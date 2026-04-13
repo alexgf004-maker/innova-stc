@@ -904,7 +904,87 @@ async function showFormSalida(db, session) {
   }
 
   // ── Renderizar items ya seleccionados ──
-  function renderLista() {  ov.querySelector('#fs-close').onclick = ov.querySelector('#fs-cancel').onclick = () => ov.remove();
+  function renderLista() {
+    const lista = ov.querySelector('#fs-lista');
+    if (!lista) return;
+    if (sel.length === 0) {
+      lista.innerHTML = '<p class="text-xs text-gray-400 text-center py-2">Sin materiales agregados</p>';
+      return;
+    }
+    lista.innerHTML = sel.map((s, idx) => `
+      <div class="bg-gray-50 rounded-xl border border-gray-200 p-3 space-y-2">
+        <div class="flex items-start justify-between gap-2">
+          <div class="min-w-0">
+            <p class="text-sm font-medium text-gray-900 truncate">${titleCase(s.name)}</p>
+            <p class="text-xs text-gray-400 font-mono">SAP ${s.sapCode||'—'} · AX ${s.axCode||'—'}</p>
+            <p class="text-xs text-gray-500">${s.cantidad} ${s.unit}</p>
+          </div>
+          <button data-ri="${idx}" class="text-gray-400 hover:text-red-500 shrink-0 text-lg leading-none mt-0.5">✕</button>
+        </div>
+        ${s.requiereSerial ? `
+        <div class="space-y-2 border-t border-gray-200 pt-2">
+          <p class="text-xs font-medium text-blue-700">Seriales / sellos</p>
+          <div class="flex gap-2">
+            <button data-modo-serial="${idx}" data-modo="individual"
+              class="flex-1 text-xs py-1.5 rounded-lg border font-medium transition-colors ${s.modoSerial === 'individual' ? 'border-blue-400 text-blue-700 bg-blue-50' : 'border-gray-300 text-gray-600'}">
+              Individual
+            </button>
+            <button data-modo-serial="${idx}" data-modo="rango"
+              class="flex-1 text-xs py-1.5 rounded-lg border font-medium transition-colors ${s.modoSerial === 'rango' ? 'border-blue-400 text-blue-700 bg-blue-50' : 'border-gray-300 text-gray-600'}">
+              Rango
+            </button>
+          </div>
+          ${s.modoSerial === 'individual' ? `
+          <div>
+            <textarea data-seriales="${idx}" rows="3"
+              placeholder="Un serial por línea"
+              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+            >${(s.seriales||[]).join('\n')}</textarea>
+            <p class="text-xs text-gray-400 mt-0.5">${(s.seriales||[]).length} de ${s.cantidad} serial(es)</p>
+          </div>` : `
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">Inicio</label>
+              <input data-rinicio="${idx}" type="text" value="${s.serialInicio||''}" placeholder="Ej. ABC001"
+                class="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-400"/>
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">Fin</label>
+              <input data-rfin="${idx}" type="text" value="${s.serialFin||''}" placeholder="Ej. ABC010"
+                class="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-400"/>
+            </div>
+          </div>`}
+        </div>` : ''}
+      </div>`).join('');
+
+    lista.querySelectorAll('[data-ri]').forEach(b => {
+      b.onclick = () => { sel.splice(parseInt(b.dataset.ri), 1); renderLista(); renderResultados(document.getElementById('fs-buscar')?.value || ''); };
+    });
+    lista.querySelectorAll('[data-modo-serial]').forEach(b => {
+      b.onclick = () => {
+        const idx = parseInt(b.dataset.modoSerial);
+        sel[idx].modoSerial = b.dataset.modo;
+        sel[idx].seriales = []; sel[idx].serialInicio = ''; sel[idx].serialFin = '';
+        renderLista();
+      };
+    });
+    lista.querySelectorAll('[data-seriales]').forEach(ta => {
+      ta.oninput = () => {
+        const idx = parseInt(ta.dataset.seriales);
+        sel[idx].seriales = ta.value.split('\n').map(s => s.trim()).filter(Boolean);
+        const count = ta.parentElement.querySelector('p');
+        if (count) count.textContent = `${sel[idx].seriales.length} de ${sel[idx].cantidad} serial(es)`;
+      };
+    });
+    lista.querySelectorAll('[data-rinicio]').forEach(inp => {
+      inp.oninput = () => { sel[parseInt(inp.dataset.rinicio)].serialInicio = inp.value.trim(); };
+    });
+    lista.querySelectorAll('[data-rfin]').forEach(inp => {
+      inp.oninput = () => { sel[parseInt(inp.dataset.rfin)].serialFin = inp.value.trim(); };
+    });
+  }
+
+  ov.querySelector('#fs-close').onclick = ov.querySelector('#fs-cancel').onclick = () => ov.remove();
 
   // Mostrar campo manual cuando se selecciona "Otro / temporal"
   ov.querySelector('#fs-placa-sel').addEventListener('change', (e) => {
