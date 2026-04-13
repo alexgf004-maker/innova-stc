@@ -1,0 +1,14 @@
+/* css/pages/login.css */
+
+.login-bg {
+  background: linear-gradient(135deg, #1B4F8A 0%, #0D3060 60%, #1B4F8A 100%);
+  min-height: 100vh;
+}
+
+.login-logo {
+  transition: transform 0.3s ease;
+}
+
+.login-logo:hover {
+  transform: scale(1.05);
+}
