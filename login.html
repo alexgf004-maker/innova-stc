@@ -195,31 +195,29 @@
       setLoading(btnUsername, true);
 
       try {
-        // Busca solo los campos mínimos necesarios para el login.
-        // La Security Rule permite leer SOLO username, uid e internalEmail
-        // a cualquier usuario autenticado o anónimo en esta consulta.
-        const q    = query(collection(db, 'users'), where('username', '==', username));
-        const snap = await getDocs(q);
+        // Consulta /usernames/{username} — colección auxiliar pública mínima.
+      // No expone datos sensibles (pinHash, pinSalt, role, etc.)
+      const usernameDoc = await getDoc(doc(db, 'usernames', username));
 
-        if (snap.empty) {
-          showStep(stepUsername);
-          showError(errorUsername, 'Usuario no encontrado.');
-          return;
-        }
+      if (!usernameDoc.exists()) {
+        showStep(stepUsername);
+        showError(errorUsername, 'Usuario no encontrado.');
+        return;
+      }
 
-        const data = snap.docs[0].data();
+      const data = usernameDoc.data();
 
-        if (!data.active) {
-          showStep(stepUsername);
-          showError(errorUsername, 'Usuario inactivo. Contacta al administrador.');
-          return;
-        }
+      if (!data.active) {
+        showStep(stepUsername);
+        showError(errorUsername, 'Usuario inactivo. Contacta al administrador.');
+        return;
+      }
 
-        currentUser = {
-          uid:           data.uid,
-          internalEmail: data.internalEmail,
-          username:      data.username,
-        };
+      currentUser = {
+        uid:           data.uid,
+        internalEmail: data.internalEmail,
+        username:      username,
+      };
 
         pinLabel.textContent = username;
         showStep(stepPin);
