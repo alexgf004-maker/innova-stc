@@ -1,0 +1,49 @@
+/* css/base.css — Variables, reset y tipografía */
+
+:root {
+  --color-primary:      #1B4F8A;
+  --color-accent:       #2196F3;
+  --color-success:      #2E7D32;
+  --color-danger:       #C62828;
+  --color-warning:      #E65100;
+  --color-surface:      #F5F7FA;
+  --color-border:       #E5E7EB;
+  --color-text:         #1A1A2E;
+  --color-text-muted:   #6B7280;
+  --sidebar-width:      240px;
+  --topbar-height:      56px;
+  --bottomnav-height:   60px;
+  --radius-sm:          8px;
+  --radius-md:          12px;
+  --radius-lg:          16px;
+  --radius-xl:          20px;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text);
+  background-color: var(--color-surface);
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-mono {
+  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+}
+
+/* Safe area para iPhone con notch/home indicator */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 8px);
+}

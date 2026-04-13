@@ -1,0 +1,46 @@
+/* css/layout.css — Layout principal */
+
+/* ─── SIDEBAR LINKS ─── */
+.sidebar-link {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.sidebar-link:hover {
+  color: white;
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-link--active {
+  color: white !important;
+  background-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+/* ─── BOTTOM NAV LINKS ─── */
+.bottom-link {
+  color: #9CA3AF;
+  flex: 1;
+}
+
+.bottom-link:hover {
+  color: #4B5563;
+}
+
+.bottom-link--active {
+  color: #2196F3 !important;
+}
+
+/* ─── ANIMACIÓN DE ENTRADA DE VISTAS ─── */
+#content-area > * {
+  animation: fadeInUp 0.2s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
