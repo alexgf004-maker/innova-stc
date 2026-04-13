@@ -1,15 +1,13 @@
 /**
- * kardex.js — Fase 1 (revisado)
- * Control de materiales mediante movimientos.
+ * kardex.js — Fase 1 (v3)
+ * Control de materiales con códigos SAP y AX.
  *
- * Cambios respecto a versión anterior:
- * - Badge de stock muestra solo el número, unidad aparte
- * - Conversión segura a número en todos los campos numéricos
- * - Filtrado de documentos sin nombre/unidad (documentos temporales)
- * - Formulario de material solo crea en catálogo, stock inicial como entrada controlada
- * - Botón de ajuste renombrado a "Entrada" para reflejar el flujo real
- * - Dashboard prioriza acciones sobre inventario
- * - Nunca aparece "undefined" en interfaz
+ * Cambios:
+ * - Modelo extendido: sapCode, axCode, name, unit, minStock, stock
+ * - Formulario incluye campos SAP y AX
+ * - Vista de inventario muestra nombre + códigos en texto secundario
+ * - Búsqueda por nombre, SAP o AX
+ * - Validación de duplicados por SAP o AX antes de crear
  */
 
 import {
@@ -20,16 +18,10 @@ import {
 import { showToast } from '../ui.js';
 
 // ─────────────────────────────────────────
-// HELPERS SEGUROS
+// HELPERS
 // ─────────────────────────────────────────
-function safeNum(val) {
-  const n = Number(val);
-  return isNaN(n) ? 0 : n;
-}
-
-function safeStr(val, fallback = '—') {
-  return (val !== undefined && val !== null && val !== '') ? String(val) : fallback;
-}
+function safeNum(val) { const n = Number(val); return isNaN(n) ? 0 : n; }
+function safeStr(val, fb = '—') { return (val !== undefined && val !== null && String(val).trim() !== '') ? String(val).trim() : fb; }
 
 // ─────────────────────────────────────────
 // INIT
@@ -78,8 +70,8 @@ function setTab(tab) {
   document.querySelectorAll('.ktab').forEach(b => {
     const a = b.dataset.tab === tab;
     b.style.backgroundColor = a ? 'white' : 'transparent';
-    b.style.color = a ? '#1B4F8A' : '#6B7280';
-    b.style.boxShadow = a ? '0 1px 3px rgba(0,0,0,0.1)' : 'none';
+    b.style.color            = a ? '#1B4F8A' : '#6B7280';
+    b.style.boxShadow        = a ? '0 1px 3px rgba(0,0,0,0.1)' : 'none';
   });
 }
 
@@ -95,11 +87,9 @@ function bindNav(db, session) {
   document.getElementById('btn-nueva-salida')?.addEventListener('click', () => showFormSalida(db, session));
 }
 
-// ─────────────────────────────────────────
-// FILTRO: excluye documentos sin datos reales
-// ─────────────────────────────────────────
-function esItemValido(item) {
-  return item.nombre && item.nombre !== '' && item.unidad && item.unidad !== '';
+// Filtra documentos sin datos reales (temporales)
+function esValido(item) {
+  return safeStr(item.name,'') !== '' && safeStr(item.unit,'') !== '';
 }
 
 // ─────────────────────────────────────────
@@ -111,28 +101,23 @@ async function showDashboard(db, session) {
   content.innerHTML = loading();
   try {
     const snap  = await getDocs(collection(db, 'kardex/inventario/items'));
-    const items = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(esItemValido);
+    const items = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(esValido);
 
-    const total     = items.length;
-    const sinStock  = items.filter(i => safeNum(i.stock) <= 0).length;
-    const stockBajo = items.filter(i => safeNum(i.stock) > 0 && safeNum(i.stock) <= safeNum(i.stockMinimo || 5)).length;
+    const total    = items.length;
+    const sinStock = items.filter(i => safeNum(i.stock) <= 0).length;
 
-    const qS     = query(collection(db, 'kardex/movimientos/salidas'), orderBy('fecha', 'desc'));
-    const snapS  = await getDocs(qS);
+    const qS      = query(collection(db, 'kardex/movimientos/salidas'), orderBy('fecha', 'desc'));
+    const snapS   = await getDocs(qS);
     const ultimas = snapS.docs.slice(0, 5).map(d => ({ id: d.id, ...d.data() }));
-
-    const alertas = items.filter(i => safeNum(i.stock) <= safeNum(i.stockMinimo || 5));
+    const alertas = items.filter(i => safeNum(i.stock) <= safeNum(i.minStock || 5));
 
     content.innerHTML = `
       <div class="space-y-4">
-
-        <!-- Acciones rápidas -->
         <div class="grid grid-cols-2 gap-3">
-          ${statCard(total, 'Materiales', '#2196F3')}
-          ${statCard(sinStock, 'Sin stock', '#C62828')}
+          ${statCard(total,    'Materiales', '#2196F3')}
+          ${statCard(sinStock, 'Sin stock',  '#C62828')}
         </div>
 
-        <!-- Últimas salidas -->
         <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
             <p class="font-semibold text-sm text-gray-900">Últimas salidas</p>
@@ -154,7 +139,6 @@ async function showDashboard(db, session) {
           }
         </div>
 
-        <!-- Alertas de stock -->
         ${alertas.length > 0 ? `
         <div class="bg-white rounded-xl border border-orange-200 overflow-hidden">
           <div class="px-4 py-3 border-b border-orange-100">
@@ -163,26 +147,22 @@ async function showDashboard(db, session) {
           <div class="divide-y divide-gray-100">
             ${alertas.map(i => {
               const stock = safeNum(i.stock);
-              const badge = stock <= 0
-                ? 'background:#FEE2E2;color:#C62828'
-                : 'background:#FEF3C7;color:#E65100';
+              const bs    = stock <= 0 ? 'background:#FEE2E2;color:#C62828' : 'background:#FEF3C7;color:#E65100';
               return `
-              <div class="px-4 py-3 flex items-center justify-between">
-                <div>
-                  <p class="text-sm text-gray-900">${safeStr(i.nombre)}</p>
-                  <p class="text-xs text-gray-400">${safeStr(i.unidad)}</p>
+              <div class="px-4 py-3 flex items-center justify-between gap-2">
+                <div class="min-w-0">
+                  <p class="text-sm text-gray-900 truncate">${safeStr(i.name)}</p>
+                  <p class="text-xs text-gray-400">${safeStr(i.unit,'')}</p>
                 </div>
-                <span class="text-xs font-semibold px-2 py-1 rounded-full" style="${badge}">
+                <span class="text-xs font-semibold px-2 py-1 rounded-full shrink-0" style="${bs}">
                   ${stock <= 0 ? 'Sin stock' : stock}
                 </span>
               </div>`;
             }).join('')}
           </div>
         </div>` : ''}
-
       </div>`;
 
-    // Rebind tabs dentro del dashboard
     document.querySelectorAll('.ktab').forEach(b => {
       b.addEventListener('click', async () => {
         const t = b.dataset.tab;
@@ -191,16 +171,14 @@ async function showDashboard(db, session) {
         if (t === 'historial')  await showHistorial(db, session);
       });
     });
-
   } catch(e) { content.innerHTML = errHtml(); console.error(e); }
 }
 
 function statCard(val, label, color) {
-  return `
-    <div class="bg-white rounded-xl border border-gray-200 p-4 text-center">
-      <p class="text-3xl font-bold" style="color:${color}">${val}</p>
-      <p class="text-xs text-gray-500 mt-1">${label}</p>
-    </div>`;
+  return `<div class="bg-white rounded-xl border border-gray-200 p-4 text-center">
+    <p class="text-3xl font-bold" style="color:${color}">${val}</p>
+    <p class="text-xs text-gray-500 mt-1">${label}</p>
+  </div>`;
 }
 
 // ─────────────────────────────────────────
@@ -208,16 +186,14 @@ function statCard(val, label, color) {
 // ─────────────────────────────────────────
 async function showInventario(db, session) {
   setTab('inventario');
-  const content  = document.getElementById('kardex-content');
+  const content = document.getElementById('kardex-content');
   content.innerHTML = loading();
   const canEdit = ['admin','coordinadora'].includes(session.role);
 
   try {
     const snap  = await getDocs(collection(db, 'kardex/inventario/items'));
-    const items = snap.docs
-      .map(d => ({ id: d.id, ...d.data() }))
-      .filter(esItemValido)
-      .sort((a, b) => safeStr(a.nombre).localeCompare(safeStr(b.nombre)));
+    const allItems = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(esValido)
+      .sort((a,b) => safeStr(a.name).localeCompare(safeStr(b.name)));
 
     content.innerHTML = `
       <div class="space-y-3">
@@ -233,64 +209,102 @@ async function showInventario(db, session) {
           </button>
         </div>` : ''}
 
-        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          ${items.length === 0
-            ? `<div class="py-12 text-center text-sm text-gray-400">
-                No hay materiales en el catálogo.
-                ${canEdit ? '<br>Agrega el primero con el botón de arriba.' : ''}
-               </div>`
-            : `<div class="overflow-x-auto">
-                <table class="w-full text-sm">
-                  <thead class="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                      <th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Material</th>
-                      <th class="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Stock</th>
-                      ${canEdit ? '<th class="px-4 py-3 w-24"></th>' : ''}
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-gray-100">
-                    ${items.map(item => itemRow(item, canEdit)).join('')}
-                  </tbody>
-                </table>
-               </div>`
-          }
+        <!-- Buscador -->
+        <div class="relative">
+          <svg class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input id="inv-search" type="text" placeholder="Buscar por nombre, SAP o AX..."
+            class="w-full border border-gray-300 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>
         </div>
+
+        <div id="inv-tabla" class="bg-white rounded-xl border border-gray-200 overflow-hidden"></div>
       </div>`;
+
+    function renderTabla(items) {
+      const tabla = document.getElementById('inv-tabla');
+      if (!tabla) return;
+      if (items.length === 0) {
+        tabla.innerHTML = `<div class="py-12 text-center text-sm text-gray-400">
+          Sin resultados.${canEdit ? '<br>Agrega materiales con el botón de arriba.' : ''}
+        </div>`;
+        return;
+      }
+      tabla.innerHTML = `
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Material</th>
+                <th class="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-20">Stock</th>
+                ${canEdit ? '<th class="px-4 py-3 w-20"></th>' : ''}
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              ${items.map(item => itemRow(item, canEdit)).join('')}
+            </tbody>
+          </table>
+        </div>`;
+
+      if (canEdit) {
+        tabla.querySelectorAll('[data-entrada]').forEach(b => {
+          b.addEventListener('click', () => showFormEntrada(db, session, allItems.find(i => i.id === b.dataset.entrada)));
+        });
+        tabla.querySelectorAll('[data-edit]').forEach(b => {
+          b.addEventListener('click', () => showFormItem(db, session, allItems.find(i => i.id === b.dataset.edit)));
+        });
+      }
+    }
+
+    renderTabla(allItems);
+
+    // Búsqueda en tiempo real
+    document.getElementById('inv-search')?.addEventListener('input', (e) => {
+      const q = e.target.value.trim().toLowerCase();
+      if (!q) { renderTabla(allItems); return; }
+      const filtered = allItems.filter(i =>
+        safeStr(i.name).toLowerCase().includes(q) ||
+        safeStr(i.sapCode,'').toLowerCase().includes(q) ||
+        safeStr(i.axCode,'').toLowerCase().includes(q)
+      );
+      renderTabla(filtered);
+    });
 
     if (canEdit) {
       document.getElementById('btn-nuevo-item')?.addEventListener('click', () => showFormItem(db, session, null));
-      content.querySelectorAll('[data-entrada]').forEach(b => {
-        b.addEventListener('click', () => showFormEntrada(db, session, items.find(i => i.id === b.dataset.entrada)));
-      });
-      content.querySelectorAll('[data-edit]').forEach(b => {
-        b.addEventListener('click', () => showFormItem(db, session, items.find(i => i.id === b.dataset.edit)));
-      });
     }
+
   } catch(e) { content.innerHTML = errHtml(); console.error(e); }
 }
 
 function itemRow(item, canEdit) {
-  const stock = safeNum(item.stock);
-  const min   = safeNum(item.stockMinimo || 5);
-  const unidad = safeStr(item.unidad, '');
-  const nombre = safeStr(item.nombre, '—');
+  const stock  = safeNum(item.stock);
+  const min    = safeNum(item.minStock || 5);
+  const unit   = safeStr(item.unit, '');
+  const name   = safeStr(item.name, '—');
+  const sap    = safeStr(item.sapCode, '');
+  const ax     = safeStr(item.axCode, '');
 
-  // Color del badge: solo el número, sin unidad
   const badgeStyle = stock <= 0
     ? 'background:#FEE2E2;color:#C62828'
     : stock <= min
     ? 'background:#FEF3C7;color:#E65100'
     : 'background:#DCFCE7;color:#166534';
 
+  const codigos = [
+    sap ? `<span class="font-mono">SAP ${sap}</span>` : '',
+    ax  ? `<span class="font-mono">AX ${ax}</span>`   : '',
+  ].filter(Boolean).join('<span class="mx-1 text-gray-300">·</span>');
+
   return `
     <tr class="hover:bg-gray-50">
       <td class="px-4 py-3">
-        <p class="font-medium text-gray-900">${nombre}</p>
-        <p class="text-xs text-gray-400">${unidad}</p>
+        <p class="font-medium text-gray-900 leading-tight">${name}</p>
+        ${codigos ? `<p class="text-xs text-gray-400 mt-0.5">${codigos}</p>` : ''}
       </td>
       <td class="px-4 py-3 text-center">
         <span class="text-sm font-bold px-2.5 py-1 rounded-full" style="${badgeStyle}">${stock}</span>
-        <p class="text-xs text-gray-400 mt-0.5">${unidad}</p>
+        <p class="text-xs text-gray-400 mt-0.5">${unit}</p>
       </td>
       ${canEdit ? `
       <td class="px-4 py-3">
@@ -301,7 +315,7 @@ function itemRow(item, canEdit) {
               <path d="M12 5v14M5 12l7 7 7-7"/>
             </svg>
           </button>
-          <button data-edit="${item.id}" title="Editar datos del material"
+          <button data-edit="${item.id}" title="Editar"
             class="p-1.5 rounded text-gray-400 hover:text-blue-500 transition-colors">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
@@ -314,9 +328,7 @@ function itemRow(item, canEdit) {
 }
 
 // ─────────────────────────────────────────
-// FORM — AGREGAR / EDITAR MATERIAL (catálogo)
-// Solo modifica nombre, unidad y stock mínimo.
-// El stock inicial se registra como entrada controlada.
+// FORM — AGREGAR / EDITAR MATERIAL
 // ─────────────────────────────────────────
 function showFormItem(db, session, item) {
   const esNuevo = !item;
@@ -326,35 +338,58 @@ function showFormItem(db, session, item) {
       <button id="fi-close" class="text-gray-400 hover:text-gray-700">✕</button>
     </div>
     <div class="px-5 py-4 space-y-4">
+
+      <!-- Nombre -->
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1.5">Nombre del material</label>
-        <input id="fi-nombre" type="text" value="${safeStr(item?.nombre,'')}"
-          placeholder="Ej. Medidor monofásico 120V"
+        <input id="fi-name" type="text" value="${safeStr(item?.name,'')}"
+          placeholder="Ej. MEDIDOR MONOFÁSICO 120V"
           class="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>
       </div>
+
+      <!-- Códigos SAP y AX -->
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">Código SAP</label>
+          <input id="fi-sap" type="text" value="${safeStr(item?.sapCode,'')}"
+            placeholder="Ej. 221477"
+            class="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400"/>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">Código AX</label>
+          <input id="fi-ax" type="text" value="${safeStr(item?.axCode,'')}"
+            placeholder="Ej. 50203"
+            class="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400"/>
+        </div>
+      </div>
+
+      <!-- Unidad y stock mínimo -->
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1.5">Unidad de medida</label>
-          <input id="fi-unidad" type="text" value="${safeStr(item?.unidad,'')}"
+          <input id="fi-unit" type="text" value="${safeStr(item?.unit,'')}"
             placeholder="unidad, m, kg, rollo"
             class="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1.5">Alerta stock mínimo</label>
-          <input id="fi-min" type="number" min="0" value="${safeNum(item?.stockMinimo) || 5}"
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">Stock mínimo</label>
+          <input id="fi-min" type="number" min="0" value="${safeNum(item?.minStock) || 5}"
             class="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>
         </div>
       </div>
+
+      <!-- Stock inicial (solo al crear) -->
       ${esNuevo ? `
-      <div class="bg-blue-50 border border-blue-100 rounded-xl p-3">
-        <p class="text-xs font-medium text-blue-800 mb-1">Stock inicial</p>
-        <p class="text-xs text-blue-600 mb-2">Si ya tienes unidades en bodega, indica la cantidad. Esto se registrará como una entrada inicial.</p>
-        <input id="fi-stock" type="number" min="0" value="0" placeholder="0"
-          class="w-full border border-blue-200 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"/>
+      <div class="bg-blue-50 border border-blue-100 rounded-xl p-3 space-y-2">
+        <p class="text-xs font-medium text-blue-800">Stock inicial en bodega</p>
+        <p class="text-xs text-blue-600">Si ya tienes unidades disponibles, indícalas aquí. Se registrará como entrada inicial.</p>
+        <input id="fi-stock" type="number" min="0" value="0"
+          class="w-full border border-blue-200 rounded-lg px-3.5 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 text-center font-semibold"/>
       </div>` : `
       <div class="bg-gray-50 border border-gray-200 rounded-xl p-3">
-        <p class="text-xs text-gray-500">Para modificar el stock usa el botón de <strong>entrada</strong> en la lista de inventario.</p>
+        <p class="text-xs text-gray-500">Para modificar el stock usa el botón de <strong>entrada ↓</strong> en la lista.</p>
       </div>`}
+
       <div id="fi-err" class="hidden text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5"></div>
     </div>
     <div class="px-5 py-4 border-t border-gray-100 flex gap-3">
@@ -365,34 +400,60 @@ function showFormItem(db, session, item) {
     </div>`);
 
   ov.querySelector('#fi-close').onclick = ov.querySelector('#fi-cancel').onclick = () => ov.remove();
+
   ov.querySelector('#fi-submit').onclick = async () => {
-    const nombre = ov.querySelector('#fi-nombre').value.trim();
-    const unidad = ov.querySelector('#fi-unidad').value.trim();
-    const minimo = safeNum(ov.querySelector('#fi-min').value);
-    const errEl  = ov.querySelector('#fi-err');
-    const btn    = ov.querySelector('#fi-submit');
+    const name    = ov.querySelector('#fi-name').value.trim();
+    const sapCode = ov.querySelector('#fi-sap').value.trim();
+    const axCode  = ov.querySelector('#fi-ax').value.trim();
+    const unit    = ov.querySelector('#fi-unit').value.trim();
+    const minStock = safeNum(ov.querySelector('#fi-min').value);
+    const errEl   = ov.querySelector('#fi-err');
+    const btn     = ov.querySelector('#fi-submit');
 
     errEl.classList.add('hidden');
-    if (!nombre) { errEl.textContent = 'El nombre es obligatorio.'; errEl.classList.remove('hidden'); return; }
-    if (!unidad) { errEl.textContent = 'La unidad de medida es obligatoria.'; errEl.classList.remove('hidden'); return; }
+    if (!name) { errEl.textContent = 'El nombre es obligatorio.'; errEl.classList.remove('hidden'); return; }
+    if (!unit) { errEl.textContent = 'La unidad de medida es obligatoria.'; errEl.classList.remove('hidden'); return; }
 
-    btn.disabled = true; btn.textContent = 'Guardando...';
+    btn.disabled = true; btn.textContent = 'Verificando...';
+
     try {
+      // Verificar duplicados por SAP o AX (solo al crear, o si el código cambió)
+      if (sapCode || axCode) {
+        const snapAll = await getDocs(collection(db, 'kardex/inventario/items'));
+        const existing = snapAll.docs.map(d => ({ id: d.id, ...d.data() })).filter(esValido);
+
+        for (const ex of existing) {
+          if (item && ex.id === item.id) continue; // excluir el mismo item al editar
+          if (sapCode && safeStr(ex.sapCode,'') === sapCode) {
+            errEl.textContent = `El código SAP ${sapCode} ya existe en el material: ${safeStr(ex.name)}`;
+            errEl.classList.remove('hidden');
+            btn.disabled = false; btn.textContent = esNuevo ? 'Agregar' : 'Guardar cambios';
+            return;
+          }
+          if (axCode && safeStr(ex.axCode,'') === axCode) {
+            errEl.textContent = `El código AX ${axCode} ya existe en el material: ${safeStr(ex.name)}`;
+            errEl.classList.remove('hidden');
+            btn.disabled = false; btn.textContent = esNuevo ? 'Agregar' : 'Guardar cambios';
+            return;
+          }
+        }
+      }
+
+      btn.textContent = 'Guardando...';
+
       if (esNuevo) {
         const stockInicial = safeNum(ov.querySelector('#fi-stock').value);
         const ref = await addDoc(collection(db, 'kardex/inventario/items'), {
-          nombre, unidad,
+          name, sapCode, axCode, unit,
           stock: stockInicial,
-          stockMinimo: minimo,
-          creadoEn: serverTimestamp(),
-          creadoPor: session.uid,
+          minStock,
+          creadoEn:   serverTimestamp(),
+          creadoPor:  session.uid,
         });
-        // Registrar entrada inicial si hay stock
         if (stockInicial > 0) {
           await addDoc(collection(db, 'kardex/movimientos/ajustes'), {
-            itemId: ref.id, itemNombre: nombre,
-            tipo: 'entrada_inicial',
-            cantidad: stockInicial,
+            itemId: ref.id, itemNombre: name,
+            tipo: 'entrada_inicial', cantidad: stockInicial,
             motivo: 'Stock inicial al crear el material',
             stockAntes: 0, stockDespues: stockInicial,
             fecha: serverTimestamp(),
@@ -401,19 +462,18 @@ function showFormItem(db, session, item) {
           });
         }
       } else {
-        // Solo actualiza datos del catálogo, no el stock
         await updateDoc(doc(db, 'kardex/inventario/items', item.id), {
-          nombre, unidad, stockMinimo: minimo,
+          name, sapCode, axCode, unit, minStock,
         });
       }
+
       ov.remove();
       showToast(`Material ${esNuevo ? 'agregado' : 'actualizado'} correctamente.`, 'success');
       await showInventario(db, session);
     } catch(e) {
       errEl.textContent = 'Error al guardar. Intenta de nuevo.';
       errEl.classList.remove('hidden');
-      btn.disabled = false;
-      btn.textContent = esNuevo ? 'Agregar' : 'Guardar cambios';
+      btn.disabled = false; btn.textContent = esNuevo ? 'Agregar' : 'Guardar cambios';
       console.error(e);
     }
   };
@@ -421,7 +481,6 @@ function showFormItem(db, session, item) {
 
 // ─────────────────────────────────────────
 // FORM — ENTRADA DE MATERIAL
-// Aumenta el stock mediante un movimiento registrado.
 // ─────────────────────────────────────────
 function showFormEntrada(db, session, item) {
   const ov = mkOverlay(`
@@ -431,8 +490,13 @@ function showFormEntrada(db, session, item) {
     </div>
     <div class="px-5 py-4 space-y-4">
       <div class="bg-gray-50 rounded-xl p-3">
-        <p class="text-sm font-medium text-gray-900">${safeStr(item?.nombre)}</p>
-        <p class="text-xs text-gray-500 mt-0.5">Stock actual: <strong>${safeNum(item?.stock)} ${safeStr(item?.unidad,'')}</strong></p>
+        <p class="text-sm font-medium text-gray-900">${safeStr(item?.name)}</p>
+        <p class="text-xs text-gray-400 font-mono mt-0.5">
+          ${item?.sapCode ? `SAP ${item.sapCode}` : ''}
+          ${item?.sapCode && item?.axCode ? ' · ' : ''}
+          ${item?.axCode  ? `AX ${item.axCode}`  : ''}
+        </p>
+        <p class="text-xs text-gray-500 mt-1">Stock actual: <strong>${safeNum(item?.stock)} ${safeStr(item?.unit,'')}</strong></p>
       </div>
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1.5">Cantidad que ingresa</label>
@@ -440,7 +504,7 @@ function showFormEntrada(db, session, item) {
           class="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 text-center text-lg font-semibold"/>
       </div>
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1.5">Motivo de entrada</label>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5">Motivo</label>
         <input id="fe-motivo" type="text" placeholder="Ej. Compra de materiales, Reposición"
           class="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>
       </div>
@@ -448,9 +512,7 @@ function showFormEntrada(db, session, item) {
     </div>
     <div class="px-5 py-4 border-t border-gray-100 flex gap-3">
       <button id="fe-cancel" class="flex-1 border border-gray-300 text-gray-700 font-medium rounded-lg py-2.5 text-sm hover:bg-gray-50">Cancelar</button>
-      <button id="fe-submit" class="flex-1 text-white font-medium rounded-lg py-2.5 text-sm" style="background-color:#2E7D32">
-        Registrar entrada
-      </button>
+      <button id="fe-submit" class="flex-1 text-white font-medium rounded-lg py-2.5 text-sm" style="background-color:#2E7D32">Registrar entrada</button>
     </div>`);
 
   ov.querySelector('#fe-close').onclick = ov.querySelector('#fe-cancel').onclick = () => ov.remove();
@@ -459,34 +521,25 @@ function showFormEntrada(db, session, item) {
     const motivo = ov.querySelector('#fe-motivo').value.trim();
     const errEl  = ov.querySelector('#fe-err');
     const btn    = ov.querySelector('#fe-submit');
-
     errEl.classList.add('hidden');
     if (cant <= 0) { errEl.textContent = 'Ingresa una cantidad válida mayor a 0.'; errEl.classList.remove('hidden'); return; }
-
     btn.disabled = true; btn.textContent = 'Registrando...';
     try {
       const stockAntes   = safeNum(item?.stock);
       const stockDespues = stockAntes + cant;
-
-      await updateDoc(doc(db, 'kardex/inventario/items', item.id), {
-        stock: increment(cant),
-      });
-
+      await updateDoc(doc(db, 'kardex/inventario/items', item.id), { stock: increment(cant) });
       await addDoc(collection(db, 'kardex/movimientos/ajustes'), {
-        itemId: item.id, itemNombre: safeStr(item?.nombre),
-        tipo: 'entrada',
-        cantidad: cant, motivo,
+        itemId: item.id, itemNombre: safeStr(item?.name),
+        tipo: 'entrada', cantidad: cant, motivo,
         stockAntes, stockDespues,
         fecha: serverTimestamp(),
-        registradoPor: session.uid,
-        registradoPorNombre: session.displayName,
+        registradoPor: session.uid, registradoPorNombre: session.displayName,
       });
-
       ov.remove();
-      showToast(`Entrada de ${cant} ${safeStr(item?.unidad,'')} registrada.`, 'success');
+      showToast(`Entrada de ${cant} ${safeStr(item?.unit,'')} registrada.`, 'success');
       await showInventario(db, session);
     } catch(e) {
-      errEl.textContent = 'Error al registrar. Intenta de nuevo.';
+      errEl.textContent = 'Error al registrar.';
       errEl.classList.remove('hidden');
       btn.disabled = false; btn.textContent = 'Registrar entrada';
       console.error(e);
@@ -505,8 +558,8 @@ async function showFormSalida(db, session) {
 
   const items = snapI.docs
     .map(d => ({ id: d.id, ...d.data() }))
-    .filter(i => esItemValido(i) && safeNum(i.stock) > 0)
-    .sort((a,b) => safeStr(a.nombre).localeCompare(safeStr(b.nombre)));
+    .filter(i => esValido(i) && safeNum(i.stock) > 0)
+    .sort((a,b) => safeStr(a.name).localeCompare(safeStr(b.name)));
 
   const tecnicos = snapU.docs
     .map(d => d.data())
@@ -538,18 +591,18 @@ async function showFormSalida(db, session) {
         <div class="flex gap-2">
           <select id="fs-item" class="flex-1 border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 min-w-0">
             <option value="">Seleccionar material...</option>
-            ${items.map(i => `<option value="${i.id}"
-              data-nombre="${safeStr(i.nombre)}"
-              data-unidad="${safeStr(i.unidad)}"
-              data-stock="${safeNum(i.stock)}"
-            >${safeStr(i.nombre)} (${safeNum(i.stock)} ${safeStr(i.unidad)})</option>`).join('')}
+            ${items.map(i => `
+              <option value="${i.id}"
+                data-nombre="${safeStr(i.name)}"
+                data-unit="${safeStr(i.unit,'')}"
+                data-stock="${safeNum(i.stock)}"
+                data-sap="${safeStr(i.sapCode,'')}"
+              >${safeStr(i.name)} (${safeNum(i.stock)} ${safeStr(i.unit,'')})</option>`).join('')}
           </select>
           <input id="fs-cant" type="number" min="1" placeholder="Cant."
             class="w-20 border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 text-center shrink-0"/>
           <button id="fs-add"
-            class="px-3 py-2.5 text-white rounded-lg text-sm font-bold shrink-0" style="background-color:#2196F3">
-            +
-          </button>
+            class="px-3 py-2.5 text-white rounded-lg text-sm font-bold shrink-0" style="background-color:#2196F3">+</button>
         </div>
       </div>
       <div id="fs-lista" class="space-y-2"></div>
@@ -562,20 +615,18 @@ async function showFormSalida(db, session) {
 
   function renderLista() {
     const lista = ov.querySelector('#fs-lista');
-    if (sel.length === 0) {
-      lista.innerHTML = '<p class="text-xs text-gray-400 text-center py-2">Sin materiales agregados</p>';
-      return;
-    }
-    lista.innerHTML = sel.map((s, i) => `
-      <div class="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 gap-2">
-        <div class="min-w-0">
-          <p class="text-sm font-medium text-gray-900 truncate">${s.nombre}</p>
-          <p class="text-xs text-gray-500">${s.cantidad} ${s.unidad}</p>
-        </div>
-        <button data-ri="${i}" class="text-gray-400 hover:text-red-500 shrink-0 text-lg leading-none">✕</button>
-      </div>`).join('');
+    lista.innerHTML = sel.length === 0
+      ? '<p class="text-xs text-gray-400 text-center py-2">Sin materiales agregados</p>'
+      : sel.map((s,i) => `
+        <div class="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 gap-2">
+          <div class="min-w-0">
+            <p class="text-sm font-medium text-gray-900 truncate">${s.nombre}</p>
+            <p class="text-xs text-gray-500">${s.cantidad} ${s.unit}</p>
+          </div>
+          <button data-ri="${i}" class="text-gray-400 hover:text-red-500 shrink-0 text-lg leading-none">✕</button>
+        </div>`).join('');
     lista.querySelectorAll('[data-ri]').forEach(b => {
-      b.onclick = () => { sel.splice(parseInt(b.dataset.ri), 1); renderLista(); };
+      b.onclick = () => { sel.splice(parseInt(b.dataset.ri),1); renderLista(); };
     });
   }
   renderLista();
@@ -588,70 +639,53 @@ async function showFormSalida(db, session) {
     const cant  = safeNum(ov.querySelector('#fs-cant').value);
     const errEl = ov.querySelector('#fs-err');
     errEl.classList.add('hidden');
-
     if (!selEl.value) { errEl.textContent = 'Selecciona un material.'; errEl.classList.remove('hidden'); return; }
-    if (cant <= 0) { errEl.textContent = 'Ingresa una cantidad válida.'; errEl.classList.remove('hidden'); return; }
-
+    if (cant <= 0)    { errEl.textContent = 'Cantidad inválida.';       errEl.classList.remove('hidden'); return; }
     const disponible = safeNum(opt.dataset.stock);
     if (cant > disponible) {
-      errEl.textContent = `Stock insuficiente. Disponible: ${disponible} ${opt.dataset.unidad}`;
-      errEl.classList.remove('hidden');
-      return;
+      errEl.textContent = `Stock insuficiente. Disponible: ${disponible} ${opt.dataset.unit}`;
+      errEl.classList.remove('hidden'); return;
     }
-
     const ex = sel.findIndex(s => s.itemId === selEl.value);
     if (ex >= 0) sel[ex].cantidad += cant;
     else sel.push({
-      itemId: selEl.value,
-      nombre: safeStr(opt.dataset.nombre),
-      unidad: safeStr(opt.dataset.unidad),
+      itemId:  selEl.value,
+      nombre:  safeStr(opt.dataset.nombre),
+      unit:    safeStr(opt.dataset.unit,''),
       cantidad: cant,
     });
-
     selEl.value = ''; ov.querySelector('#fs-cant').value = '';
     renderLista();
   };
 
   ov.querySelector('#fs-submit').onclick = async () => {
-    const tecSel  = ov.querySelector('#fs-tec');
-    const tecUid  = tecSel.value;
-    const tecNom  = safeStr(tecSel.options[tecSel.selectedIndex]?.dataset.nombre);
-    const motivo  = ov.querySelector('#fs-motivo').value.trim();
-    const errEl   = ov.querySelector('#fs-err');
-    const btn     = ov.querySelector('#fs-submit');
-
+    const tecSel = ov.querySelector('#fs-tec');
+    const tecUid = tecSel.value;
+    const tecNom = safeStr(tecSel.options[tecSel.selectedIndex]?.dataset.nombre);
+    const motivo = ov.querySelector('#fs-motivo').value.trim();
+    const errEl  = ov.querySelector('#fs-err');
+    const btn    = ov.querySelector('#fs-submit');
     errEl.classList.add('hidden');
-    if (!tecUid) { errEl.textContent = 'Selecciona el técnico.'; errEl.classList.remove('hidden'); return; }
-    if (sel.length === 0) { errEl.textContent = 'Agrega al menos un material.'; errEl.classList.remove('hidden'); return; }
-
+    if (!tecUid)       { errEl.textContent = 'Selecciona el técnico.';           errEl.classList.remove('hidden'); return; }
+    if (sel.length===0){ errEl.textContent = 'Agrega al menos un material.';     errEl.classList.remove('hidden'); return; }
     btn.disabled = true; btn.textContent = 'Registrando...';
     try {
       const ref = await addDoc(collection(db, 'kardex/movimientos/salidas'), {
         tecnicoUid: tecUid, tecnicoNombre: tecNom, motivo,
-        items: sel.map(s => ({ itemId: s.itemId, nombre: s.nombre, unidad: s.unidad, cantidad: s.cantidad })),
+        items: sel.map(s => ({ itemId:s.itemId, nombre:s.nombre, unit:s.unit, cantidad:s.cantidad })),
         fecha: serverTimestamp(),
-        registradoPor: session.uid,
-        registradoPorNombre: session.displayName,
+        registradoPor: session.uid, registradoPorNombre: session.displayName,
       });
-
       for (const s of sel) {
-        await updateDoc(doc(db, 'kardex/inventario/items', s.itemId), {
-          stock: increment(-s.cantidad),
-        });
+        await updateDoc(doc(db,'kardex/inventario/items',s.itemId), { stock: increment(-s.cantidad) });
       }
-
       ov.remove();
-      showToast('Salida registrada correctamente.', 'success');
-      showMemo({
-        id: ref.id, tecnicoNombre: tecNom, motivo,
-        items: sel, registradoPorNombre: session.displayName, fecha: new Date(),
-      });
+      showToast('Salida registrada correctamente.','success');
+      showMemo({ id:ref.id, tecnicoNombre:tecNom, motivo, items:sel, registradoPorNombre:session.displayName, fecha:new Date() });
       await showDashboard(db, session);
     } catch(e) {
-      errEl.textContent = 'Error al registrar. Intenta de nuevo.';
-      errEl.classList.remove('hidden');
-      btn.disabled = false; btn.textContent = 'Registrar salida';
-      console.error(e);
+      errEl.textContent = 'Error al registrar.'; errEl.classList.remove('hidden');
+      btn.disabled = false; btn.textContent = 'Registrar salida'; console.error(e);
     }
   };
 }
@@ -666,13 +700,11 @@ async function showHistorial(db, session) {
   try {
     let q;
     if (session.role === 'campo') {
-      q = query(collection(db, 'kardex/movimientos/salidas'),
-        where('tecnicoUid', '==', session.uid), orderBy('fecha', 'desc'));
+      q = query(collection(db,'kardex/movimientos/salidas'), where('tecnicoUid','==',session.uid), orderBy('fecha','desc'));
     } else {
-      q = query(collection(db, 'kardex/movimientos/salidas'), orderBy('fecha', 'desc'));
+      q = query(collection(db,'kardex/movimientos/salidas'), orderBy('fecha','desc'));
     }
-
-    const snap   = await getDocs(q);
+    const snap    = await getDocs(q);
     const salidas = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
     content.innerHTML = `
@@ -691,27 +723,21 @@ async function showHistorial(db, session) {
                   <p class="text-xs text-gray-400">${fmtDate(s.fecha)} · ${safeStr(s.registradoPorNombre)}</p>
                 </div>
                 <button data-smemo="${s.id}"
-                  class="text-xs font-medium px-2 py-1 rounded-lg shrink-0"
-                  style="color:#1B4F8A;background:#EFF6FF">
-                  Memo
-                </button>
+                  class="text-xs font-medium px-2 py-1 rounded-lg shrink-0" style="color:#1B4F8A;background:#EFF6FF">Memo</button>
               </div>
               ${s.motivo ? `<p class="text-xs text-gray-500 mt-1">${s.motivo}</p>` : ''}
               <div class="flex flex-wrap gap-1 mt-2">
                 ${(s.items||[]).map(i =>
                   `<span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                    ${safeNum(i.cantidad)} ${safeStr(i.unidad,'')} ${safeStr(i.nombre)}
-                  </span>`
-                ).join('')}
+                    ${safeNum(i.cantidad)} ${safeStr(i.unit||i.unidad,'')} ${safeStr(i.nombre||i.name)}
+                  </span>`).join('')}
               </div>
             </div>`).join('') + '</div>'
         }
       </div>`;
 
-    // Guardar datos de salidas en memoria para el memo
     const salidaMap = {};
     salidas.forEach(s => { salidaMap[s.id] = s; });
-
     content.querySelectorAll('[data-smemo]').forEach(b => {
       b.onclick = () => {
         const s = salidaMap[b.dataset.smemo];
@@ -766,9 +792,9 @@ function showMemo(s) {
           <tbody class="divide-y divide-gray-100">
             ${(s.items||[]).map(i => `
               <tr>
-                <td class="px-3 py-2 text-gray-900">${safeStr(i.nombre)}</td>
+                <td class="px-3 py-2 text-gray-900">${safeStr(i.nombre||i.name)}</td>
                 <td class="px-3 py-2 text-center font-semibold text-gray-900">${safeNum(i.cantidad)}</td>
-                <td class="px-3 py-2 text-gray-500">${safeStr(i.unidad,'')}</td>
+                <td class="px-3 py-2 text-gray-500">${safeStr(i.unit||i.unidad,'')}</td>
               </tr>`).join('')}
           </tbody>
         </table>
@@ -788,13 +814,13 @@ function showMemo(s) {
     </div>
     <div class="px-5 py-4 border-t border-gray-100 flex gap-3">
       <button id="fm-cancel" class="flex-1 border border-gray-300 text-gray-700 font-medium rounded-lg py-2.5 text-sm hover:bg-gray-50">Cerrar</button>
-      <button id="fm-print" class="flex-1 text-white font-medium rounded-lg py-2.5 text-sm" style="background-color:#1B4F8A">🖨️ Imprimir</button>
+      <button id="fm-print"  class="flex-1 text-white font-medium rounded-lg py-2.5 text-sm" style="background-color:#1B4F8A">🖨️ Imprimir</button>
     </div>`);
 
   ov.querySelector('#fm-close').onclick = ov.querySelector('#fm-cancel').onclick = () => ov.remove();
   ov.querySelector('#fm-print').onclick = () => {
     const body = document.getElementById('memo-body').innerHTML;
-    const w = window.open('', '_blank');
+    const w = window.open('','_blank');
     w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Memo INNOVA STC</title>
       <style>body{font-family:Arial,sans-serif;font-size:13px;color:#111;margin:24px}
       table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:6px 10px;text-align:left}
@@ -831,6 +857,6 @@ function fmtDate(ts) {
   if (!ts) return '—';
   try {
     const d = ts.toDate ? ts.toDate() : new Date(ts);
-    return d.toLocaleDateString('es-SV', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    return d.toLocaleDateString('es-SV',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
   } catch { return '—'; }
 }
