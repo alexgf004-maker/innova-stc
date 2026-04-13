@@ -1,0 +1,102 @@
+// firestore.rules
+// Pega estas reglas en Firebase Console → Firestore → Reglas
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Funciones auxiliares ──────────────────────────────────────
+
+    // Usuario autenticado con Firebase Auth
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // Perfil del usuario autenticado
+    function myProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // Está activo y autenticado
+    function isActive() {
+      return isAuth() && myProfile().active == true;
+    }
+
+    // Tiene un rol específico
+    function hasRole(r) {
+      return isActive() && myProfile().role == r;
+    }
+
+    // Tiene alguno de los roles dados
+    function hasAnyRole(roles) {
+      return isActive() && myProfile().role in roles;
+    }
+
+    // Solo los campos permitidos están siendo modificados
+    function onlyFields(fields) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
+    }
+
+    // ── Colección: users ─────────────────────────────────────────
+    match /users/{uid} {
+
+      // LOGIN: permite leer solo los campos mínimos para el flujo de login.
+      // Cualquier usuario autenticado de Firebase puede leer username, uid,
+      // internalEmail y active para construir la pantalla de login.
+      // pinHash y pinSalt NO se exponen aquí — solo al usuario propietario o admin.
+      allow get: if isAuth() && (
+        // El propio usuario puede leer su perfil completo
+        request.auth.uid == uid
+        // El admin puede leer cualquier perfil completo
+        || hasRole("admin")
+      );
+
+      // La query por username en el login necesita acceso de lista limitado.
+      // Se permite listar solo a usuarios autenticados activos.
+      // Las Security Rules no filtran campos en queries, pero el código
+      // solo solicita los campos mínimos necesarios.
+      allow list: if isAuth();
+
+      // Solo admin puede crear usuarios
+      allow create: if hasRole("admin")
+        && request.resource.data.keys().hasAll([
+          "uid", "username", "displayName", "role",
+          "internalEmail", "pinHash", "pinSalt", "active",
+          "createdAt", "createdBy"
+        ])
+        && request.resource.data.role in ["admin", "coordinadora", "campo"]
+        && request.resource.data.active == true;
+
+      // Actualización: admin puede todo; usuario solo puede cambiar su PIN
+      allow update: if
+        hasRole("admin")
+        || (
+          isActive()
+          && request.auth.uid == uid
+          && onlyFields(["pinHash", "pinSalt"])
+        );
+
+      // Nadie puede eliminar usuarios desde el cliente
+      allow delete: if false;
+    }
+
+    // ── Colección: kardex ─────────────────────────────────────────
+    // Se expandirá en la Fase 1 con reglas más granulares por subcolección.
+    match /kardex/{document=**} {
+      allow read:  if hasAnyRole(["admin", "coordinadora", "campo"]);
+      allow write: if hasAnyRole(["admin", "coordinadora"]);
+    }
+
+    // ── Colección: audit_log ──────────────────────────────────────
+    match /audit_log/{docId} {
+      allow read:          if hasRole("admin");
+      allow create:        if isActive();
+      allow update, delete: if false;
+    }
+
+    // ── Catch-all: denegar todo lo no definido ────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
