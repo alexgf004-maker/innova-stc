@@ -89,7 +89,21 @@ function bindNav(db, session) {
 
 // Filtra documentos sin datos reales (temporales)
 function esValido(item) {
-  return safeStr(item.name,'') !== '' && safeStr(item.unit,'') !== '';
+  const n = safeStr(item.name,'') || safeStr(item.nombre,'');
+  const u = safeStr(item.unit,'') || safeStr(item.unidad,'');
+  return n !== '' && u !== '';
+}
+
+function normalizeItem(raw) {
+  return {
+    ...raw,
+    name:     safeStr(raw.name,'')    || safeStr(raw.nombre,''),
+    unit:     safeStr(raw.unit,'')    || safeStr(raw.unidad,''),
+    sapCode:  safeStr(raw.sapCode,''),
+    axCode:   safeStr(raw.axCode,''),
+    stock:    safeNum(raw.stock),
+    minStock: safeNum(raw.minStock || raw.stockMinimo || 5),
+  };
 }
 
 // ─────────────────────────────────────────
@@ -101,7 +115,7 @@ async function showDashboard(db, session) {
   content.innerHTML = loading();
   try {
     const snap  = await getDocs(collection(db, 'kardex/inventario/items'));
-    const items = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(esValido);
+    const items = snap.docs.map(d => normalizeItem({ id: d.id, ...d.data() })).filter(esValido);
 
     const total    = items.length;
     const sinStock = items.filter(i => safeNum(i.stock) <= 0).length;
@@ -192,7 +206,7 @@ async function showInventario(db, session) {
 
   try {
     const snap  = await getDocs(collection(db, 'kardex/inventario/items'));
-    const allItems = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(esValido)
+    const allItems = snap.docs.map(d => normalizeItem({ id: d.id, ...d.data() })).filter(esValido)
       .sort((a,b) => safeStr(a.name).localeCompare(safeStr(b.name)));
 
     content.innerHTML = `
@@ -342,7 +356,7 @@ function showFormItem(db, session, item) {
       <!-- Nombre -->
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1.5">Nombre del material</label>
-        <input id="fi-name" type="text" value="${safeStr(item?.name,'')}"
+        <input id="fi-name" type="text" value="${safeStr(item?.name||item?.nombre,'')}"
           placeholder="Ej. MEDIDOR MONOFÁSICO 120V"
           class="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>
       </div>
@@ -367,13 +381,13 @@ function showFormItem(db, session, item) {
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1.5">Unidad de medida</label>
-          <input id="fi-unit" type="text" value="${safeStr(item?.unit,'')}"
+          <input id="fi-unit" type="text" value="${safeStr(item?.unit||item?.unidad,'')}"
             placeholder="unidad, m, kg, rollo"
             class="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1.5">Stock mínimo</label>
-          <input id="fi-min" type="number" min="0" value="${safeNum(item?.minStock) || 5}"
+          <input id="fi-min" type="number" min="0" value="${safeNum(item?.minStock||item?.stockMinimo) || 5}"
             class="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>
         </div>
       </div>
@@ -557,7 +571,7 @@ async function showFormSalida(db, session) {
   ]);
 
   const items = snapI.docs
-    .map(d => ({ id: d.id, ...d.data() }))
+    .map(d => normalizeItem({ id: d.id, ...d.data() }))
     .filter(i => esValido(i) && safeNum(i.stock) > 0)
     .sort((a,b) => safeStr(a.name).localeCompare(safeStr(b.name)));
 
