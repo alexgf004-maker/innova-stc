@@ -1135,12 +1135,42 @@ async function showHistorial(db, session) {
 // ─────────────────────────────────────────
 // MEMO — Formato documento físico DELSUR
 // ─────────────────────────────────────────
-function showMemo(s) {
-  const fecha    = s.fecha instanceof Date ? s.fecha : new Date();
-  const fechaStr = fecha.toLocaleDateString('es-SV', { year:'numeric', month:'long', day:'numeric' });
+// ─────────────────────────────────────────
+// MAPEO: datos internos → formato oficial
+// Solo los campos del documento corporativo.
+// ─────────────────────────────────────────
+function mapearParaMemo(s) {
+  const hoy = new Date().toLocaleDateString('es-SV', { year:'numeric', month:'long', day:'numeric' });
+  return {
+    // Campos del encabezado oficial — en el mismo orden del documento físico
+    USUARIO_RESPONSABLE:    safeStr(s.usuarioResponsable || s.tecnicoNombre, ''),
+    EMPRESA_CONTRATISTA:    safeStr(s.empresaContratista, ''),
+    INSTALADOR_RESPONSABLE: safeStr(s.instaladorResponsable, ''),
+    ENTREGADO_POR:          safeStr(s.entregadoPor || s.registradoPorNombre, ''),
+    PLACA_VEHICULO:         safeStr(s.placaVehiculo, ''),
+    FECHA_SOLICITUD:        safeStr(s.fechaSolicitud, hoy),
+    FECHA_ENTREGA:          safeStr(s.fechaEntrega, hoy),
+    // Tabla de materiales — columnas oficiales: RESERVA | STOCK | CANTIDAD | DESCRIPCIÓN
+    MATERIALES: (s.items || []).map(i => ({
+      RESERVA:     safeStr(i.sapCode, ''),   // Código SAP
+      STOCK:       safeStr(i.axCode, ''),    // Código AX
+      CANTIDAD:    safeNum(i.cantidad),
+      DESCRIPCION: safeStr(i.nombre || i.name, ''),
+      // Seriales — sección aparte en el documento oficial
+      _requiereSerial: !!i.requiereSerial,
+      _modoSerial:     i.modoSerial || 'individual',
+      _seriales:       i.seriales || [],
+      _serialInicio:   i.serialInicio || '',
+      _serialFin:      i.serialFin || '',
+    })),
+    // Seriales (solo materiales que lo requieren)
+    SERIALES: (s.items || []).filter(i => i.requiereSerial),
+  };
+}
 
-  // Materiales que tienen seriales
-  const conSeriales = (s.items||[]).filter(i => i.requiereSerial);
+function showMemo(s) {
+  // ── Transformar al formato oficial ──
+  const memo = mapearParaMemo(s);
 
   const ov = mkOverlay(`
     <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
@@ -1149,83 +1179,129 @@ function showMemo(s) {
     </div>
     <div id="memo-body" class="px-5 py-4 space-y-4 text-sm">
 
-      <!-- Header -->
+      <!-- Encabezado corporativo -->
       <div class="text-center border-b border-gray-200 pb-3">
-        <p class="font-bold text-base" style="color:#1B4F8A">DISTRIBUIDORA DE ELECTRICIDAD DELSUR S.A. DE C.V.</p>
-        <p class="text-xs text-gray-500 mt-0.5">OTC — GERENCIA COMERCIAL</p>
-        <p class="text-xs font-semibold text-gray-700 mt-1 uppercase tracking-wide">Despacho / Carga de Materiales</p>
+        <p class="font-bold text-sm uppercase">DISTRIBUIDORA DE ELECTRICIDAD DELSUR S.A. DE C.V.</p>
+        <p class="text-xs text-gray-500 mt-0.5 uppercase">OTC - GERENCIA COMERCIAL</p>
+        <p class="text-xs font-semibold text-gray-700 mt-1 uppercase tracking-wide">DESPACHO / CARGA DE MATERIALES</p>
       </div>
 
-      <!-- Encabezado -->
-      <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-        <div><p class="text-gray-400">Usuario responsable</p><p class="font-medium text-gray-900">${safeStr(s.usuarioResponsable || s.tecnicoNombre)}</p></div>
-        <div><p class="text-gray-400">Entregado por</p><p class="font-medium text-gray-900">${safeStr(s.entregadoPor || s.registradoPorNombre)}</p></div>
-        <div><p class="text-gray-400">Empresa contratista</p><p class="font-medium text-gray-900">${safeStr(s.empresaContratista) === '—' ? '' : safeStr(s.empresaContratista)}</p></div>
-        <div><p class="text-gray-400">Instalador responsable</p><p class="font-medium text-gray-900">${safeStr(s.instaladorResponsable) === '—' ? '' : safeStr(s.instaladorResponsable)}</p></div>
-        <div><p class="text-gray-400">Placa del vehículo</p><p class="font-medium font-mono text-gray-900">${safeStr(s.placaVehiculo) === '—' ? '' : safeStr(s.placaVehiculo)}</p></div>
-        <div><p class="text-gray-400">N° Referencia</p><p class="font-medium font-mono text-gray-900">${safeStr(s.id,'').slice(-6).toUpperCase()}</p></div>
-        <div><p class="text-gray-400">Fecha solicitud</p><p class="font-medium text-gray-900">${safeStr(s.fechaSolicitud) === '—' ? fechaStr : s.fechaSolicitud}</p></div>
-        <div><p class="text-gray-400">Fecha entrega</p><p class="font-medium text-gray-900">${safeStr(s.fechaEntrega) === '—' ? fechaStr : s.fechaEntrega}</p></div>
-      </div>
+      <!-- Campos del encabezado — orden y nombres exactos del documento oficial -->
+      <table class="w-full text-xs border-collapse">
+        <tr>
+          <td class="py-1 pr-2 text-gray-500 uppercase font-semibold w-40">USUARIO RESPONSABLE:</td>
+          <td class="py-1 border-b border-gray-400 font-medium text-gray-900">${memo.USUARIO_RESPONSABLE}</td>
+        </tr>
+        <tr><td colspan="2" class="py-0.5"></td></tr>
+        <tr>
+          <td class="py-1 pr-2 text-gray-500 uppercase font-semibold">EMPRESA CONTRATISTA:</td>
+          <td class="py-1 border-b border-gray-400 font-medium text-gray-900">${memo.EMPRESA_CONTRATISTA}</td>
+        </tr>
+        <tr><td colspan="2" class="py-0.5"></td></tr>
+        <tr>
+          <td class="py-1 pr-2 text-gray-500 uppercase font-semibold">INSTALADOR RESPONSABLE:</td>
+          <td class="py-1 border-b border-gray-400 font-medium text-gray-900">${memo.INSTALADOR_RESPONSABLE}</td>
+        </tr>
+        <tr><td colspan="2" class="py-0.5"></td></tr>
+        <tr>
+          <td class="py-1 pr-2 text-gray-500 uppercase font-semibold">ENTREGADO POR:</td>
+          <td class="py-1 border-b border-gray-400 font-medium text-gray-900">${memo.ENTREGADO_POR}</td>
+        </tr>
+        <tr><td colspan="2" class="py-0.5"></td></tr>
+        <tr>
+          <td class="py-1 pr-2 text-gray-500 uppercase font-semibold">PLACA DE VEHICULO:</td>
+          <td class="py-1 border-b border-gray-400 font-mono font-medium text-gray-900">${memo.PLACA_VEHICULO}</td>
+        </tr>
+        <tr><td colspan="2" class="py-0.5"></td></tr>
+        <tr>
+          <td class="py-1 pr-2 text-gray-500 uppercase font-semibold">FECHA DE SOLICITUD:</td>
+          <td class="py-1 border-b border-gray-400 font-medium text-gray-900">${memo.FECHA_SOLICITUD}</td>
+        </tr>
+        <tr><td colspan="2" class="py-0.5"></td></tr>
+        <tr>
+          <td class="py-1 pr-2 text-gray-500 uppercase font-semibold">FECHA ENTREGA DE MATERIAL:</td>
+          <td class="py-1 border-b border-gray-400 font-medium text-gray-900">${memo.FECHA_ENTREGA}</td>
+        </tr>
+      </table>
 
-      <!-- Tabla de materiales -->
+      <!-- Tabla de materiales — columnas del documento oficial -->
       <div>
-        <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Materiales</p>
-        <table class="w-full text-xs border border-gray-200 rounded-lg overflow-hidden">
-          <thead class="bg-gray-50">
-            <tr>
-              <th class="text-left px-2 py-2 font-semibold text-gray-600">SAP</th>
-              <th class="text-left px-2 py-2 font-semibold text-gray-600">AX</th>
-              <th class="text-left px-2 py-2 font-semibold text-gray-600">Descripción</th>
-              <th class="text-center px-2 py-2 font-semibold text-gray-600">Cant.</th>
+        <table class="w-full text-xs border border-gray-300">
+          <thead>
+            <tr class="bg-gray-100">
+              <th class="border border-gray-300 px-2 py-1.5 text-center uppercase font-semibold text-gray-700">RESERVA</th>
+              <th class="border border-gray-300 px-2 py-1.5 text-center uppercase font-semibold text-gray-700">STOCK</th>
+              <th class="border border-gray-300 px-2 py-1.5 text-center uppercase font-semibold text-gray-700">CANTIDAD</th>
+              <th class="border border-gray-300 px-2 py-1.5 text-left uppercase font-semibold text-gray-700">DESCRIPCIÓN</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-100">
-            ${(s.items||[]).map(i => `
+          <tbody>
+            ${memo.MATERIALES.map(i => `
               <tr>
-                <td class="px-2 py-2 font-mono text-gray-700">${safeStr(i.sapCode,'')}</td>
-                <td class="px-2 py-2 font-mono text-gray-700">${safeStr(i.axCode,'')}</td>
-                <td class="px-2 py-2 text-gray-900">${safeStr(i.nombre||i.name)}</td>
-                <td class="px-2 py-2 text-center font-semibold text-gray-900">${safeNum(i.cantidad)}</td>
+                <td class="border border-gray-300 px-2 py-1.5 text-center font-mono text-gray-800">${i.RESERVA}</td>
+                <td class="border border-gray-300 px-2 py-1.5 text-center font-mono text-gray-800">${i.STOCK}</td>
+                <td class="border border-gray-300 px-2 py-1.5 text-center font-semibold text-gray-900">${i.CANTIDAD}</td>
+                <td class="border border-gray-300 px-2 py-1.5 text-gray-900 uppercase">${i.DESCRIPCION}</td>
               </tr>`).join('')}
           </tbody>
         </table>
       </div>
 
-      <!-- Seriales -->
-      ${conSeriales.length > 0 ? `
+      <!-- Seriales de medidores / sellos — sección oficial -->
+      ${memo.SERIALES.length > 0 ? `
       <div>
-        <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Seriales de medidores / sellos</p>
-        <div class="space-y-3">
-          ${conSeriales.map(i => `
-            <div class="border border-gray-200 rounded-lg overflow-hidden">
-              <div class="bg-gray-50 px-3 py-2 border-b border-gray-200">
-                <p class="text-xs font-semibold text-gray-700">${safeStr(i.nombre||i.name)}</p>
-                <p class="text-xs text-gray-400 font-mono">SAP ${safeStr(i.sapCode,'')} · AX ${safeStr(i.axCode,'')}</p>
-              </div>
-              <div class="px-3 py-2">
-                ${i.modoSerial === 'rango'
-                  ? `<p class="text-xs text-gray-700">Inicio: <strong class="font-mono">${safeStr(i.serialInicio)}</strong> — Fin: <strong class="font-mono">${safeStr(i.serialFin)}</strong></p>`
-                  : (i.seriales||[]).length > 0
-                    ? `<div class="flex flex-wrap gap-1">${i.seriales.map(ser => `<span class="text-xs px-2 py-0.5 rounded bg-gray-100 font-mono text-gray-700">${ser}</span>`).join('')}</div>`
-                    : `<p class="text-xs text-gray-400 italic">Sin seriales registrados</p>`
-                }
+        <p class="text-xs font-semibold uppercase text-gray-600 mb-2">Serial de medidores / sellos entregados</p>
+        <table class="w-full text-xs border border-gray-300">
+          <thead>
+            <tr class="bg-gray-100">
+              <th class="border border-gray-300 px-2 py-1.5 text-left uppercase font-semibold text-gray-700">STOCK</th>
+              <th class="border border-gray-300 px-2 py-1.5 text-left uppercase font-semibold text-gray-700">RESERVA</th>
+              <th class="border border-gray-300 px-2 py-1.5 text-left uppercase font-semibold text-gray-700">DESCRIPCIÓN</th>
+              <th class="border border-gray-300 px-2 py-1.5 text-center uppercase font-semibold text-gray-700">CANTIDAD</th>
+              <th class="border border-gray-300 px-2 py-1.5 text-center uppercase font-semibold text-gray-700">INICIO</th>
+              <th class="border border-gray-300 px-2 py-1.5 text-center uppercase font-semibold text-gray-700">FIN</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${memo.SERIALES.map(i => {
+              const axCode  = safeStr(i.axCode,'');
+              const sapCode = safeStr(i.sapCode,'');
+              const desc    = safeStr(i.nombre||i.name,'').toUpperCase();
+              const cant    = safeNum(i.cantidad);
+              const inicio  = i.modoSerial === 'rango' ? safeStr(i.serialInicio,'') : (i.seriales||[])[0] || '';
+              const fin     = i.modoSerial === 'rango' ? safeStr(i.serialFin,'')   : (i.seriales||[]).slice(-1)[0] || '';
+              return `<tr>
+                <td class="border border-gray-300 px-2 py-1.5 font-mono text-gray-800">${axCode}</td>
+                <td class="border border-gray-300 px-2 py-1.5 font-mono text-gray-800">${sapCode}</td>
+                <td class="border border-gray-300 px-2 py-1.5 text-gray-900 uppercase">${desc}</td>
+                <td class="border border-gray-300 px-2 py-1.5 text-center font-semibold">${cant}</td>
+                <td class="border border-gray-300 px-2 py-1.5 text-center font-mono">${inicio}</td>
+                <td class="border border-gray-300 px-2 py-1.5 text-center font-mono">${fin}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+        ${memo.SERIALES.some(i => i.modoSerial === 'individual' && (i.seriales||[]).length > 1) ? `
+        <div class="mt-2 space-y-2">
+          ${memo.SERIALES.filter(i => i.modoSerial === 'individual' && (i.seriales||[]).length > 1).map(i => `
+            <div class="border border-gray-200 rounded p-2">
+              <p class="text-xs font-semibold text-gray-600 uppercase mb-1">${safeStr(i.nombre||i.name).toUpperCase()}</p>
+              <div class="flex flex-wrap gap-1">
+                ${(i.seriales||[]).map(ser => `<span class="text-xs px-1.5 py-0.5 border border-gray-300 rounded font-mono text-gray-700">${ser}</span>`).join('')}
               </div>
             </div>`).join('')}
-        </div>
+        </div>` : ''}
       </div>` : ''}
 
-      <!-- Firmas -->
-      <div class="grid grid-cols-2 gap-6 pt-2">
-        <div class="text-center">
-          <div class="border-b border-gray-400 mb-1 h-10"></div>
-          <p class="text-xs text-gray-500">Firma de entregado</p>
-          <p class="text-xs font-medium text-gray-700">${safeStr(s.entregadoPor || s.registradoPorNombre)}</p>
+      <!-- Espacios de firma — exactamente como en el documento oficial -->
+      <div class="grid grid-cols-2 gap-6 pt-4">
+        <div class="text-center space-y-1">
+          <div class="border-b border-gray-500 h-10"></div>
+          <p class="text-xs uppercase font-semibold text-gray-500">FIRMA DE ENTREGADO</p>
         </div>
-        <div class="text-center">
-          <div class="border-b border-gray-400 mb-1 h-10"></div>
-          <p class="text-xs text-gray-500">Firma de recibido</p>
-          <p class="text-xs font-medium text-gray-700">${safeStr(s.usuarioResponsable || s.tecnicoNombre)}</p>
+        <div class="text-center space-y-1">
+          <div class="border-b border-gray-500 h-10"></div>
+          <p class="text-xs uppercase font-semibold text-gray-500">FIRMA DE RECIBIDO</p>
         </div>
       </div>
 
@@ -1239,14 +1315,14 @@ function showMemo(s) {
   ov.querySelector('#fm-print').onclick = () => {
     const body = document.getElementById('memo-body').innerHTML;
     const w = window.open('','_blank');
-    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Despacho INNOVA STC</title>
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Despacho DELSUR</title>
       <style>
-        body{font-family:Arial,sans-serif;font-size:12px;color:#111;margin:20px}
+        body{font-family:Arial,sans-serif;font-size:11px;color:#000;margin:15mm}
         table{width:100%;border-collapse:collapse}
-        th,td{border:1px solid #ddd;padding:5px 8px;text-align:left}
-        th{background:#f5f5f5;font-size:10px}
-        .font-mono{font-family:monospace}
-        @media print{body{margin:8mm}}
+        th,td{border:1px solid #999;padding:4px 6px}
+        th{background:#e8e8e8;font-size:10px;text-transform:uppercase}
+        .font-mono{font-family:Courier New,monospace}
+        @media print{body{margin:10mm}}
       </style></head><body>${body}</body></html>`);
     w.document.close(); w.print();
   };
