@@ -91,8 +91,19 @@
             <p id="topbar-name" class="text-sm font-medium text-gray-800 leading-tight"></p>
             <p id="topbar-role" class="text-xs text-gray-400 capitalize"></p>
           </div>
-          <div id="topbar-avatar"
-            class="w-8 h-8 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center shrink-0">
+          <div class="relative">
+  <button id="topbar-avatar"
+    class="w-8 h-8 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center shrink-0 cursor-pointer hover:opacity-80 transition-opacity">
+  </button>
+  <div id="avatar-menu" class="hidden absolute right-0 top-10 bg-white border border-gray-200 rounded-xl shadow-lg py-1 z-50 min-w-36">
+    <div id="avatar-menu-name" class="px-4 py-2 text-xs text-gray-400 border-b border-gray-100"></div>
+    <button id="btn-logout-menu" class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>
+      </svg>
+      Cerrar sesión
+    </button>
+  </div>
           </div>
           <button id="btn-logout-top"
   class="text-gray-400 hover:text-gray-700 transition-colors">
@@ -186,7 +197,24 @@
       }
 
       document.getElementById('btn-logout-sidebar').addEventListener('click', handleLogout);
-      document.getElementById('btn-logout-top').addEventListener('click', handleLogout);
+
+const avatar = document.getElementById('topbar-avatar');
+const avatarMenu = document.getElementById('avatar-menu');
+const avatarMenuName = document.getElementById('avatar-menu-name');
+
+avatarMenuName.textContent = session.displayName;
+
+avatar.addEventListener('click', () => {
+  avatarMenu.classList.toggle('hidden');
+});
+
+document.addEventListener('click', (e) => {
+  if (!avatar.contains(e.target) && !avatarMenu.contains(e.target)) {
+    avatarMenu.classList.add('hidden');
+  }
+});
+
+document.getElementById('btn-logout-menu').addEventListener('click', handleLogout);
 
       // Verificar que Firebase Auth sigue activo
       onAuthStateChanged(auth, (user) => {
