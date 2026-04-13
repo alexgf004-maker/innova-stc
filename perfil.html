@@ -1,0 +1,136 @@
+<!-- views/perfil.html — Perfil del usuario / cambio de PIN -->
+<div class="max-w-md space-y-4">
+
+  <div>
+    <h1 class="text-xl font-semibold text-gray-900">Mi perfil</h1>
+    <p class="text-sm text-gray-500 mt-0.5">Información de tu cuenta</p>
+  </div>
+
+  <!-- Info del usuario -->
+  <div class="bg-white rounded-xl border border-gray-200 p-5 space-y-3" id="profile-info">
+    <!-- Generado por JS -->
+  </div>
+
+  <!-- Cambiar PIN -->
+  <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <div class="px-5 py-4 border-b border-gray-100">
+      <h2 class="font-medium text-gray-900 text-sm">Cambiar PIN</h2>
+    </div>
+    <div class="px-5 py-5 space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5">PIN actual</label>
+        <input id="current-pin" type="password" inputmode="numeric" maxlength="8" placeholder="••••"
+          class="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm font-mono text-center tracking-widest focus:outline-none focus:ring-2 focus:ring-accent" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5">Nuevo PIN</label>
+        <input id="new-pin" type="password" inputmode="numeric" maxlength="8" placeholder="••••"
+          class="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm font-mono text-center tracking-widest focus:outline-none focus:ring-2 focus:ring-accent" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5">Confirmar nuevo PIN</label>
+        <input id="confirm-pin" type="password" inputmode="numeric" maxlength="8" placeholder="••••"
+          class="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm font-mono text-center tracking-widest focus:outline-none focus:ring-2 focus:ring-accent" />
+      </div>
+      <div id="pin-error" class="hidden text-sm text-danger bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5"></div>
+      <button id="btn-change-pin"
+        class="w-full bg-primary hover:bg-accent text-white font-medium rounded-lg py-2.5 text-sm transition-colors">
+        Actualizar PIN
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<script type="module">
+  import { getFirestore, doc, getDoc, updateDoc }
+    from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+  import { generateSalt, hashPin } from '../js/crypto.js';
+  import { showToast } from '../js/ui.js';
+
+  const session = window.__session;
+  const db      = window.__firebase.db;
+
+  // Mostrar info del usuario
+  const infoEl = document.getElementById('profile-info');
+  if (infoEl && session) {
+    const roleLabels = { admin: 'Administrador', coordinadora: 'Coordinadora', campo: 'Personal de campo' };
+    infoEl.innerHTML = `
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 rounded-full bg-primary text-white font-bold text-lg flex items-center justify-center shrink-0">
+          ${session.displayName.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase()}
+        </div>
+        <div>
+          <p class="font-semibold text-gray-900">${session.displayName}</p>
+          <p class="text-sm text-gray-500 font-mono">${session.username}</p>
+          <p class="text-xs text-gray-400 mt-0.5">${roleLabels[session.role] || session.role}</p>
+        </div>
+      </div>
+    `;
+  }
+
+  // Solo dígitos en los campos PIN
+  ['current-pin','new-pin','confirm-pin'].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', e => {
+      e.target.value = e.target.value.replace(/\D/g,'').slice(0,8);
+    });
+  });
+
+  // Cambiar PIN
+  document.getElementById('btn-change-pin')?.addEventListener('click', async () => {
+    const currentPin = document.getElementById('current-pin').value;
+    const newPin     = document.getElementById('new-pin').value;
+    const confirmPin = document.getElementById('confirm-pin').value;
+    const errorEl    = document.getElementById('pin-error');
+    const btn        = document.getElementById('btn-change-pin');
+
+    errorEl.classList.add('hidden');
+
+    if (currentPin.length < 4 || newPin.length < 4) {
+      errorEl.textContent = 'Los PINs deben tener al menos 4 dígitos.';
+      errorEl.classList.remove('hidden');
+      return;
+    }
+    if (newPin !== confirmPin) {
+      errorEl.textContent = 'El nuevo PIN y su confirmación no coinciden.';
+      errorEl.classList.remove('hidden');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Verificando...';
+
+    try {
+      const snap = await getDoc(doc(db, 'users', session.uid));
+      if (!snap.exists()) throw new Error('Perfil no encontrado.');
+
+      const profile = snap.data();
+      const currentHash = await hashPin(profile.pinSalt, currentPin);
+
+      if (currentHash !== profile.pinHash) {
+        errorEl.textContent = 'El PIN actual es incorrecto.';
+        errorEl.classList.remove('hidden');
+        btn.disabled = false;
+        btn.textContent = 'Actualizar PIN';
+        return;
+      }
+
+      const salt    = generateSalt();
+      const pinHash = await hashPin(salt, newPin);
+      await updateDoc(doc(db, 'users', session.uid), { pinHash, pinSalt: salt });
+
+      document.getElementById('current-pin').value = '';
+      document.getElementById('new-pin').value     = '';
+      document.getElementById('confirm-pin').value = '';
+      showToast('PIN actualizado correctamente.', 'success');
+
+    } catch (err) {
+      errorEl.textContent = 'Error al actualizar el PIN. Intenta de nuevo.';
+      errorEl.classList.remove('hidden');
+      console.error(err);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Actualizar PIN';
+    }
+  });
+</script>
