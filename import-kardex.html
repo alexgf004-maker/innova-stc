@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>INNOVA STC — Importar materiales</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #F5F7FA; }
+    .avatar-btn { width:32px;height:32px;border-radius:50%;background:#1B4F8A;color:white;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center; }
+  </style>
+</head>
+<body class="p-4 max-w-2xl mx-auto">
+
+  <!-- Header -->
+  <div class="flex items-center gap-3 mb-6">
+    <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style="background:#1B4F8A">
+      <svg width="18" height="18" viewBox="0 0 32 32" fill="none">
+        <path d="M4 8h6v16H4zM13 8h6l6 16h-6z" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <div>
+      <p class="font-bold text-sm text-gray-900">INNOVA STC</p>
+      <p class="text-xs text-gray-500">Importación masiva de materiales — uso único</p>
+    </div>
+  </div>
+
+  <!-- Paso 1: Autenticación -->
+  <div id="step-auth" class="space-y-4">
+    <div class="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+      <h2 class="font-semibold text-gray-900">Paso 1 — Autenticación</h2>
+      <p class="text-sm text-gray-500">Ingresa con tu usuario administrador para poder escribir en Firestore.</p>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Usuario</label>
+        <input id="auth-user" type="text" placeholder="Ej. admin"
+          class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">PIN</label>
+        <input id="auth-pin" type="password" inputmode="numeric" maxlength="8" placeholder="••••"
+          class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm font-mono text-center focus:outline-none focus:ring-2 focus:ring-blue-400"/>
+      </div>
+      <div id="auth-err" class="hidden text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2"></div>
+      <button id="btn-auth"
+        class="w-full text-white font-medium rounded-lg py-2.5 text-sm" style="background:#1B4F8A">
+        Autenticar
+      </button>
+    </div>
+  </div>
+
+  <!-- Paso 2: Seleccionar archivo -->
+  <div id="step-file" class="hidden space-y-4">
+    <div class="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="font-semibold text-gray-900">Paso 2 — Seleccionar archivo</h2>
+        <span id="auth-badge" class="text-xs px-2 py-1 rounded-full font-medium" style="background:#DCFCE7;color:#166534">✓ Autenticado</span>
+      </div>
+      <p class="text-sm text-gray-500">Selecciona el archivo Excel con la lista de materiales.</p>
+      <p class="text-xs text-gray-400">Columnas requeridas: <strong>SAP</strong>, <strong>AX</strong>, <strong>Nombre material</strong>, <strong>Existencia</strong></p>
+
+      <label class="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-xl p-6 cursor-pointer hover:border-blue-400 transition-colors">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="mb-2">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        <p class="text-sm text-gray-600 font-medium">Toca para seleccionar el Excel</p>
+        <p class="text-xs text-gray-400 mt-1">.xlsx únicamente</p>
+        <input id="file-input" type="file" accept=".xlsx,.xls" class="hidden"/>
+      </label>
+
+      <div id="file-err" class="hidden text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2"></div>
+    </div>
+  </div>
+
+  <!-- Paso 3: Previsualización -->
+  <div id="step-preview" class="hidden space-y-4">
+    <div class="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+      <h2 class="font-semibold text-gray-900">Paso 3 — Previsualización</h2>
+
+      <!-- Resumen -->
+      <div id="preview-summary" class="grid grid-cols-3 gap-2"></div>
+
+      <!-- Tabla de materiales a importar -->
+      <div id="preview-table" class="overflow-x-auto rounded-lg border border-gray-200 max-h-80 overflow-y-auto"></div>
+
+      <!-- Materiales duplicados (serán saltados) -->
+      <div id="preview-skipped" class="hidden"></div>
+
+      <div id="import-err" class="hidden text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2"></div>
+
+      <div class="flex gap-3">
+        <button id="btn-back"
+          class="flex-1 border border-gray-300 text-gray-700 font-medium rounded-lg py-2.5 text-sm hover:bg-gray-50">
+          ← Volver
+        </button>
+        <button id="btn-import"
+          class="flex-1 text-white font-medium rounded-lg py-2.5 text-sm" style="background:#1B4F8A">
+          Importar materiales
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Paso 4: Resultado -->
+  <div id="step-result" class="hidden space-y-4">
+    <div class="bg-white rounded-xl border border-gray-200 p-5 space-y-4 text-center">
+      <div class="w-16 h-16 rounded-full flex items-center justify-center mx-auto" style="background:#DCFCE7">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#166534" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      </div>
+      <h2 class="font-semibold text-gray-900">Importación completada</h2>
+      <div id="result-summary" class="space-y-1"></div>
+      <a href="index.html"
+        class="inline-block mt-2 text-white font-medium rounded-lg px-6 py-2.5 text-sm" style="background:#1B4F8A">
+        Ir al Kardex
+      </a>
+    </div>
+  </div>
+
+  <!-- Firebase + lógica -->
+  <script type="module">
+    import { initializeApp }    from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+    import { getAuth, signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+    import { getFirestore, collection, getDocs, addDoc, serverTimestamp }
+      from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+    import { FIREBASE_CONFIG, SEED } from './js/firebase-config.js';
+    import { derivePassword, hashPin } from './js/crypto.js';
+
+    const app  = initializeApp(FIREBASE_CONFIG);
+    const auth = getAuth(app);
+    const db   = getFirestore(app);
+
+    let currentSession = null;
+    let toImport  = [];
+    let toSkip    = [];
+
+    // ── PASO 1: AUTH ──────────────────────────────────
+    document.getElementById('btn-auth').addEventListener('click', async () => {
+      const username = document.getElementById('auth-user').value.trim().toLowerCase();
+      const pin      = document.getElementById('auth-pin').value.replace(/\D/g,'');
+      const errEl    = document.getElementById('auth-err');
+      const btn      = document.getElementById('btn-auth');
+      errEl.classList.add('hidden');
+
+      if (!username || pin.length < 4) {
+        errEl.textContent = 'Ingresa usuario y PIN.';
+        errEl.classList.remove('hidden');
+        return;
+      }
+
+      btn.disabled = true; btn.textContent = 'Verificando...';
+
+      try {
+        // Buscar en colección usernames
+        const { getDoc, doc, query, where, getDocs: gd, collection: col } =
+          await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+
+        const usernameDoc = await getDoc(doc(db, 'usernames', username));
+        if (!usernameDoc.exists()) throw new Error('Usuario no encontrado.');
+
+        const { uid, internalEmail, active } = usernameDoc.data();
+        if (!active) throw new Error('Usuario inactivo.');
+
+        const pass = await derivePassword(uid, SEED);
+        await signInWithEmailAndPassword(auth, internalEmail, pass);
+
+        // Verificar PIN
+        const { getDoc: gd2, doc: d2 } =
+          await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+        const profileSnap = await gd2(d2(db, 'users', uid));
+        const profile = profileSnap.data();
+
+        if (!profile.active) throw new Error('Usuario inactivo.');
+
+        const enc  = new TextEncoder().encode(profile.pinSalt + pin);
+        const buf  = await crypto.subtle.digest('SHA-256', enc);
+        const hash = Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+
+        if (hash !== profile.pinHash) throw new Error('PIN incorrecto.');
+        if (profile.role !== 'admin') throw new Error('Solo administradores pueden importar materiales.');
+
+        currentSession = { uid, displayName: profile.displayName, role: profile.role };
+
+        document.getElementById('step-auth').classList.add('hidden');
+        document.getElementById('step-file').classList.remove('hidden');
+
+      } catch(e) {
+        errEl.textContent = e.message || 'Error de autenticación.';
+        errEl.classList.remove('hidden');
+        btn.disabled = false; btn.textContent = 'Autenticar';
+      }
+    });
+
+    // ── PASO 2: ARCHIVO ───────────────────────────────
+    document.getElementById('file-input').addEventListener('change', async (e) => {
+      const file  = e.target.files[0];
+      const errEl = document.getElementById('file-err');
+      errEl.classList.add('hidden');
+      if (!file) return;
+
+      try {
+        const data = await file.arrayBuffer();
+        const wb   = XLSX.read(data, { type: 'array' });
+        const ws   = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { defval: null });
+
+        if (rows.length === 0) throw new Error('El archivo está vacío o no tiene datos.');
+
+        // Verificar columnas
+        const firstRow = rows[0];
+        const keys = Object.keys(firstRow).map(k => k.trim());
+        const hasSap    = keys.some(k => k.toUpperCase() === 'SAP');
+        const hasAx     = keys.some(k => k.toUpperCase() === 'AX');
+        const hasNombre = keys.some(k => k.toLowerCase().includes('nombre'));
+        if (!hasSap || !hasAx || !hasNombre) {
+          throw new Error('El archivo debe tener las columnas: SAP, AX, Nombre material');
+        }
+
+        // Normalizar filas
+        const materiales = rows
+          .map(row => {
+            // Buscar columnas de forma flexible
+            const sapKey    = Object.keys(row).find(k => k.trim().toUpperCase() === 'SAP');
+            const axKey     = Object.keys(row).find(k => k.trim().toUpperCase() === 'AX');
+            const nombreKey = Object.keys(row).find(k => k.trim().toLowerCase().includes('nombre'));
+            const existKey  = Object.keys(row).find(k => k.trim().toLowerCase().includes('exist'));
+
+            const sapCode = row[sapKey] != null ? String(row[sapKey]).trim() : '';
+            const axCode  = row[axKey]  != null ? String(row[axKey]).trim()  : '';
+            const name    = row[nombreKey] != null ? String(row[nombreKey]).trim() : '';
+            const stock   = row[existKey]  != null ? Number(row[existKey]) || 0 : 0;
+
+            return { sapCode, axCode, name, stock };
+          })
+          .filter(m => m.name !== '' && (m.sapCode !== '' || m.axCode !== ''));
+
+        if (materiales.length === 0) throw new Error('No se encontraron materiales válidos en el archivo.');
+
+        // Verificar duplicados contra Firestore
+        const snap     = await getDocs(collection(db, 'kardex/inventario/items'));
+        const existing = snap.docs.map(d => d.data());
+        const existingSap = new Set(existing.map(i => String(i.sapCode||'')).filter(Boolean));
+        const existingAx  = new Set(existing.map(i => String(i.axCode||'')).filter(Boolean));
+
+        toImport = [];
+        toSkip   = [];
+
+        for (const m of materiales) {
+          const dupSap = m.sapCode && existingSap.has(m.sapCode);
+          const dupAx  = m.axCode  && existingAx.has(m.axCode);
+          if (dupSap || dupAx) {
+            toSkip.push({ ...m, reason: dupSap ? `SAP ${m.sapCode} ya existe` : `AX ${m.axCode} ya existe` });
+          } else {
+            toImport.push(m);
+          }
+        }
+
+        mostrarPreview();
+
+      } catch(e) {
+        errEl.textContent = e.message || 'Error al leer el archivo.';
+        errEl.classList.remove('hidden');
+      }
+    });
+
+    function mostrarPreview() {
+      document.getElementById('step-file').classList.add('hidden');
+      document.getElementById('step-preview').classList.remove('hidden');
+
+      // Resumen
+      document.getElementById('preview-summary').innerHTML = `
+        ${statBox(toImport.length, 'A importar', '#2196F3')}
+        ${statBox(toSkip.length,   'A saltar',   '#E65100')}
+        ${statBox(toImport.length + toSkip.length, 'Total',  '#6B7280')}`;
+
+      // Tabla
+      const tabla = document.getElementById('preview-table');
+      tabla.innerHTML = `
+        <table class="w-full text-xs">
+          <thead class="bg-gray-50 border-b border-gray-200 sticky top-0">
+            <tr>
+              <th class="text-left px-3 py-2 font-semibold text-gray-500">Material</th>
+              <th class="text-left px-3 py-2 font-semibold text-gray-500">SAP</th>
+              <th class="text-left px-3 py-2 font-semibold text-gray-500">AX</th>
+              <th class="text-right px-3 py-2 font-semibold text-gray-500">Stock</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            ${toImport.map(m => `
+              <tr class="hover:bg-gray-50">
+                <td class="px-3 py-2 text-gray-900 max-w-xs truncate">${m.name}</td>
+                <td class="px-3 py-2 text-gray-500 font-mono">${m.sapCode||'—'}</td>
+                <td class="px-3 py-2 text-gray-500 font-mono">${m.axCode||'—'}</td>
+                <td class="px-3 py-2 text-right font-medium text-gray-900">${m.stock}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>`;
+
+      // Saltados
+      if (toSkip.length > 0) {
+        const skip = document.getElementById('preview-skipped');
+        skip.classList.remove('hidden');
+        skip.innerHTML = `
+          <div class="bg-orange-50 border border-orange-200 rounded-xl p-3">
+            <p class="text-xs font-semibold text-orange-800 mb-2">⚠️ ${toSkip.length} material(es) serán saltados (ya existen)</p>
+            <div class="space-y-1">
+              ${toSkip.map(m => `
+                <div class="flex items-center justify-between text-xs">
+                  <span class="text-orange-700 truncate">${m.name}</span>
+                  <span class="text-orange-500 shrink-0 ml-2">${m.reason}</span>
+                </div>`).join('')}
+            </div>
+          </div>`;
+      }
+    }
+
+    function statBox(val, label, color) {
+      return `<div class="bg-gray-50 rounded-xl p-3 text-center border border-gray-200">
+        <p class="text-2xl font-bold" style="color:${color}">${val}</p>
+        <p class="text-xs text-gray-500 mt-0.5">${label}</p>
+      </div>`;
+    }
+
+    document.getElementById('btn-back').addEventListener('click', () => {
+      document.getElementById('step-preview').classList.add('hidden');
+      document.getElementById('step-file').classList.remove('hidden');
+      document.getElementById('file-input').value = '';
+    });
+
+    // ── PASO 3: IMPORTAR ──────────────────────────────
+    document.getElementById('btn-import').addEventListener('click', async () => {
+      if (toImport.length === 0) {
+        document.getElementById('import-err').textContent = 'No hay materiales nuevos para importar.';
+        document.getElementById('import-err').classList.remove('hidden');
+        return;
+      }
+
+      const btn = document.getElementById('btn-import');
+      btn.disabled = true;
+      btn.textContent = 'Importando...';
+
+      let ok = 0, err = 0;
+      const col = collection(db, 'kardex/inventario/items');
+
+      for (const m of toImport) {
+        try {
+          await addDoc(col, {
+            name:      m.name,
+            sapCode:   m.sapCode,
+            axCode:    m.axCode,
+            unit:      'unidad',   // valor por defecto — editable desde el Kardex
+            stock:     isNaN(m.stock) ? 0 : m.stock,
+            minStock:  0,
+            creadoEn:  serverTimestamp(),
+            creadoPor: currentSession.uid,
+          });
+          ok++;
+        } catch(e) {
+          err++;
+          console.error('Error al importar:', m.name, e);
+        }
+
+        // Actualizar progreso
+        btn.textContent = `Importando ${ok + err} / ${toImport.length}...`;
+      }
+
+      document.getElementById('step-preview').classList.add('hidden');
+      document.getElementById('step-result').classList.remove('hidden');
+      document.getElementById('result-summary').innerHTML = `
+        <p class="text-sm text-gray-700">
+          <strong class="text-green-700">${ok}</strong> material(es) importados correctamente.
+        </p>
+        ${toSkip.length > 0 ? `<p class="text-sm text-gray-500">${toSkip.length} saltados por duplicado.</p>` : ''}
+        ${err > 0 ? `<p class="text-sm text-red-600">${err} errores al importar.</p>` : ''}
+        <p class="text-xs text-gray-400 mt-2">Recuerda revisar la unidad de medida de cada material en el inventario.</p>`;
+    });
+  </script>
+
+</body>
+</html>
