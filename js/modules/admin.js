@@ -176,6 +176,13 @@ async function handleSetActive(db, uid, name, active) {
 
   try {
     await updateDoc(doc(db, 'users', uid), { active });
+
+    // Sincronizar active en /usernames para que el login lo refleje
+    const userSnap = await getDoc(doc(db, 'users', uid));
+    if (userSnap.exists()) {
+      const username = userSnap.data().username;
+      await updateDoc(doc(db, 'usernames', username), { active });
+    }
     showToast(`${name} ha sido ${active ? 'activado' : 'desactivado'}.`, active ? 'success' : 'info');
   } catch (err) {
     showToast('Error al actualizar el usuario.', 'error');
@@ -323,10 +330,16 @@ async function handleCreateUser(db, auth, overlay, session) {
     const salt    = generateSalt();
     const pinHash = await hashPin(salt, pin);
 
+    // Guardar perfil completo en /users/{uid}
     await setDoc(doc(db, 'users', uid), {
       uid, username, displayName, role, internalEmail,
       pinHash, pinSalt: salt, active: true,
       createdAt: serverTimestamp(), createdBy: session.uid,
+    });
+
+    // Guardar entrada mínima en /usernames/{username} para el login
+    await setDoc(doc(db, 'usernames', username), {
+      uid, internalEmail, active: true,
     });
 
     overlay.remove();
