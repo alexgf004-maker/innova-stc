@@ -304,36 +304,33 @@ async function handleCreateUser(db, auth, overlay, session) {
   try {
     const internalEmail = `${username}@innova-stc.internal`;
 
-    // 1. Crear en Firebase Auth con contraseña temporal
-    const cred = await createUserWithEmailAndPassword(auth, internalEmail, 'TEMP_PASS_placeholder');
+    // Crear segunda instancia de Firebase para no perder la sesión del admin
+    const { initializeApp, getApp } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
+    const { getAuth, createUserWithEmailAndPassword, updatePassword } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js');
+
+    let secondApp;
+    try { secondApp = getApp('secondary'); } catch { 
+      secondApp = initializeApp(window.__firebase.app.options, 'secondary');
+    }
+    const secondAuth = getAuth(secondApp);
+
+    const cred = await createUserWithEmailAndPassword(secondAuth, internalEmail, 'TEMP_PASS_placeholder');
     const uid  = cred.user.uid;
 
-    // 2. Derivar contraseña única real y actualizarla
     const realPass = await derivePassword(uid, SEED);
     await updatePassword(cred.user, realPass);
 
-    // 3. Hashear PIN
     const salt    = generateSalt();
     const pinHash = await hashPin(salt, pin);
 
-    // 4. Guardar perfil en Firestore
     await setDoc(doc(db, 'users', uid), {
-      uid,
-      username,
-      displayName,
-      role,
-      internalEmail,
-      pinHash,
-      pinSalt:   salt,
-      active:    true,
-      createdAt: serverTimestamp(),
-      createdBy: session.uid,
+      uid, username, displayName, role, internalEmail,
+      pinHash, pinSalt: salt, active: true,
+      createdAt: serverTimestamp(), createdBy: session.uid,
     });
 
     overlay.remove();
     showToast(`Usuario ${displayName} creado correctamente.`, 'success');
-
-    // Refrescar lista
     await renderUserList(db);
 
   } catch (err) {
