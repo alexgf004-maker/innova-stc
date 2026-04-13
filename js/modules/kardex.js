@@ -718,25 +718,21 @@ async function showFormSalida(db, session) {
     <!-- MATERIALES -->
     <div class="px-5 py-4 space-y-3 border-b border-gray-100">
       <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Materiales</p>
-      <div class="flex gap-2">
-        <select id="fs-item"
-          class="flex-1 border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 min-w-0">
-          <option value="">Seleccionar material...</option>
-          ${items.map(i => `
-            <option value="${i.id}"
-              data-nombre="${safeStr(i.name)}"
-              data-unit="${safeStr(i.unit,'')}"
-              data-stock="${safeNum(i.stock)}"
-              data-sap="${safeStr(i.sapCode,'')}"
-              data-ax="${safeStr(i.axCode,'')}"
-              data-serial="${i.requiereSerial ? '1' : '0'}"
-            >${safeStr(i.name)} — SAP ${safeStr(i.sapCode,'?')} (${safeNum(i.stock)} disp.)</option>`).join('')}
-        </select>
-        <input id="fs-cant" type="number" min="1" placeholder="Cant."
-          class="w-20 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 text-center shrink-0"/>
-        <button id="fs-add"
-          class="px-3 py-2 text-white rounded-lg text-sm font-bold shrink-0" style="background-color:#2196F3">+</button>
+
+      <!-- Buscador -->
+      <div class="relative">
+        <svg class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input id="fs-buscar" type="text" placeholder="Buscar por nombre o código SAP..."
+          autocomplete="off"
+          class="w-full border border-gray-300 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>
       </div>
+
+      <!-- Lista de resultados -->
+      <div id="fs-resultados" class="bg-white rounded-xl border border-gray-200 overflow-hidden max-h-56 overflow-y-auto"></div>
+
+      <!-- Items seleccionados -->
       <div id="fs-lista" class="space-y-2"></div>
     </div>
 
@@ -749,94 +745,166 @@ async function showFormSalida(db, session) {
       <button id="fs-submit" class="flex-1 text-white font-medium rounded-lg py-2.5 text-sm" style="background-color:#1B4F8A">Registrar salida</button>
     </div>`);
 
-  // ── Renderizar lista de items seleccionados ──
-  function renderLista() {
-    const lista = ov.querySelector('#fs-lista');
-    if (sel.length === 0) {
-      lista.innerHTML = '<p class="text-xs text-gray-400 text-center py-2">Sin materiales agregados</p>';
+  // ── Historial de últimos materiales usados (localStorage-like via sessionStorage) ──
+  function getRecientes() {
+    try { return JSON.parse(sessionStorage.getItem('kardex_recientes') || '[]'); } catch { return []; }
+  }
+  function addReciente(itemId) {
+    const prev = getRecientes().filter(id => id !== itemId);
+    sessionStorage.setItem('kardex_recientes', JSON.stringify([itemId, ...prev].slice(0, 5)));
+  }
+
+  // ── Normalizar nombre: Title Case ──
+  function titleCase(str) {
+    return safeStr(str).toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  // ── Renderizar lista de resultados de búsqueda ──
+  function renderResultados(query) {
+    const el = document.getElementById('fs-resultados');
+    if (!el) return;
+
+    let lista = [];
+    const q = (query || '').trim().toLowerCase();
+
+    if (!q) {
+      // Sin búsqueda: mostrar recientes primero, luego todos
+      const recientes = getRecientes();
+      const recList = recientes.map(id => items.find(i => i.id === id)).filter(Boolean);
+      const resto   = items.filter(i => !recientes.includes(i.id));
+      if (recList.length > 0) {
+        lista = [{ tipo: 'header', label: 'Usados recientemente' }, ...recList,
+                 { tipo: 'header', label: 'Todos los materiales' }, ...resto];
+      } else {
+        lista = [{ tipo: 'header', label: 'Materiales disponibles' }, ...items];
+      }
+    } else {
+      const filtered = items.filter(i =>
+        titleCase(i.name).toLowerCase().includes(q) ||
+        safeStr(i.name).toLowerCase().includes(q) ||
+        safeStr(i.sapCode,'').toLowerCase().includes(q) ||
+        safeStr(i.axCode,'').toLowerCase().includes(q)
+      );
+      lista = filtered.length > 0 ? filtered : [{ tipo: 'empty' }];
+    }
+
+    if (lista.length === 0) {
+      el.innerHTML = '<div class="py-4 text-center text-xs text-gray-400">Sin resultados</div>';
       return;
     }
-    lista.innerHTML = sel.map((s, idx) => `
-      <div class="bg-gray-50 rounded-xl border border-gray-200 p-3 space-y-2">
-        <div class="flex items-start justify-between gap-2">
-          <div class="min-w-0">
-            <p class="text-sm font-medium text-gray-900 truncate">${s.name}</p>
-            <p class="text-xs text-gray-400 font-mono">SAP ${s.sapCode||'—'} · AX ${s.axCode||'—'}</p>
-            <p class="text-xs text-gray-500">${s.cantidad} ${s.unit}</p>
-          </div>
-          <button data-ri="${idx}" class="text-gray-400 hover:text-red-500 shrink-0 text-lg leading-none mt-0.5">✕</button>
-        </div>
-        ${s.requiereSerial ? `
-        <div class="space-y-2 border-t border-gray-200 pt-2">
-          <p class="text-xs font-medium text-blue-700">Seriales / sellos</p>
-          <div class="flex gap-2">
-            <button data-modo-serial="${idx}" data-modo="individual"
-              class="flex-1 text-xs py-1.5 rounded-lg border font-medium transition-colors ${s.modoSerial === 'individual' ? 'border-blue-400 text-blue-700 bg-blue-50' : 'border-gray-300 text-gray-600'}">
-              Individual
-            </button>
-            <button data-modo-serial="${idx}" data-modo="rango"
-              class="flex-1 text-xs py-1.5 rounded-lg border font-medium transition-colors ${s.modoSerial === 'rango' ? 'border-blue-400 text-blue-700 bg-blue-50' : 'border-gray-300 text-gray-600'}">
-              Rango
-            </button>
-          </div>
-          ${s.modoSerial === 'individual' ? `
-          <div>
-            <textarea data-seriales="${idx}" rows="3"
-              placeholder="Un serial por línea&#10;Ej:&#10;ABC123&#10;ABC124"
-              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
-            >${(s.seriales||[]).join('\n')}</textarea>
-            <p class="text-xs text-gray-400 mt-0.5">${(s.seriales||[]).length} de ${s.cantidad} serial(es)</p>
-          </div>` : `
-          <div class="grid grid-cols-2 gap-2">
-            <div>
-              <label class="block text-xs text-gray-500 mb-1">Inicio</label>
-              <input data-rinicio="${idx}" type="text" value="${s.serialInicio||''}" placeholder="Ej. ABC001"
-                class="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-400"/>
-            </div>
-            <div>
-              <label class="block text-xs text-gray-500 mb-1">Fin</label>
-              <input data-rfin="${idx}" type="text" value="${s.serialFin||''}" placeholder="Ej. ABC010"
-                class="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-400"/>
-            </div>
-          </div>`}
-        </div>` : ''}
-      </div>`).join('');
 
-    // Eliminar item
-    lista.querySelectorAll('[data-ri]').forEach(b => {
-      b.onclick = () => { sel.splice(parseInt(b.dataset.ri), 1); renderLista(); };
-    });
-    // Cambiar modo serial
-    lista.querySelectorAll('[data-modo-serial]').forEach(b => {
-      b.onclick = () => {
-        const idx = parseInt(b.dataset.modoSerial);
-        sel[idx].modoSerial = b.dataset.modo;
-        sel[idx].seriales = [];
-        sel[idx].serialInicio = '';
-        sel[idx].serialFin = '';
-        renderLista();
-      };
-    });
-    // Actualizar seriales individuales
-    lista.querySelectorAll('[data-seriales]').forEach(ta => {
-      ta.oninput = () => {
-        const idx = parseInt(ta.dataset.seriales);
-        sel[idx].seriales = ta.value.split('\n').map(s => s.trim()).filter(Boolean);
-        const count = ta.parentElement.querySelector('p');
-        if (count) count.textContent = `${sel[idx].seriales.length} de ${sel[idx].cantidad} serial(es)`;
-      };
-    });
-    // Rango inicio/fin
-    lista.querySelectorAll('[data-rinicio]').forEach(inp => {
-      inp.oninput = () => { sel[parseInt(inp.dataset.rinicio)].serialInicio = inp.value.trim(); };
-    });
-    lista.querySelectorAll('[data-rfin]').forEach(inp => {
-      inp.oninput = () => { sel[parseInt(inp.dataset.rfin)].serialFin = inp.value.trim(); };
+    el.innerHTML = lista.map(item => {
+      if (item.tipo === 'header') {
+        return `<div class="px-3 py-1.5 bg-gray-50 border-b border-gray-100 sticky top-0">
+          <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide">${item.label}</p>
+        </div>`;
+      }
+      if (item.tipo === 'empty') {
+        return '<div class="py-4 text-center text-xs text-gray-400">Sin resultados para esa búsqueda</div>';
+      }
+      const yaEnLista = sel.some(s => s.itemId === item.id);
+      const nombre = titleCase(item.name);
+      const stock  = safeNum(item.stock);
+      const stockColor = stock <= 0 ? 'color:#C62828' : stock <= 5 ? 'color:#E65100' : 'color:#166534';
+      return `
+        <button data-add-item="${item.id}"
+          class="w-full text-left px-3 py-2.5 hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-0 ${yaEnLista ? 'opacity-50' : ''}"
+          ${yaEnLista ? 'disabled' : ''}>
+          <div class="flex items-center justify-between gap-2">
+            <div class="min-w-0">
+              <p class="text-sm font-medium text-gray-900 truncate">${nombre}</p>
+              <p class="text-xs text-gray-400 font-mono mt-0.5">SAP ${safeStr(item.sapCode,'—')} · AX ${safeStr(item.axCode,'—')}</p>
+            </div>
+            <span class="text-xs font-semibold shrink-0" style="${stockColor}">${stock} ${safeStr(item.unit,'')}</span>
+          </div>
+        </button>`;
+    }).join('');
+
+    // Al tocar un material → pedir cantidad inline
+    el.querySelectorAll('[data-add-item]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const item = items.find(i => i.id === btn.dataset.addItem);
+        if (!item) return;
+        showCantidadInline(item);
+      });
     });
   }
-  renderLista();
 
-  ov.querySelector('#fs-close').onclick = ov.querySelector('#fs-cancel').onclick = () => ov.remove();
+  // ── Modal rápido de cantidad ──
+  function showCantidadInline(item) {
+    const nombre = titleCase(item.name);
+    const stock  = safeNum(item.stock);
+
+    // Overlay ligero
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black/40 flex items-end justify-center z-50 p-4';
+    modal.innerHTML = `
+      <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-5 space-y-3">
+        <div class="flex items-start justify-between gap-2">
+          <div class="min-w-0">
+            <p class="font-semibold text-gray-900 leading-tight">${nombre}</p>
+            <p class="text-xs text-gray-400 font-mono mt-0.5">SAP ${safeStr(item.sapCode,'—')} · Disponible: ${stock} ${safeStr(item.unit,'')}</p>
+          </div>
+          <button id="mc-close" class="text-gray-400 hover:text-gray-700 shrink-0 text-xl leading-none">✕</button>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Cantidad</label>
+          <input id="mc-cant" type="number" min="1" max="${stock}" placeholder="0"
+            class="w-full border border-gray-300 rounded-xl px-4 py-3 text-2xl font-bold text-center focus:outline-none focus:ring-2 focus:ring-blue-400"/>
+          <p class="text-xs text-gray-400 mt-1 text-center">Máximo disponible: ${stock} ${safeStr(item.unit,'')}</p>
+        </div>
+        <div id="mc-err" class="hidden text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2"></div>
+        <div class="flex gap-3">
+          <button id="mc-cancel" class="flex-1 border border-gray-300 text-gray-700 font-medium rounded-xl py-3 text-sm">Cancelar</button>
+          <button id="mc-add" class="flex-1 text-white font-semibold rounded-xl py-3 text-sm" style="background:#1B4F8A">Agregar</button>
+        </div>
+      </div>`;
+
+    document.body.appendChild(modal);
+    const cantInput = modal.querySelector('#mc-cant');
+    cantInput.focus();
+
+    modal.querySelector('#mc-close').onclick = modal.querySelector('#mc-cancel').onclick = () => modal.remove();
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+    const doAdd = () => {
+      const cant  = safeNum(cantInput.value);
+      const errEl = modal.querySelector('#mc-err');
+      errEl.classList.add('hidden');
+      if (cant <= 0) { errEl.textContent = 'Ingresa una cantidad válida.'; errEl.classList.remove('hidden'); return; }
+      if (cant > stock) { errEl.textContent = `Máximo disponible: ${stock} ${safeStr(item.unit,'')}.`; errEl.classList.remove('hidden'); return; }
+
+      const ex = sel.findIndex(s => s.itemId === item.id);
+      if (ex >= 0) sel[ex].cantidad += cant;
+      else sel.push({
+        itemId: item.id,
+        name:   item.name,
+        unit:   item.unit,
+        sapCode: item.sapCode,
+        axCode:  item.axCode,
+        cantidad: cant,
+        requiereSerial: item.requiereSerial,
+        modoSerial: 'individual',
+        seriales: [],
+        serialInicio: '',
+        serialFin: '',
+      });
+
+      addReciente(item.id);
+      modal.remove();
+      // Limpiar búsqueda y refrescar
+      const buscar = document.getElementById('fs-buscar');
+      if (buscar) buscar.value = '';
+      renderResultados('');
+      renderLista();
+    };
+
+    modal.querySelector('#mc-add').addEventListener('click', doAdd);
+    cantInput.addEventListener('keydown', e => { if (e.key === 'Enter') doAdd(); });
+  }
+
+  // ── Renderizar items ya seleccionados ──
+  function renderLista() {  ov.querySelector('#fs-close').onclick = ov.querySelector('#fs-cancel').onclick = () => ov.remove();
 
   // Mostrar campo manual cuando se selecciona "Otro / temporal"
   ov.querySelector('#fs-placa-sel').addEventListener('change', (e) => {
@@ -850,39 +918,13 @@ async function showFormSalida(db, session) {
     }
   });
 
-  // Agregar material
-  ov.querySelector('#fs-add').onclick = () => {
-    const selEl  = ov.querySelector('#fs-item');
-    const opt    = selEl.options[selEl.selectedIndex];
-    const cant   = safeNum(ov.querySelector('#fs-cant').value);
-    const errEl  = ov.querySelector('#fs-err');
-    errEl.classList.add('hidden');
-    if (!selEl.value) { errEl.textContent = 'Selecciona un material.'; errEl.classList.remove('hidden'); return; }
-    if (cant <= 0)    { errEl.textContent = 'Cantidad inválida.'; errEl.classList.remove('hidden'); return; }
-    if (cant > safeNum(opt.dataset.stock)) {
-      errEl.textContent = `Stock insuficiente. Disponible: ${opt.dataset.stock} ${opt.dataset.unit}`;
-      errEl.classList.remove('hidden'); return;
-    }
-    const ex = sel.findIndex(s => s.itemId === selEl.value);
-    if (ex >= 0) { sel[ex].cantidad += cant; }
-    else {
-      sel.push({
-        itemId: selEl.value,
-        name:   safeStr(opt.dataset.nombre),
-        unit:   safeStr(opt.dataset.unit,''),
-        sapCode: safeStr(opt.dataset.sap,''),
-        axCode:  safeStr(opt.dataset.ax,''),
-        cantidad: cant,
-        requiereSerial: opt.dataset.serial === '1',
-        modoSerial: 'individual',
-        seriales: [],
-        serialInicio: '',
-        serialFin: '',
-      });
-    }
-    selEl.value = ''; ov.querySelector('#fs-cant').value = '';
-    renderLista();
-  };
+  // Búsqueda de materiales en tiempo real
+  const buscarEl = document.getElementById('fs-buscar');
+  if (buscarEl) {
+    buscarEl.addEventListener('input', e => renderResultados(e.target.value));
+    // Mostrar lista inicial
+    renderResultados('');
+  }
 
   // Registrar salida
   ov.querySelector('#fs-submit').onclick = async () => {
