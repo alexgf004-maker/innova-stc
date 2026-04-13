@@ -212,14 +212,23 @@ async function showInventario(db, session) {
     content.innerHTML = `
       <div class="space-y-3">
         ${canEdit ? `
-        <div class="flex justify-end">
+        <div class="flex gap-2 justify-end">
+          ${session.role === 'admin' ? `
+          <button id="btn-importar-excel"
+            class="inline-flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            Importar Excel
+          </button>` : ''}
           <button id="btn-nuevo-item"
             class="inline-flex items-center gap-2 text-white text-sm font-medium px-3 py-2 rounded-lg"
             style="background-color:#1B4F8A">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
-            Agregar material
+            Agregar
           </button>
         </div>` : ''}
 
@@ -286,6 +295,7 @@ async function showInventario(db, session) {
 
     if (canEdit) {
       document.getElementById('btn-nuevo-item')?.addEventListener('click', () => showFormItem(db, session, null));
+      document.getElementById('btn-importar-excel')?.addEventListener('click', () => showImportExcel(db, session, allItems, renderTabla));
     }
 
   } catch(e) { content.innerHTML = errHtml(); console.error(e); }
@@ -351,60 +361,48 @@ function showFormItem(db, session, item) {
       <h2 class="font-semibold text-gray-900">${esNuevo ? 'Nuevo material' : 'Editar material'}</h2>
       <button id="fi-close" class="text-gray-400 hover:text-gray-700">✕</button>
     </div>
-    <div class="px-5 py-4 space-y-4">
-
-      <!-- Nombre -->
+    <div class="px-4 py-3 space-y-3">
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1.5">Nombre del material</label>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Nombre del material</label>
         <input id="fi-name" type="text" value="${safeStr(item?.name||item?.nombre,'')}"
           placeholder="Ej. MEDIDOR MONOFÁSICO 120V"
-          class="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>
+          class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>
       </div>
-
-      <!-- Códigos SAP y AX -->
-      <div class="grid grid-cols-2 gap-3">
+      <div class="grid grid-cols-2 gap-2">
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1.5">Código SAP</label>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Código SAP</label>
           <input id="fi-sap" type="text" value="${safeStr(item?.sapCode,'')}"
             placeholder="Ej. 221477"
-            class="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400"/>
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400"/>
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1.5">Código AX</label>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Código AX</label>
           <input id="fi-ax" type="text" value="${safeStr(item?.axCode,'')}"
             placeholder="Ej. 50203"
-            class="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400"/>
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400"/>
         </div>
       </div>
-
-      <!-- Unidad y stock mínimo -->
-      <div class="grid grid-cols-2 gap-3">
+      <div class="grid grid-cols-2 gap-2">
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1.5">Unidad de medida</label>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Unidad</label>
           <input id="fi-unit" type="text" value="${safeStr(item?.unit||item?.unidad,'')}"
-            placeholder="unidad, m, kg, rollo"
-            class="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>
+            placeholder="unidad, m, kg"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1.5">Stock mínimo</label>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Stock mínimo</label>
           <input id="fi-min" type="number" min="0" value="${safeNum(item?.minStock||item?.stockMinimo) || 5}"
-            class="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>
         </div>
       </div>
-
-      <!-- Stock inicial (solo al crear) -->
       ${esNuevo ? `
-      <div class="bg-blue-50 border border-blue-100 rounded-xl p-3 space-y-2">
-        <p class="text-xs font-medium text-blue-800">Stock inicial en bodega</p>
-        <p class="text-xs text-blue-600">Si ya tienes unidades disponibles, indícalas aquí. Se registrará como entrada inicial.</p>
+      <div class="bg-blue-50 border border-blue-100 rounded-lg p-2.5">
+        <p class="text-xs font-medium text-blue-800 mb-1">Stock inicial <span class="font-normal text-blue-500">(se registra como entrada)</span></p>
         <input id="fi-stock" type="number" min="0" value="0"
-          class="w-full border border-blue-200 rounded-lg px-3.5 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 text-center font-semibold"/>
+          class="w-full border border-blue-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 text-center font-semibold"/>
       </div>` : `
-      <div class="bg-gray-50 border border-gray-200 rounded-xl p-3">
-        <p class="text-xs text-gray-500">Para modificar el stock usa el botón de <strong>entrada ↓</strong> en la lista.</p>
-      </div>`}
-
-      <div id="fi-err" class="hidden text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5"></div>
+      <p class="text-xs text-gray-400">Para cambiar el stock usa el botón de entrada ↓ en la lista.</p>`}
+      <div id="fi-err" class="hidden text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2"></div>
     </div>
     <div class="px-5 py-4 border-t border-gray-100 flex gap-3">
       <button id="fi-cancel" class="flex-1 border border-gray-300 text-gray-700 font-medium rounded-lg py-2.5 text-sm hover:bg-gray-50">Cancelar</button>
@@ -849,8 +847,8 @@ function showMemo(s) {
 // ─────────────────────────────────────────
 function mkOverlay(inner) {
   const ov = document.createElement('div');
-  ov.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto';
-  ov.innerHTML = `<div class="bg-white rounded-2xl shadow-xl w-full max-w-md my-4">${inner}</div>`;
+  ov.className = 'fixed inset-0 bg-black/50 flex items-start justify-center z-50 p-4 overflow-y-auto';
+  ov.innerHTML = `<div class="bg-white rounded-2xl shadow-xl w-full max-w-md my-4" style="max-height:90vh;overflow-y:auto;">${inner}</div>`;
   document.body.appendChild(ov);
   return ov;
 }
@@ -873,4 +871,216 @@ function fmtDate(ts) {
     const d = ts.toDate ? ts.toDate() : new Date(ts);
     return d.toLocaleDateString('es-SV',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
   } catch { return '—'; }
+}
+
+// ─────────────────────────────────────────
+// IMPORTAR DESDE EXCEL
+// Solo admin. Modal integrado en el Kardex.
+// ─────────────────────────────────────────
+async function showImportExcel(db, session, existingItems, refreshFn) {
+  // Cargar SheetJS dinámicamente si no está disponible
+  if (!window.XLSX) {
+    await new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js';
+      s.onload = res; s.onerror = rej;
+      document.head.appendChild(s);
+    });
+  }
+
+  let toImport = [];
+  let toSkip   = [];
+
+  const ov = mkOverlay(`
+    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+      <h2 class="font-semibold text-gray-900">Importar desde Excel</h2>
+      <button id="ix-close" class="text-gray-400 hover:text-gray-700">✕</button>
+    </div>
+
+    <!-- Paso A: seleccionar archivo -->
+    <div id="ix-step-file" class="px-5 py-4 space-y-3">
+      <p class="text-sm text-gray-500">Selecciona el archivo Excel con la lista de materiales.</p>
+      <p class="text-xs text-gray-400">Columnas requeridas: <strong>SAP</strong>, <strong>AX</strong>, <strong>Nombre material</strong></p>
+      <label class="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-xl p-5 cursor-pointer hover:border-blue-400 transition-colors">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="mb-2">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        <p class="text-sm text-gray-600 font-medium">Toca para seleccionar el Excel</p>
+        <p class="text-xs text-gray-400 mt-0.5">.xlsx</p>
+        <input id="ix-file" type="file" accept=".xlsx,.xls" class="hidden"/>
+      </label>
+      <div id="ix-file-err" class="hidden text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2"></div>
+    </div>
+
+    <!-- Paso B: previsualización -->
+    <div id="ix-step-preview" class="hidden px-5 py-4 space-y-3">
+      <div id="ix-summary" class="grid grid-cols-3 gap-2"></div>
+      <div id="ix-tabla" class="rounded-lg border border-gray-200 overflow-hidden max-h-52 overflow-y-auto text-xs"></div>
+      <div id="ix-skipped" class="hidden"></div>
+      <div id="ix-err" class="hidden text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2"></div>
+      <div class="flex gap-3 pt-1">
+        <button id="ix-back" class="flex-1 border border-gray-300 text-gray-700 font-medium rounded-lg py-2.5 text-sm hover:bg-gray-50">← Volver</button>
+        <button id="ix-submit" class="flex-1 text-white font-medium rounded-lg py-2.5 text-sm" style="background:#1B4F8A">Importar</button>
+      </div>
+    </div>
+
+    <!-- Paso C: resultado -->
+    <div id="ix-step-result" class="hidden px-5 py-6 text-center space-y-3">
+      <div class="w-14 h-14 rounded-full flex items-center justify-center mx-auto" style="background:#DCFCE7">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#166534" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      </div>
+      <p class="font-semibold text-gray-900">Importación completada</p>
+      <div id="ix-result-txt" class="space-y-1"></div>
+      <button id="ix-done" class="text-white font-medium rounded-lg px-6 py-2.5 text-sm mt-2" style="background:#1B4F8A">Cerrar</button>
+    </div>`);
+
+  ov.querySelector('#ix-close').onclick = () => ov.remove();
+
+  // ── Leer archivo ──
+  ov.querySelector('#ix-file').addEventListener('change', async (e) => {
+    const file  = e.target.files[0];
+    const errEl = ov.querySelector('#ix-file-err');
+    errEl.classList.add('hidden');
+    if (!file) return;
+
+    try {
+      const data = await file.arrayBuffer();
+      const wb   = window.XLSX.read(data, { type: 'array' });
+      const ws   = wb.Sheets[wb.SheetNames[0]];
+      const rows = window.XLSX.utils.sheet_to_json(ws, { defval: null });
+
+      if (rows.length === 0) throw new Error('El archivo está vacío.');
+
+      // Mapear columnas flexible
+      const materiales = rows.map(row => {
+        const sapKey    = Object.keys(row).find(k => k.trim().toUpperCase() === 'SAP');
+        const axKey     = Object.keys(row).find(k => k.trim().toUpperCase() === 'AX');
+        const nombreKey = Object.keys(row).find(k => k.trim().toLowerCase().includes('nombre'));
+        const existKey  = Object.keys(row).find(k => k.trim().toLowerCase().includes('exist'));
+
+        return {
+          sapCode: row[sapKey]    != null ? String(row[sapKey]).trim()    : '',
+          axCode:  row[axKey]     != null ? String(row[axKey]).trim()     : '',
+          name:    row[nombreKey] != null ? String(row[nombreKey]).trim() : '',
+          stock:   row[existKey]  != null ? Number(row[existKey]) || 0    : 0,
+        };
+      }).filter(m => m.name !== '' && (m.sapCode !== '' || m.axCode !== ''));
+
+      if (materiales.length === 0) throw new Error('No se encontraron materiales válidos.');
+
+      // Verificar duplicados contra items existentes
+      const existingSap = new Set(existingItems.map(i => safeStr(i.sapCode,'')).filter(Boolean));
+      const existingAx  = new Set(existingItems.map(i => safeStr(i.axCode,'') ).filter(Boolean));
+
+      toImport = []; toSkip = [];
+      for (const m of materiales) {
+        const dupSap = m.sapCode && existingSap.has(m.sapCode);
+        const dupAx  = m.axCode  && existingAx.has(m.axCode);
+        if (dupSap || dupAx) toSkip.push({ ...m, reason: dupSap ? `SAP ${m.sapCode} ya existe` : `AX ${m.axCode} ya existe` });
+        else toImport.push(m);
+      }
+
+      // Mostrar previsualización
+      ov.querySelector('#ix-step-file').classList.add('hidden');
+      ov.querySelector('#ix-step-preview').classList.remove('hidden');
+
+      // Stats
+      ov.querySelector('#ix-summary').innerHTML = [
+        { v: toImport.length, l: 'A importar', c: '#2196F3' },
+        { v: toSkip.length,   l: 'Saltados',   c: '#E65100' },
+        { v: materiales.length, l: 'Total',    c: '#6B7280' },
+      ].map(s => `<div class="bg-gray-50 rounded-xl p-2 text-center border border-gray-200">
+        <p class="text-xl font-bold" style="color:${s.c}">${s.v}</p>
+        <p class="text-xs text-gray-500">${s.l}</p>
+      </div>`).join('');
+
+      // Tabla
+      ov.querySelector('#ix-tabla').innerHTML = `
+        <table class="w-full">
+          <thead class="bg-gray-50 border-b border-gray-200 sticky top-0">
+            <tr>
+              <th class="text-left px-3 py-2 font-semibold text-gray-500">Material</th>
+              <th class="text-left px-3 py-2 font-semibold text-gray-500">SAP</th>
+              <th class="text-right px-3 py-2 font-semibold text-gray-500">Stock</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            ${toImport.map(m => `<tr>
+              <td class="px-3 py-1.5 text-gray-900 truncate max-w-xs">${m.name}</td>
+              <td class="px-3 py-1.5 text-gray-400 font-mono">${m.sapCode||'—'}</td>
+              <td class="px-3 py-1.5 text-right font-medium text-gray-700">${m.stock}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>`;
+
+      // Saltados
+      if (toSkip.length > 0) {
+        const sk = ov.querySelector('#ix-skipped');
+        sk.classList.remove('hidden');
+        sk.innerHTML = `<div class="bg-orange-50 border border-orange-200 rounded-xl p-3">
+          <p class="text-xs font-semibold text-orange-800 mb-1">⚠️ ${toSkip.length} serán saltados (ya existen)</p>
+          ${toSkip.slice(0,5).map(m => `<p class="text-xs text-orange-600 truncate">${m.name} — ${m.reason}</p>`).join('')}
+          ${toSkip.length > 5 ? `<p class="text-xs text-orange-400">...y ${toSkip.length-5} más</p>` : ''}
+        </div>`;
+      }
+
+    } catch(e) {
+      errEl.textContent = e.message || 'Error al leer el archivo.';
+      errEl.classList.remove('hidden');
+    }
+  });
+
+  // ── Volver ──
+  ov.querySelector('#ix-back').onclick = () => {
+    ov.querySelector('#ix-step-preview').classList.add('hidden');
+    ov.querySelector('#ix-step-file').classList.remove('hidden');
+    ov.querySelector('#ix-file').value = '';
+  };
+
+  // ── Importar ──
+  ov.querySelector('#ix-submit').onclick = async () => {
+    if (toImport.length === 0) {
+      ov.querySelector('#ix-err').textContent = 'No hay materiales nuevos para importar.';
+      ov.querySelector('#ix-err').classList.remove('hidden');
+      return;
+    }
+
+    const btn = ov.querySelector('#ix-submit');
+    btn.disabled = true; btn.textContent = 'Importando...';
+
+    let ok = 0, errCount = 0;
+    for (const m of toImport) {
+      try {
+        await addDoc(collection(db, 'kardex/inventario/items'), {
+          name:      m.name,
+          sapCode:   m.sapCode,
+          axCode:    m.axCode,
+          unit:      'unidad',
+          stock:     isNaN(m.stock) ? 0 : m.stock,
+          minStock:  0,
+          creadoEn:  serverTimestamp(),
+          creadoPor: session.uid,
+        });
+        ok++;
+      } catch(e) { errCount++; console.error(e); }
+      btn.textContent = `Importando ${ok+errCount}/${toImport.length}...`;
+    }
+
+    ov.querySelector('#ix-step-preview').classList.add('hidden');
+    ov.querySelector('#ix-step-result').classList.remove('hidden');
+    ov.querySelector('#ix-result-txt').innerHTML = `
+      <p class="text-sm text-gray-700"><strong class="text-green-700">${ok}</strong> material(es) importados.</p>
+      ${toSkip.length > 0 ? `<p class="text-sm text-gray-500">${toSkip.length} saltados por duplicado.</p>` : ''}
+      ${errCount > 0 ? `<p class="text-sm text-red-600">${errCount} errores.</p>` : ''}
+      <p class="text-xs text-gray-400 mt-1">Revisa la unidad de cada material importado.</p>`;
+  };
+
+  // ── Cerrar tras resultado ──
+  ov.querySelector('#ix-done').onclick = async () => {
+    ov.remove();
+    await showInventario(db, session);
+  };
 }
