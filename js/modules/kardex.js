@@ -29,6 +29,30 @@ function today() {
 }
 
 // ─────────────────────────────────────────
+// CONSTANTES DEL FORMULARIO DE DESPACHO
+// Edita estas listas para actualizar las opciones del formulario.
+// ─────────────────────────────────────────
+const PLACAS = [
+  'CPT-154',
+  'CPT-156',
+  'AU-250',
+  'AU-200',
+  'CNR-163',
+  'P568DA',
+  'P38DA6',
+];
+
+const USUARIOS_RESPONSABLES = [
+  'NALVAR',
+  'RGONZA',
+  'JPEREZ',
+];
+
+const EMPRESAS_CONTRATISTAS = [
+  'INNOVA',
+];
+
+// ─────────────────────────────────────────
 // INIT
 // ─────────────────────────────────────────
 export async function initKardex(session) {
@@ -642,28 +666,40 @@ async function showFormSalida(db, session) {
         <select id="fs-responsable"
           class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
           <option value="">Seleccionar...</option>
-          ${usuarios.map(u => `<option value="${u.uid}" data-nombre="${safeStr(u.displayName)}">${safeStr(u.displayName)}</option>`).join('')}
+          ${USUARIOS_RESPONSABLES.map(u => `<option value="${u}" data-nombre="${u}">${u}</option>`).join('')}
         </select>
       </div>
 
       <div class="grid grid-cols-2 gap-2">
         <div>
           <label class="block text-xs font-medium text-gray-600 mb-1">Empresa contratista</label>
-          <input id="fs-contratista" type="text" placeholder="Nombre empresa"
-            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>
+          <select id="fs-contratista"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+            ${EMPRESAS_CONTRATISTAS.map(e => `<option value="${e}">${e}</option>`).join('')}
+            <option value="">Otra...</option>
+          </select>
         </div>
         <div>
           <label class="block text-xs font-medium text-gray-600 mb-1">Instalador responsable</label>
-          <input id="fs-instalador" type="text" placeholder="Nombre instalador"
-            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>
+          <select id="fs-instalador"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+            <option value="">Seleccionar...</option>
+            ${usuarios.map(u => `<option value="${safeStr(u.displayName)}">${safeStr(u.displayName)}</option>`).join('')}
+          </select>
         </div>
       </div>
 
       <div class="grid grid-cols-2 gap-2">
         <div>
           <label class="block text-xs font-medium text-gray-600 mb-1">Placa del vehículo</label>
-          <input id="fs-placa" type="text" placeholder="Ej. P-123456"
-            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>
+          <select id="fs-placa-sel"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+            <option value="">Seleccionar...</option>
+            ${PLACAS.map(p => `<option value="${p}">${p}</option>`).join('')}
+            <option value="__otro__">Otro / temporal</option>
+          </select>
+          <input id="fs-placa-otro" type="text" placeholder="Escribe la placa"
+            class="hidden w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 mt-1 font-mono"/>
         </div>
         <div>
           <label class="block text-xs font-medium text-gray-600 mb-1">Fecha de solicitud</label>
@@ -802,6 +838,18 @@ async function showFormSalida(db, session) {
 
   ov.querySelector('#fs-close').onclick = ov.querySelector('#fs-cancel').onclick = () => ov.remove();
 
+  // Mostrar campo manual cuando se selecciona "Otro / temporal"
+  ov.querySelector('#fs-placa-sel').addEventListener('change', (e) => {
+    const otro = ov.querySelector('#fs-placa-otro');
+    if (e.target.value === '__otro__') {
+      otro.classList.remove('hidden');
+      otro.focus();
+    } else {
+      otro.classList.add('hidden');
+      otro.value = '';
+    }
+  });
+
   // Agregar material
   ov.querySelector('#fs-add').onclick = () => {
     const selEl  = ov.querySelector('#fs-item');
@@ -839,11 +887,14 @@ async function showFormSalida(db, session) {
   // Registrar salida
   ov.querySelector('#fs-submit').onclick = async () => {
     const responsableSel  = ov.querySelector('#fs-responsable');
-    const responsableUid  = responsableSel.value;
-    const responsableNom  = safeStr(responsableSel.options[responsableSel.selectedIndex]?.dataset.nombre);
+    const responsableUid  = responsableSel.value;  // now equals the name/code
+    const responsableNom  = responsableSel.value;
     const contratista     = ov.querySelector('#fs-contratista').value.trim();
     const instalador      = ov.querySelector('#fs-instalador').value.trim();
-    const placa           = ov.querySelector('#fs-placa').value.trim();
+    const placaSel        = ov.querySelector('#fs-placa-sel').value;
+    const placa           = placaSel === '__otro__'
+      ? ov.querySelector('#fs-placa-otro').value.trim()
+      : placaSel;
     const fechaSolicitud  = ov.querySelector('#fs-fecha-sol').value;
     const fechaEntrega    = ov.querySelector('#fs-fecha-ent').value;
     const errEl           = ov.querySelector('#fs-err');
