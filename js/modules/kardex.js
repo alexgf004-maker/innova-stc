@@ -645,413 +645,460 @@ async function showFormSalida(db, session) {
     .filter(u => ['campo','coordinadora'].includes(u.role))
     .sort((a,b) => safeStr(a.displayName).localeCompare(safeStr(b.displayName)));
 
-  // items seleccionados: { itemId, sapCode, axCode, name, unit, cantidad, requiereSerial, modoSerial, seriales[], serialInicio, serialFin }
-  let sel = [];
+  let sel = []; // { itemId, name, unit, sapCode, axCode, stock, cantidad, requiereSerial, modoSerial, seriales, serialInicio, serialFin }
 
-  const ov = mkOverlay(`
-    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+  // ── Overlay de pantalla completa para móvil ──
+  const ov = document.createElement('div');
+  ov.className = 'fixed inset-0 bg-white z-50 flex flex-col';
+  ov.style.cssText = 'max-height:100dvh;overflow:hidden;';
+  ov.innerHTML = `
+    <!-- Header fijo -->
+    <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0" style="background:#1B4F8A">
       <div>
-        <h2 class="font-semibold text-gray-900">Nueva salida de materiales</h2>
-        <p class="text-xs text-gray-400 mt-0.5">Despacho / Carga de materiales</p>
+        <h2 class="font-semibold text-white text-base">Nueva salida</h2>
+        <p class="text-xs text-blue-200 mt-0.5">Despacho / Carga de materiales</p>
       </div>
-      <button id="fs-close" class="text-gray-400 hover:text-gray-700 shrink-0">✕</button>
+      <button id="fs-close" class="text-white/80 hover:text-white text-2xl leading-none w-8 h-8 flex items-center justify-center">✕</button>
     </div>
 
-    <!-- ENCABEZADO DEL DESPACHO -->
-    <div class="px-5 py-4 space-y-3 border-b border-gray-100">
-      <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Encabezado del despacho</p>
+    <!-- Área scrolleable -->
+    <div class="flex-1 overflow-y-auto">
 
-      <div>
-        <label class="block text-xs font-medium text-gray-600 mb-1">Usuario responsable *</label>
-        <select id="fs-responsable"
-          class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
-          <option value="">Seleccionar...</option>
-          ${USUARIOS_RESPONSABLES.map(u => `<option value="${u}" data-nombre="${u}">${u}</option>`).join('')}
-        </select>
-      </div>
-
-      <div class="grid grid-cols-2 gap-2">
+      <!-- Encabezado del despacho -->
+      <div class="px-4 py-3 space-y-2.5 border-b border-gray-100 bg-gray-50">
+        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Encabezado del despacho</p>
         <div>
-          <label class="block text-xs font-medium text-gray-600 mb-1">Empresa contratista</label>
-          <select id="fs-contratista"
-            class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
-            ${EMPRESAS_CONTRATISTAS.map(e => `<option value="${e}">${e}</option>`).join('')}
-            <option value="">Otra...</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-gray-600 mb-1">Instalador responsable</label>
-          <select id="fs-instalador"
-            class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+          <label class="block text-xs font-medium text-gray-600 mb-1">Usuario responsable *</label>
+          <select id="fs-responsable" class="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white">
             <option value="">Seleccionar...</option>
-            ${usuarios.map(u => `<option value="${safeStr(u.displayName)}">${safeStr(u.displayName)}</option>`).join('')}
+            ${USUARIOS_RESPONSABLES.map(u => `<option value="${u}">${u}</option>`).join('')}
           </select>
         </div>
-      </div>
-
-      <div class="grid grid-cols-2 gap-2">
-        <div>
-          <label class="block text-xs font-medium text-gray-600 mb-1">Placa del vehículo</label>
-          <select id="fs-placa-sel"
-            class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
-            <option value="">Seleccionar...</option>
-            ${PLACAS.map(p => `<option value="${p}">${p}</option>`).join('')}
-            <option value="__otro__">Otro / temporal</option>
-          </select>
-          <input id="fs-placa-otro" type="text" placeholder="Escribe la placa"
-            class="hidden w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 mt-1 font-mono"/>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Empresa contratista</label>
+            <select id="fs-contratista" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white">
+              ${EMPRESAS_CONTRATISTAS.map(e => `<option value="${e}">${e}</option>`).join('')}
+              <option value="">Otra...</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Instalador responsable</label>
+            <select id="fs-instalador" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white">
+              <option value="">Seleccionar...</option>
+              ${usuarios.map(u => `<option value="${safeStr(u.displayName)}">${safeStr(u.displayName)}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Placa del vehículo</label>
+            <select id="fs-placa-sel" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white">
+              <option value="">Seleccionar...</option>
+              ${PLACAS.map(p => `<option value="${p}">${p}</option>`).join('')}
+              <option value="__otro__">Otro / temporal</option>
+            </select>
+            <input id="fs-placa-otro" type="text" placeholder="Escribe la placa"
+              class="hidden w-full border border-gray-300 rounded-xl px-3 py-2 text-sm font-mono mt-1 focus:outline-none focus:ring-2 focus:ring-blue-400"/>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Fecha solicitud</label>
+            <input id="fs-fecha-sol" type="date" value="${today()}"
+              class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"/>
+          </div>
         </div>
         <div>
-          <label class="block text-xs font-medium text-gray-600 mb-1">Fecha de solicitud</label>
-          <input id="fs-fecha-sol" type="date" value="${today()}"
-            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Fecha entrega de material</label>
+          <input id="fs-fecha-ent" type="date" value="${today()}"
+            class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"/>
         </div>
       </div>
 
-      <div>
-        <label class="block text-xs font-medium text-gray-600 mb-1">Fecha de entrega de material</label>
-        <input id="fs-fecha-ent" type="date" value="${today()}"
-          class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>
-      </div>
-    </div>
-
-    <!-- MATERIALES -->
-    <div class="px-5 py-4 space-y-3 border-b border-gray-100">
-      <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Materiales</p>
-
-      <!-- Buscador -->
-      <div class="relative">
-        <svg class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-        </svg>
-        <input id="fs-buscar" type="text" placeholder="Buscar por nombre o código SAP..."
-          autocomplete="off"
-          class="w-full border border-gray-300 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>
+      <!-- Bloque: Materiales seleccionados -->
+      <div class="px-4 py-3 border-b border-gray-100">
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Materiales seleccionados</p>
+          <span id="fs-sel-count" class="text-xs font-semibold px-2 py-0.5 rounded-full" style="background:#EFF6FF;color:#1D4ED8">0 ítems</span>
+        </div>
+        <div id="fs-sel-lista" class="space-y-2">
+          <p class="text-xs text-gray-400 text-center py-3 border border-dashed border-gray-200 rounded-xl">
+            Toca un material de la lista para agregarlo
+          </p>
+        </div>
       </div>
 
-      <!-- Lista de resultados -->
-      <div id="fs-resultados" class="bg-white rounded-xl border border-gray-200 overflow-hidden max-h-56 overflow-y-auto"></div>
+      <!-- Bloque: Materiales disponibles -->
+      <div class="px-4 py-3">
+        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Materiales disponibles</p>
+        <div class="relative mb-2">
+          <svg class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input id="fs-buscar" type="text" placeholder="Buscar por nombre o SAP..."
+            autocomplete="off"
+            class="w-full border border-gray-300 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>
+        </div>
+        <div id="fs-disponibles" class="space-y-1.5"></div>
+      </div>
 
-      <!-- Items seleccionados -->
-      <div id="fs-lista" class="space-y-2"></div>
-    </div>
+    </div><!-- fin scroll -->
 
-    <div class="px-5 py-3">
-      <div id="fs-err" class="hidden text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2"></div>
-    </div>
+    <!-- Error -->
+    <div id="fs-err" class="hidden mx-4 mb-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2 shrink-0"></div>
 
-    <div class="px-5 py-4 border-t border-gray-100 flex gap-3">
-      <button id="fs-cancel" class="flex-1 border border-gray-300 text-gray-700 font-medium rounded-lg py-2.5 text-sm hover:bg-gray-50">Cancelar</button>
-      <button id="fs-submit" class="flex-1 text-white font-medium rounded-lg py-2.5 text-sm" style="background-color:#1B4F8A">Registrar salida</button>
-    </div>`);
+    <!-- Botón sticky -->
+    <div class="px-4 py-3 border-t border-gray-200 bg-white shrink-0" style="padding-bottom: max(12px, env(safe-area-inset-bottom))">
+      <button id="fs-submit"
+        class="w-full text-white font-semibold rounded-xl py-3.5 text-sm transition-opacity"
+        style="background:#1B4F8A">
+        Registrar salida
+      </button>
+    </div>`;
 
-  // ── Historial de últimos materiales usados (localStorage-like via sessionStorage) ──
+  document.body.appendChild(ov);
+
+  // ── Helpers ──
+  function getStockRestante(itemId) {
+    const item  = items.find(i => i.id === itemId);
+    const stock = safeNum(item?.stock);
+    const enSel = sel.find(s => s.itemId === itemId);
+    return stock - (enSel ? enSel.cantidad : 0);
+  }
+
+  function titleCase(str) {
+    return safeStr(str).toLowerCase().replace(/\w/g, c => c.toUpperCase());
+  }
+
   function getRecientes() {
     try { return JSON.parse(sessionStorage.getItem('kardex_recientes') || '[]'); } catch { return []; }
   }
-  function addReciente(itemId) {
-    const prev = getRecientes().filter(id => id !== itemId);
-    sessionStorage.setItem('kardex_recientes', JSON.stringify([itemId, ...prev].slice(0, 5)));
+  function addReciente(id) {
+    const prev = getRecientes().filter(x => x !== id);
+    sessionStorage.setItem('kardex_recientes', JSON.stringify([id, ...prev].slice(0, 5)));
   }
 
-  // ── Normalizar nombre: Title Case ──
-  function titleCase(str) {
-    return safeStr(str).toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
-  }
-
-  // ── Renderizar lista de resultados de búsqueda ──
-  function renderResultados(query) {
-    const el = document.getElementById('fs-resultados');
+  // ── Render lista disponibles ──
+  function renderDisponibles(q) {
+    const el = document.getElementById('fs-disponibles');
     if (!el) return;
+    const query = (q || '').trim().toLowerCase();
 
-    let lista = [];
-    const q = (query || '').trim().toLowerCase();
-
-    if (!q) {
-      // Sin búsqueda: mostrar recientes primero, luego todos
-      const recientes = getRecientes();
-      const recList = recientes.map(id => items.find(i => i.id === id)).filter(Boolean);
-      const resto   = items.filter(i => !recientes.includes(i.id));
-      if (recList.length > 0) {
-        lista = [{ tipo: 'header', label: 'Usados recientemente' }, ...recList,
-                 { tipo: 'header', label: 'Todos los materiales' }, ...resto];
-      } else {
-        lista = [{ tipo: 'header', label: 'Materiales disponibles' }, ...items];
-      }
-    } else {
-      const filtered = items.filter(i =>
-        titleCase(i.name).toLowerCase().includes(q) ||
-        safeStr(i.name).toLowerCase().includes(q) ||
-        safeStr(i.sapCode,'').toLowerCase().includes(q) ||
-        safeStr(i.axCode,'').toLowerCase().includes(q)
-      );
-      lista = filtered.length > 0 ? filtered : [{ tipo: 'empty' }];
-    }
+    let lista = query
+      ? items.filter(i =>
+          safeStr(i.name).toLowerCase().includes(query) ||
+          safeStr(i.sapCode,'').toLowerCase().includes(query) ||
+          safeStr(i.axCode,'').toLowerCase().includes(query)
+        )
+      : items;
 
     if (lista.length === 0) {
-      el.innerHTML = '<div class="py-4 text-center text-xs text-gray-400">Sin resultados</div>';
+      el.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Sin resultados</p>';
       return;
     }
 
+    // Mostrar recientes primero si no hay búsqueda
+    if (!query) {
+      const rec   = getRecientes().map(id => items.find(i => i.id === id)).filter(Boolean);
+      const resto = items.filter(i => !getRecientes().includes(i.id));
+      lista = [...rec, ...resto];
+    }
+
     el.innerHTML = lista.map(item => {
-      if (item.tipo === 'header') {
-        return `<div class="px-3 py-1.5 bg-gray-50 border-b border-gray-100 sticky top-0">
-          <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide">${item.label}</p>
-        </div>`;
-      }
-      if (item.tipo === 'empty') {
-        return '<div class="py-4 text-center text-xs text-gray-400">Sin resultados para esa búsqueda</div>';
-      }
-      const yaEnLista = sel.some(s => s.itemId === item.id);
-      const nombre = titleCase(item.name);
-      const stock  = safeNum(item.stock);
-      const stockColor = stock <= 0 ? 'color:#C62828' : stock <= 5 ? 'color:#E65100' : 'color:#166534';
+      const enSel     = sel.some(s => s.itemId === item.id);
+      const restante  = getStockRestante(item.id);
+      const stockColor = item.stock <= safeNum(item.minStock||5) ? '#E65100' : '#166534';
       return `
-        <button data-add-item="${item.id}"
-          class="w-full text-left px-3 py-2.5 hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-0 ${yaEnLista ? 'opacity-50' : ''}"
-          ${yaEnLista ? 'disabled' : ''}>
+        <button data-avail="${item.id}"
+          class="w-full text-left rounded-xl px-3 py-2.5 border transition-colors ${enSel
+            ? 'border-blue-300 bg-blue-50'
+            : 'border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50'
+          }">
           <div class="flex items-center justify-between gap-2">
             <div class="min-w-0">
-              <p class="text-sm font-medium text-gray-900 truncate">${nombre}</p>
+              <p class="text-sm font-medium text-gray-900 truncate">${titleCase(item.name)}</p>
               <p class="text-xs text-gray-400 font-mono mt-0.5">SAP ${safeStr(item.sapCode,'—')} · AX ${safeStr(item.axCode,'—')}</p>
             </div>
-            <span class="text-xs font-semibold shrink-0" style="${stockColor}">${stock} ${safeStr(item.unit,'')}</span>
+            <div class="text-right shrink-0">
+              ${enSel
+                ? `<span class="text-xs font-semibold px-2 py-0.5 rounded-full" style="background:#DCFCE7;color:#166534">✓ Agregado</span>`
+                : `<span class="text-xs font-semibold" style="color:${stockColor}">${item.stock} ${safeStr(item.unit,'')}</span>`
+              }
+            </div>
           </div>
         </button>`;
     }).join('');
 
-    // Al tocar un material → pedir cantidad inline
-    el.querySelectorAll('[data-add-item]').forEach(btn => {
+    el.querySelectorAll('[data-avail]').forEach(btn => {
       btn.addEventListener('click', () => {
-        const item = items.find(i => i.id === btn.dataset.addItem);
+        const item = items.find(i => i.id === btn.dataset.avail);
         if (!item) return;
-        showCantidadInline(item);
+        const yaEsta = sel.find(s => s.itemId === item.id);
+        if (yaEsta) {
+          // Si ya está, hacer scroll a la tarjeta seleccionada
+          document.getElementById('fs-sel-lista')?.scrollIntoView({ behavior: 'smooth' });
+          return;
+        }
+        mostrarModalCantidad(item);
       });
     });
   }
 
-  // ── Modal rápido de cantidad ──
-  function showCantidadInline(item) {
-    const nombre = titleCase(item.name);
-    const stock  = safeNum(item.stock);
-
-    // Overlay ligero
+  // ── Modal de cantidad ──
+  function mostrarModalCantidad(item) {
     const modal = document.createElement('div');
-    modal.className = 'fixed inset-0 bg-black/40 flex items-end justify-center z-50 p-4';
+    modal.className = 'fixed inset-0 bg-black/50 flex items-end justify-center z-50 p-4';
     modal.innerHTML = `
-      <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-5 space-y-3">
+      <div class="bg-white rounded-2xl w-full max-w-md p-5 space-y-4">
         <div class="flex items-start justify-between gap-2">
           <div class="min-w-0">
-            <p class="font-semibold text-gray-900 leading-tight">${nombre}</p>
-            <p class="text-xs text-gray-400 font-mono mt-0.5">SAP ${safeStr(item.sapCode,'—')} · Disponible: ${stock} ${safeStr(item.unit,'')}</p>
+            <p class="font-semibold text-gray-900 leading-tight">${titleCase(item.name)}</p>
+            <p class="text-xs text-gray-400 font-mono mt-0.5">SAP ${safeStr(item.sapCode,'—')} · Disponible: <strong>${item.stock} ${safeStr(item.unit,'')}</strong></p>
           </div>
-          <button id="mc-close" class="text-gray-400 hover:text-gray-700 shrink-0 text-xl leading-none">✕</button>
+          <button id="mc-x" class="text-gray-400 text-2xl leading-none shrink-0">✕</button>
         </div>
         <div>
-          <label class="block text-xs font-medium text-gray-600 mb-1">Cantidad</label>
-          <input id="mc-cant" type="number" min="1" max="${stock}" placeholder="0"
-            class="w-full border border-gray-300 rounded-xl px-4 py-3 text-2xl font-bold text-center focus:outline-none focus:ring-2 focus:ring-blue-400"/>
-          <p class="text-xs text-gray-400 mt-1 text-center">Máximo disponible: ${stock} ${safeStr(item.unit,'')}</p>
+          <label class="block text-xs font-medium text-gray-600 mb-2 text-center">¿Cuántas unidades?</label>
+          <div class="flex items-center gap-3 justify-center">
+            <button id="mc-minus" class="w-11 h-11 rounded-xl border-2 border-gray-300 text-xl font-bold text-gray-600 hover:border-blue-400 hover:text-blue-600 transition-colors flex items-center justify-center">−</button>
+            <input id="mc-cant" type="number" min="1" max="${item.stock}" value="1"
+              class="w-24 text-center text-2xl font-bold border-2 border-gray-300 rounded-xl py-2 focus:outline-none focus:border-blue-400"/>
+            <button id="mc-plus" class="w-11 h-11 rounded-xl border-2 border-gray-300 text-xl font-bold text-gray-600 hover:border-blue-400 hover:text-blue-600 transition-colors flex items-center justify-center">+</button>
+          </div>
+          <p class="text-xs text-center text-gray-400 mt-2">Máximo: ${item.stock} ${safeStr(item.unit,'')}</p>
         </div>
-        <div id="mc-err" class="hidden text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2"></div>
+        <div id="mc-err" class="hidden text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2 text-center"></div>
         <div class="flex gap-3">
           <button id="mc-cancel" class="flex-1 border border-gray-300 text-gray-700 font-medium rounded-xl py-3 text-sm">Cancelar</button>
           <button id="mc-add" class="flex-1 text-white font-semibold rounded-xl py-3 text-sm" style="background:#1B4F8A">Agregar</button>
         </div>
       </div>`;
-
     document.body.appendChild(modal);
-    const cantInput = modal.querySelector('#mc-cant');
-    cantInput.focus();
 
-    modal.querySelector('#mc-close').onclick = modal.querySelector('#mc-cancel').onclick = () => modal.remove();
+    const cantEl = modal.querySelector('#mc-cant');
+    cantEl.focus(); cantEl.select();
+
+    modal.querySelector('#mc-x').onclick      = () => modal.remove();
+    modal.querySelector('#mc-cancel').onclick = () => modal.remove();
     modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
 
+    modal.querySelector('#mc-minus').onclick = () => {
+      const v = safeNum(cantEl.value);
+      if (v > 1) cantEl.value = v - 1;
+    };
+    modal.querySelector('#mc-plus').onclick = () => {
+      const v = safeNum(cantEl.value);
+      if (v < item.stock) cantEl.value = v + 1;
+    };
+
     const doAdd = () => {
-      const cant  = safeNum(cantInput.value);
+      const cant  = safeNum(cantEl.value);
       const errEl = modal.querySelector('#mc-err');
       errEl.classList.add('hidden');
-      if (cant <= 0) { errEl.textContent = 'Ingresa una cantidad válida.'; errEl.classList.remove('hidden'); return; }
-      if (cant > stock) { errEl.textContent = `Máximo disponible: ${stock} ${safeStr(item.unit,'')}.`; errEl.classList.remove('hidden'); return; }
+      if (cant <= 0)          { errEl.textContent = 'Ingresa una cantidad mayor a 0.'; errEl.classList.remove('hidden'); return; }
+      if (cant > item.stock)  { errEl.textContent = `Máximo disponible: ${item.stock} ${safeStr(item.unit,'')}.`; errEl.classList.remove('hidden'); return; }
 
-      const ex = sel.findIndex(s => s.itemId === item.id);
-      if (ex >= 0) sel[ex].cantidad += cant;
-      else sel.push({
-        itemId: item.id,
-        name:   item.name,
-        unit:   item.unit,
-        sapCode: item.sapCode,
-        axCode:  item.axCode,
-        cantidad: cant,
+      sel.push({
+        itemId: item.id, name: item.name, unit: item.unit,
+        sapCode: item.sapCode, axCode: item.axCode,
+        stock: item.stock, cantidad: cant,
         requiereSerial: item.requiereSerial,
-        modoSerial: 'individual',
-        seriales: [],
-        serialInicio: '',
-        serialFin: '',
+        modoSerial: 'individual', seriales: [], serialInicio: '', serialFin: '',
       });
-
       addReciente(item.id);
       modal.remove();
-      // Limpiar búsqueda y refrescar
-      const buscar = document.getElementById('fs-buscar');
-      if (buscar) buscar.value = '';
-      renderResultados('');
-      renderLista();
+      renderSeleccionados();
+      renderDisponibles(document.getElementById('fs-buscar')?.value || '');
     };
 
     modal.querySelector('#mc-add').addEventListener('click', doAdd);
-    cantInput.addEventListener('keydown', e => { if (e.key === 'Enter') doAdd(); });
+    cantEl.addEventListener('keydown', e => { if (e.key === 'Enter') doAdd(); });
   }
 
-  // ── Renderizar items ya seleccionados ──
-  function renderLista() {
-    const lista = ov.querySelector('#fs-lista');
+  // ── Render materiales seleccionados ──
+  function renderSeleccionados() {
+    const lista  = document.getElementById('fs-sel-lista');
+    const countEl = document.getElementById('fs-sel-count');
     if (!lista) return;
+
+    if (countEl) {
+      countEl.textContent = `${sel.length} ítem${sel.length !== 1 ? 's' : ''}`;
+      countEl.style.background = sel.length > 0 ? '#EFF6FF' : '#F3F4F6';
+      countEl.style.color      = sel.length > 0 ? '#1D4ED8' : '#9CA3AF';
+    }
+
     if (sel.length === 0) {
-      lista.innerHTML = '<p class="text-xs text-gray-400 text-center py-2">Sin materiales agregados</p>';
+      lista.innerHTML = `<p class="text-xs text-gray-400 text-center py-3 border border-dashed border-gray-200 rounded-xl">
+        Toca un material de la lista para agregarlo
+      </p>`;
       return;
     }
-    lista.innerHTML = sel.map((s, idx) => `
-      <div class="bg-gray-50 rounded-xl border border-gray-200 p-3 space-y-2">
-        <div class="flex items-start justify-between gap-2">
-          <div class="min-w-0">
-            <p class="text-sm font-medium text-gray-900 truncate">${titleCase(s.name)}</p>
-            <p class="text-xs text-gray-400 font-mono">SAP ${s.sapCode||'—'} · AX ${s.axCode||'—'}</p>
-            <p class="text-xs text-gray-500">${s.cantidad} ${s.unit}</p>
-          </div>
-          <button data-ri="${idx}" class="text-gray-400 hover:text-red-500 shrink-0 text-lg leading-none mt-0.5">✕</button>
-        </div>
-        ${s.requiereSerial ? `
-        <div class="space-y-2 border-t border-gray-200 pt-2">
-          <p class="text-xs font-medium text-blue-700">Seriales / sellos</p>
-          <div class="flex gap-2">
-            <button data-modo-serial="${idx}" data-modo="individual"
-              class="flex-1 text-xs py-1.5 rounded-lg border font-medium transition-colors ${s.modoSerial === 'individual' ? 'border-blue-400 text-blue-700 bg-blue-50' : 'border-gray-300 text-gray-600'}">
-              Individual
-            </button>
-            <button data-modo-serial="${idx}" data-modo="rango"
-              class="flex-1 text-xs py-1.5 rounded-lg border font-medium transition-colors ${s.modoSerial === 'rango' ? 'border-blue-400 text-blue-700 bg-blue-50' : 'border-gray-300 text-gray-600'}">
-              Rango
-            </button>
-          </div>
-          ${s.modoSerial === 'individual' ? `
-          <div>
-            <textarea data-seriales="${idx}" rows="3"
-              placeholder="Un serial por línea"
-              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
-            >${(s.seriales||[]).join('\n')}</textarea>
-            <p class="text-xs text-gray-400 mt-0.5">${(s.seriales||[]).length} de ${s.cantidad} serial(es)</p>
-          </div>` : `
-          <div class="grid grid-cols-2 gap-2">
-            <div>
-              <label class="block text-xs text-gray-500 mb-1">Inicio</label>
-              <input data-rinicio="${idx}" type="text" value="${s.serialInicio||''}" placeholder="Ej. ABC001"
-                class="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-400"/>
-            </div>
-            <div>
-              <label class="block text-xs text-gray-500 mb-1">Fin</label>
-              <input data-rfin="${idx}" type="text" value="${s.serialFin||''}" placeholder="Ej. ABC010"
-                class="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-400"/>
-            </div>
-          </div>`}
-        </div>` : ''}
-      </div>`).join('');
 
-    lista.querySelectorAll('[data-ri]').forEach(b => {
-      b.onclick = () => { sel.splice(parseInt(b.dataset.ri), 1); renderLista(); renderResultados(document.getElementById('fs-buscar')?.value || ''); };
+    lista.innerHTML = sel.map((s, idx) => {
+      const restante   = s.stock - s.cantidad;
+      const lowStock   = restante <= safeNum(items.find(i=>i.id===s.itemId)?.minStock || 5);
+      const stockColor = restante <= 0 ? '#C62828' : lowStock ? '#E65100' : '#166534';
+      return `
+        <div class="rounded-xl border-2 border-blue-200 bg-blue-50 p-3 space-y-2">
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0">
+              <p class="text-sm font-semibold text-gray-900 leading-tight truncate">${titleCase(s.name)}</p>
+              <p class="text-xs text-gray-400 font-mono mt-0.5">SAP ${s.sapCode||'—'} · AX ${s.axCode||'—'}</p>
+            </div>
+            <button data-del="${idx}" class="text-gray-400 hover:text-red-500 shrink-0 text-lg leading-none mt-0.5">✕</button>
+          </div>
+          <!-- Cantidad editable con +/- -->
+          <div class="flex items-center gap-2">
+            <button data-dec="${idx}" class="w-9 h-9 rounded-lg border border-gray-300 bg-white text-lg font-bold text-gray-600 hover:border-blue-400 hover:text-blue-600 flex items-center justify-center shrink-0">−</button>
+            <input data-qty="${idx}" type="number" min="1" max="${s.stock}" value="${s.cantidad}"
+              class="flex-1 text-center text-base font-bold border border-gray-300 rounded-lg py-1.5 bg-white focus:outline-none focus:border-blue-400"/>
+            <button data-inc="${idx}" class="w-9 h-9 rounded-lg border border-gray-300 bg-white text-lg font-bold text-gray-600 hover:border-blue-400 hover:text-blue-600 flex items-center justify-center shrink-0">+</button>
+            <span class="text-xs text-gray-500 shrink-0">${safeStr(s.unit,'')}</span>
+          </div>
+          <!-- Stock restante -->
+          <p class="text-xs font-medium" style="color:${stockColor}">
+            Stock restante: ${restante} ${safeStr(s.unit,'')}${restante <= 0 ? ' ⚠️ Sin stock' : ''}
+          </p>
+          <!-- Seriales si aplica -->
+          ${s.requiereSerial ? `
+          <div class="space-y-1.5 border-t border-blue-200 pt-2">
+            <p class="text-xs font-semibold text-blue-700">Seriales / sellos</p>
+            <div class="flex gap-1.5">
+              <button data-modo="${idx}" data-tipo="individual"
+                class="flex-1 text-xs py-1.5 rounded-lg border font-medium transition-colors ${s.modoSerial==='individual' ? 'border-blue-400 bg-white text-blue-700' : 'border-gray-200 text-gray-500'}">
+                Individual
+              </button>
+              <button data-modo="${idx}" data-tipo="rango"
+                class="flex-1 text-xs py-1.5 rounded-lg border font-medium transition-colors ${s.modoSerial==='rango' ? 'border-blue-400 bg-white text-blue-700' : 'border-gray-200 text-gray-500'}">
+                Rango
+              </button>
+            </div>
+            ${s.modoSerial==='individual' ? `
+            <textarea data-ser="${idx}" rows="2" placeholder="Un serial por línea"
+              class="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs font-mono bg-white focus:outline-none focus:border-blue-400 resize-none"
+            >${(s.seriales||[]).join('
+')}</textarea>
+            <p class="text-xs text-gray-400">${(s.seriales||[]).length} de ${s.cantidad}</p>` : `
+            <div class="grid grid-cols-2 gap-1.5">
+              <div>
+                <p class="text-xs text-gray-500 mb-1">Inicio</p>
+                <input data-ri="${idx}" type="text" value="${s.serialInicio||''}" placeholder="ABC001"
+                  class="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs font-mono bg-white focus:outline-none focus:border-blue-400"/>
+              </div>
+              <div>
+                <p class="text-xs text-gray-500 mb-1">Fin</p>
+                <input data-rf="${idx}" type="text" value="${s.serialFin||''}" placeholder="ABC010"
+                  class="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs font-mono bg-white focus:outline-none focus:border-blue-400"/>
+              </div>
+            </div>`}
+          </div>` : ''}
+        </div>`;
+    }).join('');
+
+    // Eventos
+    lista.querySelectorAll('[data-del]').forEach(b => {
+      b.onclick = () => { sel.splice(parseInt(b.dataset.del), 1); renderSeleccionados(); renderDisponibles(document.getElementById('fs-buscar')?.value||''); };
     });
-    lista.querySelectorAll('[data-modo-serial]').forEach(b => {
+    lista.querySelectorAll('[data-dec]').forEach(b => {
       b.onclick = () => {
-        const idx = parseInt(b.dataset.modoSerial);
-        sel[idx].modoSerial = b.dataset.modo;
-        sel[idx].seriales = []; sel[idx].serialInicio = ''; sel[idx].serialFin = '';
-        renderLista();
+        const idx = parseInt(b.dataset.dec);
+        if (sel[idx].cantidad > 1) { sel[idx].cantidad--; renderSeleccionados(); renderDisponibles(document.getElementById('fs-buscar')?.value||''); }
       };
     });
-    lista.querySelectorAll('[data-seriales]').forEach(ta => {
+    lista.querySelectorAll('[data-inc]').forEach(b => {
+      b.onclick = () => {
+        const idx = parseInt(b.dataset.inc);
+        if (sel[idx].cantidad < sel[idx].stock) { sel[idx].cantidad++; renderSeleccionados(); renderDisponibles(document.getElementById('fs-buscar')?.value||''); }
+      };
+    });
+    lista.querySelectorAll('[data-qty]').forEach(inp => {
+      inp.onchange = () => {
+        const idx  = parseInt(inp.dataset.qty);
+        const cant = safeNum(inp.value);
+        if (cant > 0 && cant <= sel[idx].stock) {
+          sel[idx].cantidad = cant;
+        } else {
+          inp.value = sel[idx].cantidad;
+        }
+        renderSeleccionados(); renderDisponibles(document.getElementById('fs-buscar')?.value||'');
+      };
+    });
+    lista.querySelectorAll('[data-modo]').forEach(b => {
+      b.onclick = () => {
+        const idx = parseInt(b.dataset.modo);
+        sel[idx].modoSerial = b.dataset.tipo;
+        sel[idx].seriales=[]; sel[idx].serialInicio=''; sel[idx].serialFin='';
+        renderSeleccionados();
+      };
+    });
+    lista.querySelectorAll('[data-ser]').forEach(ta => {
       ta.oninput = () => {
-        const idx = parseInt(ta.dataset.seriales);
-        sel[idx].seriales = ta.value.split('\n').map(s => s.trim()).filter(Boolean);
-        const count = ta.parentElement.querySelector('p');
-        if (count) count.textContent = `${sel[idx].seriales.length} de ${sel[idx].cantidad} serial(es)`;
+        const idx = parseInt(ta.dataset.ser);
+        sel[idx].seriales = ta.value.split('
+').map(s=>s.trim()).filter(Boolean);
+        const p = ta.nextElementSibling;
+        if (p) p.textContent = `${sel[idx].seriales.length} de ${sel[idx].cantidad}`;
       };
     });
-    lista.querySelectorAll('[data-rinicio]').forEach(inp => {
-      inp.oninput = () => { sel[parseInt(inp.dataset.rinicio)].serialInicio = inp.value.trim(); };
+    lista.querySelectorAll('[data-ri]').forEach(inp => {
+      inp.oninput = () => { sel[parseInt(inp.dataset.ri)].serialInicio = inp.value.trim(); };
     });
-    lista.querySelectorAll('[data-rfin]').forEach(inp => {
-      inp.oninput = () => { sel[parseInt(inp.dataset.rfin)].serialFin = inp.value.trim(); };
+    lista.querySelectorAll('[data-rf]').forEach(inp => {
+      inp.oninput = () => { sel[parseInt(inp.dataset.rf)].serialFin = inp.value.trim(); };
     });
   }
 
-  ov.querySelector('#fs-close').onclick = ov.querySelector('#fs-cancel').onclick = () => ov.remove();
+  // Init
+  renderDisponibles('');
+  renderSeleccionados();
 
-  // Mostrar campo manual cuando se selecciona "Otro / temporal"
-  ov.querySelector('#fs-placa-sel').addEventListener('change', (e) => {
+  // Placa "otro"
+  ov.querySelector('#fs-placa-sel').addEventListener('change', e => {
     const otro = ov.querySelector('#fs-placa-otro');
-    if (e.target.value === '__otro__') {
-      otro.classList.remove('hidden');
-      otro.focus();
-    } else {
-      otro.classList.add('hidden');
-      otro.value = '';
-    }
+    if (e.target.value === '__otro__') { otro.classList.remove('hidden'); otro.focus(); }
+    else { otro.classList.add('hidden'); otro.value = ''; }
   });
 
-  // Búsqueda de materiales en tiempo real
-  const buscarEl = document.getElementById('fs-buscar');
-  if (buscarEl) {
-    buscarEl.addEventListener('input', e => renderResultados(e.target.value));
-    // Mostrar lista inicial
-    renderResultados('');
-  }
+  // Búsqueda
+  ov.querySelector('#fs-buscar').addEventListener('input', e => renderDisponibles(e.target.value));
 
-  // Registrar salida
+  // Cerrar
+  ov.querySelector('#fs-close').onclick = () => ov.remove();
+
+  // Registrar
   ov.querySelector('#fs-submit').onclick = async () => {
-    const responsableSel  = ov.querySelector('#fs-responsable');
-    const responsableUid  = responsableSel.value;  // now equals the name/code
-    const responsableNom  = responsableSel.value;
-    const contratista     = ov.querySelector('#fs-contratista').value.trim();
-    const instalador      = ov.querySelector('#fs-instalador').value.trim();
-    const placaSel        = ov.querySelector('#fs-placa-sel').value;
-    const placa           = placaSel === '__otro__'
-      ? ov.querySelector('#fs-placa-otro').value.trim()
-      : placaSel;
-    const fechaSolicitud  = ov.querySelector('#fs-fecha-sol').value;
-    const fechaEntrega    = ov.querySelector('#fs-fecha-ent').value;
-    const errEl           = ov.querySelector('#fs-err');
-    const btn             = ov.querySelector('#fs-submit');
+    const responsableVal = ov.querySelector('#fs-responsable').value;
+    const contratista    = ov.querySelector('#fs-contratista').value.trim();
+    const instalador     = ov.querySelector('#fs-instalador').value.trim();
+    const placaSel       = ov.querySelector('#fs-placa-sel').value;
+    const placa          = placaSel === '__otro__' ? ov.querySelector('#fs-placa-otro').value.trim() : placaSel;
+    const fechaSolicitud = ov.querySelector('#fs-fecha-sol').value;
+    const fechaEntrega   = ov.querySelector('#fs-fecha-ent').value;
+    const errEl          = ov.querySelector('#fs-err');
+    const btn            = ov.querySelector('#fs-submit');
 
     errEl.classList.add('hidden');
-    if (!responsableUid) { errEl.textContent = 'Selecciona el usuario responsable.'; errEl.classList.remove('hidden'); return; }
+    if (!responsableVal) { errEl.textContent = 'Selecciona el usuario responsable.'; errEl.classList.remove('hidden'); return; }
     if (sel.length === 0) { errEl.textContent = 'Agrega al menos un material.'; errEl.classList.remove('hidden'); return; }
 
     btn.disabled = true; btn.textContent = 'Registrando...';
     try {
       const ref = await addDoc(collection(db, 'kardex/movimientos/salidas'), {
-        // Encabezado
-        usuarioResponsableUid: responsableUid,
-        usuarioResponsable:    responsableNom,
+        usuarioResponsableUid: responsableVal,
+        usuarioResponsable:    responsableVal,
         empresaContratista:    contratista,
         instaladorResponsable: instalador,
         placaVehiculo:         placa,
-        fechaSolicitud,
-        fechaEntrega,
-        entregadoPor:          session.displayName,
-        entregadoPorUid:       session.uid,
-        // Materiales
+        fechaSolicitud, fechaEntrega,
+        entregadoPor:    session.displayName,
+        entregadoPorUid: session.uid,
         items: sel.map(s => ({
-          itemId:    s.itemId,
-          sapCode:   s.sapCode,
-          axCode:    s.axCode,
-          nombre:    s.name,
-          unit:      s.unit,
-          cantidad:  s.cantidad,
+          itemId: s.itemId, sapCode: s.sapCode, axCode: s.axCode,
+          nombre: s.name, unit: s.unit, cantidad: s.cantidad,
           requiereSerial: s.requiereSerial,
-          modoSerial:    s.requiereSerial ? s.modoSerial : null,
-          seriales:      s.requiereSerial && s.modoSerial === 'individual' ? s.seriales : [],
-          serialInicio:  s.requiereSerial && s.modoSerial === 'rango' ? s.serialInicio : '',
-          serialFin:     s.requiereSerial && s.modoSerial === 'rango' ? s.serialFin    : '',
+          modoSerial:    s.requiereSerial ? s.modoSerial    : null,
+          seriales:      s.requiereSerial && s.modoSerial==='individual' ? s.seriales : [],
+          serialInicio:  s.requiereSerial && s.modoSerial==='rango' ? s.serialInicio : '',
+          serialFin:     s.requiereSerial && s.modoSerial==='rango' ? s.serialFin    : '',
         })),
         fecha: serverTimestamp(),
       });
@@ -1064,23 +1111,23 @@ async function showFormSalida(db, session) {
       showToast('Salida registrada correctamente.', 'success');
       showMemo({
         id: ref.id,
-        usuarioResponsable: responsableNom,
-        empresaContratista: contratista,
+        usuarioResponsable:    responsableVal,
+        empresaContratista:    contratista,
         instaladorResponsable: instalador,
-        entregadoPor: session.displayName,
-        placaVehiculo: placa,
-        fechaSolicitud,
-        fechaEntrega,
+        entregadoPor:          session.displayName,
+        placaVehiculo:         placa,
+        fechaSolicitud, fechaEntrega,
         items: sel,
       });
       await showDashboard(db, session);
     } catch(e) {
-      errEl.textContent = 'Error al registrar.'; errEl.classList.remove('hidden');
-      btn.disabled = false; btn.textContent = 'Registrar salida'; console.error(e);
+      errEl.textContent = 'Error al registrar. Intenta de nuevo.';
+      errEl.classList.remove('hidden');
+      btn.disabled = false; btn.textContent = 'Registrar salida';
+      console.error(e);
     }
   };
 }
-
 // ─────────────────────────────────────────
 // HISTORIAL
 // ─────────────────────────────────────────
