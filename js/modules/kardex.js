@@ -1312,20 +1312,130 @@ function showMemo(s) {
     </div>`);
 
   ov.querySelector('#fm-close').onclick = ov.querySelector('#fm-cancel').onclick = () => ov.remove();
-  ov.querySelector('#fm-print').onclick = () => {
-    const body = document.getElementById('memo-body').innerHTML;
-    const w = window.open('','_blank');
-    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Despacho DELSUR</title>
-      <style>
-        body{font-family:Arial,sans-serif;font-size:11px;color:#000;margin:15mm}
-        table{width:100%;border-collapse:collapse}
-        th,td{border:1px solid #999;padding:4px 6px}
-        th{background:#e8e8e8;font-size:10px;text-transform:uppercase}
-        .font-mono{font-family:Courier New,monospace}
-        @media print{body{margin:10mm}}
-      </style></head><body>${body}</body></html>`);
-    w.document.close(); w.print();
+
+  ov.querySelector('#fm-print').onclick = async () => {
+    const btn = ov.querySelector('#fm-print');
+    btn.disabled = true;
+    btn.textContent = 'Generando PDF...';
+    try {
+      await generarPDFOficial(memo);
+    } catch(e) {
+      console.error('Error generando PDF:', e);
+      showToast('Error al generar el PDF. Intenta de nuevo.', 'error');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '🖨️ Imprimir';
+    }
   };
+}
+
+// ─────────────────────────────────────────
+// GENERADOR DE PDF OFICIAL
+// Usa el PDF original como plantilla y superpone
+// los valores en las coordenadas exactas del documento.
+// ─────────────────────────────────────────
+
+// Mapa SAP → coordenada Y en el PDF original (origen bottom-left, PDF-lib)
+const SAP_Y_MAP = {
+  "221477": 641, "213719": 632, "328541": 623, "352453": 614,
+  "352460": 603, "352461": 594, "352462": 585, "353112": 576,
+  "354045": 567, "354549": 558, "200129": 549, "355518": 539,
+  "338362": 530, "219359": 521, "328560": 503, "243940": 494,
+  "337775": 485, "337776": 476, "337777": 467, "210525": 458,
+  "212720": 449, "214221": 440, "301560": 430, "245979": 421,
+  "355070": 412, "244569": 403, "353992": 394, "211373": 385,
+  "211375": 376, "353121": 367, "355064": 358, "338357": 349,
+  "353099": 340, "353110": 331, "353088": 322, "200468": 303,
+  "200472": 293, "200469": 284, "200473": 274, "213410": 265,
+  "214726": 255, "214727": 246, "352463": 236, "219527": 216,
+  "221062": 207, "200367": 198, "282485": 188, "350560": 179,
+  "212896": 169, "350564": 160, "221472": 141, "200413": 131,
+  "211829": 122, "213340": 112, "222315": 103, "353730": 94,
+  "338363": 84,  "338361": 75,  "338360": 65,
+};
+
+// Posiciones del encabezado (origen bottom-left)
+const HEADER_COORDS = {
+  USUARIO_RESPONSABLE:    { x: 312, y: 732 },
+  EMPRESA_CONTRATISTA:    { x: 165, y: 720 },
+  INSTALADOR_RESPONSABLE: { x: 362, y: 720 },
+  ENTREGADO_POR:          { x: 165, y: 708 },
+  PLACA_VEHICULO:         { x: 362, y: 695 },
+  FECHA_SOLICITUD:        { x: 165, y: 683 },
+  FECHA_ENTREGA:          { x: 362, y: 683 },
+};
+
+async function generarPDFOficial(memo) {
+  // Cargar PDF-lib si no está disponible
+  if (!window.PDFLib) {
+    await new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = 'https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js';
+      s.onload = res; s.onerror = rej;
+      document.head.appendChild(s);
+    });
+  }
+
+  // Cargar el PDF original como plantilla
+  // El PDF debe estar en la raíz del repositorio
+  const pdfUrl = new URL('despacho-template.pdf', window.location.href).href;
+  let pdfBytes;
+  try {
+    const resp = await fetch(pdfUrl);
+    if (!resp.ok) throw new Error(`No se encontró la plantilla: ${pdfUrl}`);
+    pdfBytes = await resp.arrayBuffer();
+  } catch(e) {
+    throw new Error('No se encontró el archivo despacho-template.pdf en el repositorio.');
+  }
+
+  const { PDFDocument, rgb, StandardFonts } = window.PDFLib;
+  const pdfDoc  = await PDFDocument.load(pdfBytes);
+  const page    = pdfDoc.getPage(0);
+  const font    = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const fontSize = 7.4;
+  const color    = rgb(0, 0, 0);
+
+  // ── Encabezado ──
+  const drawHeader = (key, value) => {
+    if (!value || value === '—') return;
+    const coords = HEADER_COORDS[key];
+    if (!coords) return;
+    page.drawText(String(value), {
+      x: coords.x, y: coords.y,
+      size: fontSize, font, color,
+    });
+  };
+
+  drawHeader('USUARIO_RESPONSABLE',    memo.USUARIO_RESPONSABLE);
+  drawHeader('EMPRESA_CONTRATISTA',    memo.EMPRESA_CONTRATISTA);
+  drawHeader('INSTALADOR_RESPONSABLE', memo.INSTALADOR_RESPONSABLE);
+  drawHeader('ENTREGADO_POR',          memo.ENTREGADO_POR);
+  drawHeader('PLACA_VEHICULO',         memo.PLACA_VEHICULO);
+  drawHeader('FECHA_SOLICITUD',        memo.FECHA_SOLICITUD);
+  drawHeader('FECHA_ENTREGA',          memo.FECHA_ENTREGA);
+
+  // ── Cantidades por SAP ──
+  for (const item of memo.MATERIALES) {
+    const sap = String(item.RESERVA).trim();
+    const y   = SAP_Y_MAP[sap];
+    if (!y || !item.CANTIDAD) continue;
+    page.drawText(String(item.CANTIDAD), {
+      x: 504, y,
+      size: fontSize, font, color,
+    });
+  }
+
+  // ── Descargar ──
+  const filledBytes = await pdfDoc.save();
+  const blob  = new Blob([filledBytes], { type: 'application/pdf' });
+  const url   = URL.createObjectURL(blob);
+  const a     = document.createElement('a');
+  a.href      = url;
+  a.download  = `despacho-${memo.FECHA_ENTREGA || 'sin-fecha'}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
 // ─────────────────────────────────────────
