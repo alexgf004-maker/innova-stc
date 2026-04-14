@@ -1308,7 +1308,7 @@ function showMemo(s) {
     </div>
     <div class="px-5 py-4 border-t border-gray-100 flex gap-3">
       <button id="fm-cancel" class="flex-1 border border-gray-300 text-gray-700 font-medium rounded-lg py-2.5 text-sm hover:bg-gray-50">Cerrar</button>
-      <button id="fm-print"  class="flex-1 text-white font-medium rounded-lg py-2.5 text-sm" style="background-color:#1B4F8A">🖨️ Imprimir</button>
+      <button id="fm-print"  class="flex-1 text-white font-medium rounded-lg py-2.5 text-sm" style="background-color:#1B4F8A">🖨️ Generar PDF</button>
     </div>`);
 
   ov.querySelector('#fm-close').onclick = ov.querySelector('#fm-cancel').onclick = () => ov.remove();
@@ -1338,20 +1338,37 @@ function showMemo(s) {
     setTimeout(() => URL.revokeObjectURL(url), 3000);
   });
 
-  ov.querySelector('#fm-print').onclick = () => imprimirDespacho(memo);
+  ov.querySelector('#fm-print').onclick = async () => {
+    const btn = ov.querySelector('#fm-print');
+    btn.disabled = true;
+    btn.textContent = 'Generando PDF...';
+    try {
+      await generarYAbrirPDF(memo);
+    } catch(e) {
+      console.error(e);
+      showToast(e.message || 'Error al generar el PDF.', 'error');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '🖨️ Generar PDF';
+    }
+  };
 }
 
 // ─────────────────────────────────────────
 // IMPRIMIR DESPACHO OFICIAL
-// Replica el formato físico del documento Word
-// Entrega_de_materiales_OTC_2026.docx
-// Misma tabla, mismas columnas, mismos headers de sección.
+// HTML fiel al documento Word original.
+// Medidas exactas extraídas del .docx:
+//   Página carta: 215.9×279.4mm
+//   Márgenes: top=8.8 bottom=4.9 left=12.7 right=6.3
+//   Tabla encabezado: 2 cols de 50% c/u
+//   Tabla materiales: 10.6% | 7.0% | 72.8% | 9.6%
+//   Fuente header: 8pt bold, datos: 7.5pt normal
 // ─────────────────────────────────────────
 
-// Tabla completa del documento original — 65 filas incluyendo headers de sección
+// 65 filas de la tabla 1 del Word, en orden exacto
 const DOC_ROWS = [
   {sap:"RESERVA",ax:"STOCK",desc:"DESCRIPICIÓN",header:true},
-  {sap:"USO HABITUAL",ax:"",desc:"USO HABITUAL",header:true},
+  {sap:"USO HABITUAL",ax:"",desc:"",header:true},
   {sap:"221477",ax:"50203",desc:"ALAMBRE COBRE THHN 8 AWG 600 V FORRO PLASTICO",header:false},
   {sap:"213719",ax:"50806",desc:"CABLE DUPLEX AL #6 ACSR SETTER",header:false},
   {sap:"328541",ax:"50807",desc:"CABLE TRIPLEX AL. #6 ACSR PALUDINA",header:false},
@@ -1418,343 +1435,172 @@ const DOC_ROWS = [
 ];
 
 function imprimirDespacho(memo) {
-  // Construir mapa SAP → cantidad del despacho actual
   const cantMap = {};
   for (const item of memo.MATERIALES) {
     cantMap[String(item.RESERVA).trim()] = item.CANTIDAD;
   }
 
-  // Generar filas de la tabla
   const filas = DOC_ROWS.map(row => {
     if (row.header) {
-      // Fila de encabezado de sección (ej: "USO HABITUAL", "MATERIAL PARA CL200")
       if (row.sap === 'RESERVA') {
-        // Encabezado de columnas
-        return `<tr class="col-header">
-          <td><b>RESERVA</b></td>
-          <td><b>STOCK</b></td>
-          <td><b>CANTIDAD</b></td>
-          <td><b>DESCRIPCIÓN</b></td>
-        </tr>`;
+        return `<tr><td class="th">RESERVA</td><td class="th">STOCK</td><td class="th cant">CANTIDAD</td><td class="th desc">DESCRIPICIÓN</td></tr>`;
       }
-      return `<tr class="sec-header">
-        <td colspan="4"><b>${row.sap}</b></td>
-      </tr>`;
+      return `<tr><td class="sec" colspan="4">${row.sap}</td></tr>`;
     }
     const cant = cantMap[row.sap] || '';
-    const highlight = cant ? ' class="filled"' : '';
-    return `<tr${highlight}>
-      <td class="code">${row.sap}</td>
-      <td class="code">${row.ax}</td>
-      <td class="cant">${cant}</td>
-      <td>${row.desc}</td>
-    </tr>`;
+    return `<tr><td class="c0">${row.sap}</td><td class="c1">${row.ax}</td><td class="c2 cant">${cant}</td><td class="c3">${row.desc}</td></tr>`;
   }).join('');
 
-  // Sección de seriales
+  // Seriales
   const seriales = memo.SERIALES || [];
-  let serialSection = '';
+  let serialHtml = '';
   if (seriales.length > 0) {
-    const serialRows = seriales.map(i => {
-      const inicio = i.modoSerial === 'rango' ? (i.serialInicio||'') : (i.seriales||[])[0]||'';
-      const fin    = i.modoSerial === 'rango' ? (i.serialFin||'')   : (i.seriales||[]).slice(-1)[0]||'';
-      // Render individual serials as numbered rows if individual mode
+    const sRows = seriales.map(i => {
       if (i.modoSerial === 'individual' && (i.seriales||[]).length > 0) {
-        return i.seriales.map((ser, idx) => `
-          <tr>
-            <td class="code">${safeStr(i.axCode,'')}</td>
-            <td class="code">${safeStr(i.sapCode,'')}</td>
-            <td>${idx === 0 ? safeStr(i.nombre||i.name,'').toUpperCase() : ''}</td>
-            <td class="cant">${idx === 0 ? safeNum(i.cantidad) : ''}</td>
-            <td class="cant">${idx+1}</td>
-            <td class="code">${ser}</td>
-            <td class="code"></td>
-          </tr>`).join('');
+        return i.seriales.map((ser, idx) => `<tr>
+          <td class="c0">${idx===0 ? safeStr(i.axCode,'') : ''}</td>
+          <td class="c0">${idx===0 ? safeStr(i.sapCode,'') : ''}</td>
+          <td>${idx===0 ? safeStr(i.nombre||i.name,'').toUpperCase() : ''}</td>
+          <td class="cant">${idx===0 ? safeNum(i.cantidad) : ''}</td>
+          <td class="cant">${idx+1}</td>
+          <td class="c0">${ser}</td>
+          <td></td>
+        </tr>`).join('');
       }
+      const ini = i.modoSerial==='rango' ? (i.serialInicio||'') : (i.seriales||[])[0]||'';
+      const fin = i.modoSerial==='rango' ? (i.serialFin||'')   : (i.seriales||[]).slice(-1)[0]||'';
       return `<tr>
-        <td class="code">${safeStr(i.axCode,'')}</td>
-        <td class="code">${safeStr(i.sapCode,'')}</td>
+        <td class="c0">${safeStr(i.axCode,'')}</td>
+        <td class="c0">${safeStr(i.sapCode,'')}</td>
         <td>${safeStr(i.nombre||i.name,'').toUpperCase()}</td>
         <td class="cant">${safeNum(i.cantidad)}</td>
         <td class="cant">1</td>
-        <td class="code">${inicio}</td>
-        <td class="code">${fin}</td>
+        <td class="c0">${ini}</td>
+        <td class="c0">${fin}</td>
       </tr>`;
     }).join('');
-
-    serialSection = `
-      <p style="margin-top:6mm;font-size:8pt;font-weight:bold;text-transform:uppercase">
-        Serial de medidores / sellos entregados
-      </p>
-      <table class="serial-table">
-        <tr class="col-header">
-          <td><b>STOCK</b></td>
-          <td><b>RESERVA</b></td>
-          <td><b>DESCRIPCIÓN</b></td>
-          <td><b>CANTIDAD</b></td>
-          <td><b>Cantidad</b></td>
-          <td><b>Inicio</b></td>
-          <td><b>Fin</b></td>
-        </tr>
-        ${serialRows}
+    serialHtml = `
+      <p class="serial-title">Serial de medidores / sellos entregados</p>
+      <table>
+        <tr><td class="th">STOCK</td><td class="th">RESERVA</td><td class="th desc">DESCRIPCIÓN</td><td class="th cant">CANTIDAD</td><td class="th cant">Cantidad</td><td class="th">Inicio</td><td class="th">Fin</td></tr>
+        ${sRows}
       </table>`;
   }
 
-  const html = `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width"/>
-  <title>Despacho / Carga de Materiales</title>
-  <style>
-    /* ── Reset ── */
-    * { margin:0; padding:0; box-sizing:border-box; }
+  const v = memo;
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<title>Despacho / Carga de Materiales</title>
+<style>
+/* Página carta con los márgenes exactos del Word */
+@page { size: 215.9mm 279.4mm; margin: 8.8mm 6.3mm 4.9mm 12.7mm; }
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: Arial, sans-serif; font-size: 7.5pt; color: #000; width: 196.9mm; }
 
-    /* ── Página: carta, márgenes del Word original ── */
-    @page {
-      size: letter portrait;
-      margin: 8.8mm 6.3mm 4.9mm 12.7mm;
-    }
-    body {
-      font-family: Arial, sans-serif;
-      font-size: 8pt;
-      color: #000;
-      background: #fff;
-    }
+/* ── Tabla encabezado institucional ──
+   Replica Tabla 0 del Word: 2 cols de 50%, bordes negros, sin fondo */
+.t0 { width: 100%; border-collapse: collapse; border: 1px solid #000; margin-bottom: 1mm; }
+.t0 td { border: 1px solid #000; padding: 0.8mm 1mm; vertical-align: top; font-size: 7.5pt; }
+.empresa { font-size: 8pt; font-weight: bold; text-align: left; }
+.otc     { font-size: 7.5pt; }
+.label   { font-size: 6.5pt; color: #000; display: block; }
+.valor   { font-size: 7.5pt; display: block; min-height: 3.5mm; border-bottom: 0.5pt solid #555; padding-bottom: 0.3mm; margin-top: 0.2mm; }
 
-    /* ── Tabla de encabezado institucional ── */
-    /* Replica exactamente la tabla 0 del Word:
-       col0=68.8mm (empresa+labels izquierda), col1=68.7mm (labels derecha) */
-    .t-header {
-      width: 100%;
-      border-collapse: collapse;
-      border: 1px solid #000;
-      margin-bottom: 2mm;
-      table-layout: fixed;
-    }
-    .t-header td {
-      border: 1px solid #000;
-      padding: 1mm 1.5mm;
-      vertical-align: top;
-      font-size: 7.5pt;
-    }
-    .t-header .empresa {
-      font-size: 8pt;
-      font-weight: bold;
-      text-transform: uppercase;
-    }
-    .t-header .label {
-      font-size: 6.5pt;
-      color: #333;
-      text-transform: uppercase;
-    }
-    .t-header .valor {
-      font-size: 7.5pt;
-      font-weight: bold;
-      min-height: 4mm;
-      display: block;
-      border-bottom: 0.5pt solid #666;
-      padding-bottom: 0.5mm;
-    }
+/* ── Tabla materiales ──
+   Replica Tabla 1 del Word: 4 cols, proporciones exactas */
+.t1 { width: 100%; border-collapse: collapse; }
+.t1 td { border: 1px solid #000; padding: 0.3mm 0.8mm; font-size: 7.5pt; vertical-align: middle; }
+/* Anchos exactos del Word */
+.c0   { width: 10.6%; text-align: center; }
+.c1   { width: 7.0%;  text-align: center; }
+.c2   { width: 9.6%;  text-align: center; }
+.c3   { width: 72.8%; }
+/* Alias para tabla seriales */
+.cant { text-align: center; }
+.desc { }
+/* Encabezado columnas */
+.th  { background: #d9d9d9; font-weight: bold; font-size: 8pt; text-align: center; border: 1px solid #000; padding: 0.5mm 0.8mm; }
+/* Headers de sección */
+.sec { background: #d9d9d9; font-weight: bold; font-size: 7.5pt; border: 1px solid #000; padding: 0.3mm 0.8mm; }
 
-    /* ── Tabla de materiales ── */
-    /* Replica tabla 1 del Word:
-       col0=10.6% (RESERVA/SAP), col1=7% (STOCK/AX),
-       col2=72.8% (DESCRIPCIÓN), col3=9.6% (CANTIDAD) */
-    .t-materiales {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 7.5pt;
-    }
-    .t-materiales td {
-      border: 1px solid #000;
-      padding: 0.5mm 1mm;
-      vertical-align: middle;
-    }
-    .t-materiales col.c-reserva  { width: 10.6%; }
-    .t-materiales col.c-stock    { width: 7.0%;  }
-    .t-materiales col.c-cantidad { width: 9.6%;  }
-    .t-materiales col.c-desc     { width: 72.8%; }
+/* Firmas */
+.firmas { display: flex; margin-top: 12mm; gap: 10mm; }
+.firma  { flex:1; text-align: center; }
+.firma .linea { border-top: 0.75pt solid #000; padding-top: 1mm; font-size: 7pt; font-weight: bold; }
 
-    /* Encabezado de columnas */
-    tr.col-header td {
-      background: #d9d9d9;
-      font-weight: bold;
-      text-align: center;
-      font-size: 7.5pt;
-      border: 1px solid #000;
-      padding: 1mm;
-    }
-    /* Encabezados de sección (USO HABITUAL, MATERIAL PARA CL200, etc.) */
-    tr.sec-header td {
-      background: #d9d9d9;
-      font-weight: bold;
-      font-size: 7.5pt;
-      padding: 0.5mm 1mm;
-      border: 1px solid #000;
-    }
-    /* Filas normales */
-    .t-materiales .code {
-      text-align: center;
-      font-size: 7pt;
-    }
-    .t-materiales .cant {
-      text-align: center;
-      font-weight: bold;
-      font-size: 8pt;
-    }
-    /* Filas con cantidad marcadas sutilmente */
-    tr.filled td { background: #f0f7ff; }
+.serial-title { font-size: 7.5pt; font-weight: bold; text-transform: uppercase; margin: 3mm 0 1mm; }
 
-    /* ── Tabla de seriales ── */
-    .serial-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 7pt;
-      margin-top: 1mm;
-    }
-    .serial-table td {
-      border: 1px solid #000;
-      padding: 0.5mm 1mm;
-      vertical-align: middle;
-    }
+@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style></head><body>
 
-    /* ── Área de firmas ── */
-    .firmas {
-      display: flex;
-      justify-content: space-around;
-      margin-top: 15mm;
-      gap: 20mm;
-    }
-    .firma {
-      flex: 1;
-      text-align: center;
-    }
-    .firma .linea {
-      border-top: 0.75pt solid #000;
-      padding-top: 1mm;
-      font-size: 7pt;
-      font-weight: bold;
-      text-transform: uppercase;
-    }
+<!-- Tabla 0: Encabezado institucional -->
+<!-- Fila 0-2 col izquierda: empresa, OTC, DESPACHO — unidas con rowspan -->
+<!-- Fila 0 col derecha: vacía -->
+<!-- Filas 3-7: labels y valores en ambas columnas -->
+<table class="t0">
+  <colgroup><col style="width:50%"><col style="width:50%"></colgroup>
+  <tr>
+    <td rowspan="3" style="vertical-align:middle">
+      <span class="empresa">DISTRUIBUIDORA DE ELECTRICIDAD DELSUR S.A. DE C.V.</span><br>
+      <span class="otc">OTC - GERENCIA COMERCIAL</span><br>
+      <span class="otc">DESPACHO/ CARGA DE MATERIALES</span>
+    </td>
+    <td><span class="label">USUARIO RESPONSABLE:</span><span class="valor">${v.USUARIO_RESPONSABLE}</span></td>
+  </tr>
+  <tr>
+    <td>
+      <table style="width:100%;border-collapse:collapse"><tr>
+        <td style="width:50%;padding-right:1mm;border:none">
+          <span class="label">EMPRESA CONTRATISTA:</span><span class="valor">${v.EMPRESA_CONTRATISTA}</span>
+        </td>
+        <td style="width:50%;padding-left:1mm;border:none;border-left:0.5pt solid #999">
+          <span class="label">INSTALADOR RESPONSABLE:</span><span class="valor">${v.INSTALADOR_RESPONSABLE}</span>
+        </td>
+      </tr></table>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <table style="width:100%;border-collapse:collapse"><tr>
+        <td style="width:50%;padding-right:1mm;border:none">
+          <span class="label">ENTREGADO POR:</span><span class="valor">${v.ENTREGADO_POR}</span>
+        </td>
+        <td style="width:50%;padding-left:1mm;border:none;border-left:0.5pt solid #999">
+          <span class="label">FIRMA DE RECIBIDO:</span><span class="valor">&nbsp;</span>
+        </td>
+      </tr></table>
+    </td>
+  </tr>
+  <tr>
+    <td><span class="label">FIRMA DE ENTREGADO:</span><span class="valor">&nbsp;</span></td>
+    <td><span class="label">PLACA DE VEHICULO:</span><span class="valor">${v.PLACA_VEHICULO}</span></td>
+  </tr>
+  <tr>
+    <td><span class="label">FECHA DE SOLICITUD</span><span class="valor">${v.FECHA_SOLICITUD}</span></td>
+    <td><span class="label">FECHA ENTREGA DE MATERIAL:</span><span class="valor">${v.FECHA_ENTREGA}</span></td>
+  </tr>
+</table>
 
-    /* ── Control de saltos de página ── */
-    @media print {
-      .t-materiales { page-break-inside: auto; }
-      tr { page-break-inside: avoid; }
-    }
-  </style>
-</head>
-<body>
+<!-- Tabla 1: Materiales con todos los 59 materiales y secciones -->
+<table class="t1">
+  <colgroup>
+    <col class="c0"><col class="c1"><col class="c2"><col class="c3">
+  </colgroup>
+  ${filas}
+</table>
 
-  <!-- ══ TABLA 0: ENCABEZADO INSTITUCIONAL ══
-       Estructura idéntica al Word: 8 filas × 2 columnas
-       Fila 0: empresa (col0) | vacío (col1)
-       Fila 1-2: OTC / DESPACHO (col0)
-       Filas 3-7: labels izquierda y derecha con valores -->
-  <table class="t-header">
-    <colgroup>
-      <col style="width:50%">
-      <col style="width:50%">
-    </colgroup>
-    <!-- Fila 0: nombre empresa -->
-    <tr>
-      <td rowspan="3" style="vertical-align:middle;text-align:center;border-right:1px solid #000">
-        <span class="empresa">DISTRUIBUIDORA DE ELECTRICIDAD DELSUR S.A. DE C.V.</span><br>
-        <span style="font-size:7.5pt">OTC - GERENCIA COMERCIAL</span><br>
-        <span style="font-size:7.5pt">DESPACHO/ CARGA DE MATERIALES</span>
-      </td>
-      <td>
-        <span class="label">USUARIO RESPONSABLE:</span>
-        <span class="valor">${memo.USUARIO_RESPONSABLE}</span>
-      </td>
-    </tr>
-    <tr>
-      <td>
-        <div style="display:flex;gap:2mm">
-          <div style="flex:1">
-            <span class="label">EMPRESA CONTRATISTA:</span>
-            <span class="valor">${memo.EMPRESA_CONTRATISTA}</span>
-          </div>
-          <div style="flex:1;border-left:0.5pt solid #ccc;padding-left:2mm">
-            <span class="label">INSTALADOR RESPONSABLE:</span>
-            <span class="valor">${memo.INSTALADOR_RESPONSABLE}</span>
-          </div>
-        </div>
-      </td>
-    </tr>
-    <tr>
-      <td>
-        <div style="display:flex;gap:2mm">
-          <div style="flex:1">
-            <span class="label">ENTREGADO POR:</span>
-            <span class="valor">${memo.ENTREGADO_POR}</span>
-          </div>
-          <div style="flex:1;border-left:0.5pt solid #ccc;padding-left:2mm">
-            <span class="label">FIRMA DE RECIBIDO:</span>
-            <span class="valor">&nbsp;</span>
-          </div>
-        </div>
-      </td>
-    </tr>
-    <tr>
-      <td>
-        <span class="label">FIRMA DE ENTREGADO:</span>
-        <span class="valor">&nbsp;</span>
-      </td>
-      <td>
-        <span class="label">PLACA DE VEHICULO:</span>
-        <span class="valor">${memo.PLACA_VEHICULO}</span>
-      </td>
-    </tr>
-    <tr>
-      <td>
-        <span class="label">FECHA DE SOLICITUD</span>
-        <span class="valor">${memo.FECHA_SOLICITUD}</span>
-      </td>
-      <td>
-        <span class="label">FECHA ENTREGA DE MATERIAL:</span>
-        <span class="valor">${memo.FECHA_ENTREGA}</span>
-      </td>
-    </tr>
-  </table>
+${serialHtml}
 
-  <!-- ══ TABLA 1: MATERIALES ══
-       Replica exactamente la estructura del Word:
-       col RESERVA(10.6%) | STOCK(7%) | CANTIDAD(9.6%) | DESCRIPCIÓN(72.8%)
-       Incluye headers de sección en gris: USO HABITUAL, MATERIAL PARA CL200,
-       ACOMETIDA ESPECIAL, SUBTERRÁNEO, PATRON ANTIHURTO Y TELEGESTIÓN -->
-  <table class="t-materiales">
-    <colgroup>
-      <col class="c-reserva">
-      <col class="c-stock">
-      <col class="c-cantidad">
-      <col class="c-desc">
-    </colgroup>
-    ${filas}
-  </table>
+<!-- Firmas -->
+<div class="firmas">
+  <div class="firma"><div class="linea">FIRMA DE ENTREGADO</div></div>
+  <div class="firma"><div class="linea">FIRMA DE RECIBIDO</div></div>
+</div>
 
-  ${serialSection}
+<script>window.onload=()=>window.print();</script>
+</body></html>`;
 
-  <!-- ══ FIRMAS ══ -->
-  <div class="firmas">
-    <div class="firma"><div class="linea">FIRMA DE ENTREGADO</div></div>
-    <div class="firma"><div class="linea">FIRMA DE RECIBIDO</div></div>
-  </div>
-
-  <script>
-    window.onload = function() {
-      window.print();
-    };
-  </script>
-</body>
-</html>`;
-
-  const w = window.open('', '_blank');
-  if (!w) {
-    showToast('Permite las ventanas emergentes para imprimir.', 'error');
-    return;
-  }
+  const w = window.open('','_blank');
+  if (!w) { showToast('Permite las ventanas emergentes para imprimir.','error'); return; }
   w.document.write(html);
   w.document.close();
 }
@@ -2019,4 +1865,156 @@ function fmtDate(ts) {
     const d = ts.toDate ? ts.toDate() : new Date(ts);
     return d.toLocaleDateString('es-SV', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
   } catch { return '—'; }
+}
+
+// ─────────────────────────────────────────
+// GENERAR PDF VÍA INNOVA-CONVERTER
+// 1. Llena el Word con los datos del despacho
+// 2. Envía el docx al microservicio en Render
+// 3. Recibe el PDF y lo abre para imprimir
+// ─────────────────────────────────────────
+
+// URL del microservicio — actualiza esto cuando lo despliegues en Render
+const CONVERTER_URL = 'https://innova-converter.onrender.com/convert';
+
+async function generarYAbrirPDF(memo) {
+  // ── Paso 1: generar el docx llenado en el navegador ──
+  if (!window.JSZip) {
+    await new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+      s.onload = res; s.onerror = rej;
+      document.head.appendChild(s);
+    });
+  }
+
+  const templateUrl = new URL('Entrega_de_materiales_OTC_2026.docx', window.location.href).href;
+  const resp = await fetch(templateUrl);
+  if (!resp.ok) throw new Error('No se encontró la plantilla Word en el repositorio.');
+  const arrayBuffer = await resp.arrayBuffer();
+
+  const zip    = await JSZip.loadAsync(arrayBuffer);
+  const xmlStr = await zip.file('word/document.xml').async('string');
+  const parser = new DOMParser();
+  const xmlDoc = parser.parseFromString(xmlStr, 'application/xml');
+  const tables = xmlDoc.querySelectorAll('tbl');
+  const ns     = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+
+  function appendTextToCell(cell, value) {
+    const paras = cell.querySelectorAll('p');
+    const para  = paras[paras.length - 1] || paras[0];
+    if (!para) return;
+    const run = xmlDoc.createElementNS(ns, 'w:r');
+    const t   = xmlDoc.createElementNS(ns, 'w:t');
+    t.setAttribute('xml:space', 'preserve');
+    t.textContent = ' ' + value;
+    run.appendChild(t);
+    para.appendChild(run);
+  }
+
+  function setCellText(cell, value) {
+    cell.querySelectorAll('r').forEach(r => {
+      r.querySelectorAll('t').forEach(t => { t.textContent = ''; });
+    });
+    const para = cell.querySelector('p');
+    if (!para) return;
+    const run = xmlDoc.createElementNS(ns, 'w:r');
+    const t   = xmlDoc.createElementNS(ns, 'w:t');
+    t.setAttribute('xml:space', 'preserve');
+    t.textContent = String(value);
+    run.appendChild(t);
+    para.appendChild(run);
+  }
+
+  // Encabezado (Tabla 0)
+  const HEADER_MAP_DOCX = {
+    USUARIO_RESPONSABLE:    [3, 1],
+    EMPRESA_CONTRATISTA:    [4, 0],
+    INSTALADOR_RESPONSABLE: [4, 1],
+    ENTREGADO_POR:          [5, 0],
+    PLACA_VEHICULO:         [6, 1],
+    FECHA_SOLICITUD:        [7, 0],
+    FECHA_ENTREGA:          [7, 1],
+  };
+  const t0rows = tables[0].querySelectorAll('tr');
+  for (const [campo, [fila, col]] of Object.entries(HEADER_MAP_DOCX)) {
+    const valor = memo[campo];
+    if (!valor || valor === '—') continue;
+    const row   = t0rows[fila];
+    if (!row) continue;
+    const cells = row.querySelectorAll('tc');
+    const cell  = cells[col];
+    if (cell) appendTextToCell(cell, valor);
+  }
+
+  // Cantidades (Tabla 1)
+  const SAP_ROW_MAP = {
+    "221477":2,"213719":3,"328541":4,"352453":5,"352460":6,
+    "352461":7,"352462":8,"353112":9,"354045":10,"354549":11,
+    "200129":12,"355518":13,"338362":14,"219359":15,
+    "328560":17,"243940":18,"337775":19,"337776":20,"337777":21,
+    "210525":22,"212720":23,"214221":24,"301560":25,"245979":26,
+    "355070":27,"244569":28,"353992":29,"211373":30,"211375":31,
+    "353121":32,"355064":33,"338357":34,"353099":35,"353110":36,
+    "353088":37,"200468":39,"200472":40,"200469":41,"200473":42,
+    "213410":43,"214726":44,"214727":45,"352463":46,
+    "219527":48,"221062":49,"200367":50,"282485":51,"350560":52,
+    "212896":53,"350564":54,"221472":56,"200413":57,"211829":58,
+    "213340":59,"222315":60,"353730":61,"338363":62,"338361":63,"338360":64,
+  };
+  const t1rows = tables[1].querySelectorAll('tr');
+  for (const item of memo.MATERIALES) {
+    const sap    = String(item.RESERVA).trim();
+    const rowIdx = SAP_ROW_MAP[sap];
+    if (rowIdx === undefined || !item.CANTIDAD) continue;
+    const row   = t1rows[rowIdx];
+    if (!row) continue;
+    const cells = row.querySelectorAll('tc');
+    if (cells[3]) setCellText(cells[3], String(item.CANTIDAD));
+  }
+
+  const serializer = new XMLSerializer();
+  zip.file('word/document.xml', serializer.serializeToString(xmlDoc));
+  const docxBlob = await zip.generateAsync({
+    type: 'blob',
+    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  });
+
+  // ── Paso 2: convertir a PDF via Render ──
+  const docxBase64 = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload  = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(docxBlob);
+  });
+
+  const convResp = await fetch(CONVERTER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ docx_base64: docxBase64 }),
+  });
+
+  if (!convResp.ok) {
+    const err = await convResp.json().catch(() => ({}));
+    throw new Error(err.error || `Error del servidor: ${convResp.status}`);
+  }
+
+  const { pdf_base64 } = await convResp.json();
+  if (!pdf_base64) throw new Error('El servidor no devolvió el PDF.');
+
+  // ── Paso 3: abrir PDF para imprimir ──
+  const pdfBytes  = Uint8Array.from(atob(pdf_base64), c => c.charCodeAt(0));
+  const pdfBlob   = new Blob([pdfBytes], { type: 'application/pdf' });
+  const pdfUrl    = URL.createObjectURL(pdfBlob);
+  const w         = window.open(pdfUrl, '_blank');
+  if (!w) {
+    // Fallback: descarga directa si el navegador bloquea el popup
+    const a    = document.createElement('a');
+    a.href     = pdfUrl;
+    a.download = `despacho-${memo.FECHA_ENTREGA || 'sin-fecha'}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+  setTimeout(() => URL.revokeObjectURL(pdfUrl), 10000);
 }
