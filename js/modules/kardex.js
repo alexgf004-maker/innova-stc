@@ -1308,7 +1308,7 @@ function showMemo(s) {
     </div>
     <div class="px-5 py-4 border-t border-gray-100 flex gap-3">
       <button id="fm-cancel" class="flex-1 border border-gray-300 text-gray-700 font-medium rounded-lg py-2.5 text-sm hover:bg-gray-50">Cerrar</button>
-      <button id="fm-print"  class="flex-1 text-white font-medium rounded-lg py-2.5 text-sm" style="background-color:#1B4F8A">⬇️ Descargar Word</button>
+      <button id="fm-print"  class="flex-1 text-white font-medium rounded-lg py-2.5 text-sm" style="background-color:#1B4F8A">🖨️ Imprimir</button>
     </div>`);
 
   ov.querySelector('#fm-close').onclick = ov.querySelector('#fm-cancel').onclick = () => ov.remove();
@@ -1338,171 +1338,193 @@ function showMemo(s) {
     setTimeout(() => URL.revokeObjectURL(url), 3000);
   });
 
-  ov.querySelector('#fm-print').onclick = async () => {
-    const btn = ov.querySelector('#fm-print');
-    btn.disabled = true;
-    btn.textContent = 'Generando...';
-    try {
-      await generarDocx(memo);
-    } catch(e) {
-      console.error('Error generando documento:', e);
-      showToast('Error al generar el documento. Intenta de nuevo.', 'error');
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = '⬇️ Descargar Word';
-    }
-  };
+  ov.querySelector('#fm-print').onclick = () => imprimirDespacho(memo);
 }
 
 // ─────────────────────────────────────────
-// GENERADOR DE WORD OFICIAL
-// Carga la plantilla .docx, manipula el XML
-// directamente para llenar encabezado y cantidades,
-// y descarga el archivo llenado.
+// IMPRIMIR DESPACHO OFICIAL
+// Genera una página HTML con el formato del
+// documento Word y la abre lista para imprimir.
 // ─────────────────────────────────────────
+function imprimirDespacho(memo) {
+  const seriales = memo.SERIALES || [];
 
-// Índice de fila en Tabla 1 (materiales) por código SAP
-const SAP_ROW_MAP = {
-  "221477":2,"213719":3,"328541":4,"352453":5,"352460":6,
-  "352461":7,"352462":8,"353112":9,"354045":10,"354549":11,
-  "200129":12,"355518":13,"338362":14,"219359":15,
-  "328560":17,"243940":18,"337775":19,"337776":20,"337777":21,
-  "210525":22,"212720":23,"214221":24,"301560":25,"245979":26,
-  "355070":27,"244569":28,"353992":29,"211373":30,"211375":31,
-  "353121":32,"355064":33,"338357":34,"353099":35,"353110":36,
-  "353088":37,"200468":39,"200472":40,"200469":41,"200473":42,
-  "213410":43,"214726":44,"214727":45,"352463":46,
-  "219527":48,"221062":49,"200367":50,"282485":51,"350560":52,
-  "212896":53,"350564":54,"221472":56,"200413":57,"211829":58,
-  "213340":59,"222315":60,"353730":61,"338363":62,"338361":63,"338360":64,
-};
+  const filasMateriales = memo.MATERIALES.map(i => `
+    <tr>
+      <td>${i.RESERVA}</td>
+      <td>${i.STOCK}</td>
+      <td class="cant">${i.CANTIDAD}</td>
+      <td>${i.DESCRIPCION}</td>
+    </tr>`).join('');
 
-// Mapeo encabezado: campo → [tabla0_fila, tabla0_col, label_existente]
-const HEADER_MAP_DOCX = {
-  USUARIO_RESPONSABLE:    [3, 1, "USUARIO RESPONSABLE:"],
-  EMPRESA_CONTRATISTA:    [4, 0, "EMPRESA CONTRATISTA:"],
-  INSTALADOR_RESPONSABLE: [4, 1, "INSTALADOR RESPONSABLE:"],
-  ENTREGADO_POR:          [5, 0, "ENTREGADO POR:"],
-  PLACA_VEHICULO:         [6, 1, "PLACA DE VEHICULO:"],
-  FECHA_SOLICITUD:        [7, 0, "FECHA DE SOLICITUD"],
-  FECHA_ENTREGA:          [7, 1, "FECHA ENTREGA DE MATERIAL:"],
-};
+  const seccionSeriales = seriales.length > 0 ? `
+    <h3>Serial de medidores / sellos entregados</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>STOCK</th><th>RESERVA</th><th>DESCRIPCIÓN</th>
+          <th>CANTIDAD</th><th>INICIO</th><th>FIN</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${seriales.map(i => {
+          const inicio = i.modoSerial === 'rango' ? (i.serialInicio||'') : (i.seriales||[])[0]||'';
+          const fin    = i.modoSerial === 'rango' ? (i.serialFin||'')   : (i.seriales||[]).slice(-1)[0]||'';
+          return `<tr>
+            <td>${safeStr(i.axCode,'')}</td>
+            <td>${safeStr(i.sapCode,'')}</td>
+            <td>${safeStr(i.nombre||i.name,'').toUpperCase()}</td>
+            <td class="cant">${safeNum(i.cantidad)}</td>
+            <td>${inicio}</td>
+            <td>${fin}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>` : '';
 
-async function generarDocx(memo) {
-  // Cargar JSZip
-  if (!window.JSZip) {
-    await new Promise((res, rej) => {
-      const s = document.createElement('script');
-      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
-      s.onload = res; s.onerror = rej;
-      document.head.appendChild(s);
-    });
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Despacho DELSUR</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family: Arial, sans-serif; font-size: 9pt; color: #000; padding: 12mm; }
+
+    /* Encabezado */
+    .header { border: 1px solid #000; margin-bottom: 4px; }
+    .header-top { display: flex; }
+    .header-logo { width: 40%; padding: 4px 6px; border-right: 1px solid #000; }
+    .header-logo .empresa { font-weight: bold; font-size: 9pt; }
+    .header-logo .sub { font-size: 8pt; }
+    .header-campos { width: 60%; }
+    .campo-row { display: flex; border-bottom: 1px solid #000; min-height: 18px; }
+    .campo-row:last-child { border-bottom: none; }
+    .campo { flex: 1; padding: 2px 5px; border-right: 1px solid #000; font-size: 7.5pt; }
+    .campo:last-child { border-right: none; }
+    .campo .label { color: #444; font-size: 7pt; }
+    .campo .valor { font-weight: bold; font-size: 8pt; }
+
+    /* Tabla materiales */
+    table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 8pt; }
+    th, td { border: 1px solid #000; padding: 2px 4px; }
+    th { background: #e0e0e0; font-weight: bold; text-align: center; font-size: 7.5pt; }
+    td { vertical-align: middle; }
+    td.cant { text-align: center; font-weight: bold; }
+    .section-header td { background: #d0d0d0; font-weight: bold; font-size: 7.5pt; }
+
+    /* Firmas */
+    .firmas { display: flex; margin-top: 20mm; gap: 20mm; }
+    .firma { flex: 1; text-align: center; }
+    .firma .linea { border-top: 1px solid #000; padding-top: 3px; font-size: 7.5pt; font-weight: bold; text-transform: uppercase; }
+
+    h3 { margin-top: 8px; margin-bottom: 3px; font-size: 8pt; text-transform: uppercase; }
+
+    @media print {
+      body { padding: 8mm; }
+      @page { margin: 8mm; size: letter; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Encabezado institucional -->
+  <div class="header">
+    <div class="header-top">
+      <div class="header-logo">
+        <p class="empresa">DISTRIBUIDORA DE ELECTRICIDAD DELSUR S.A. DE C.V.</p>
+        <p class="sub">OTC - GERENCIA COMERCIAL</p>
+        <p class="sub"><strong>DESPACHO / CARGA DE MATERIALES</strong></p>
+      </div>
+      <div class="header-campos">
+        <div class="campo-row">
+          <div class="campo" style="flex:2">
+            <span class="label">USUARIO RESPONSABLE:</span><br>
+            <span class="valor">${memo.USUARIO_RESPONSABLE}</span>
+          </div>
+        </div>
+        <div class="campo-row">
+          <div class="campo">
+            <span class="label">EMPRESA CONTRATISTA:</span><br>
+            <span class="valor">${memo.EMPRESA_CONTRATISTA}</span>
+          </div>
+          <div class="campo">
+            <span class="label">INSTALADOR RESPONSABLE:</span><br>
+            <span class="valor">${memo.INSTALADOR_RESPONSABLE}</span>
+          </div>
+        </div>
+        <div class="campo-row">
+          <div class="campo">
+            <span class="label">ENTREGADO POR:</span><br>
+            <span class="valor">${memo.ENTREGADO_POR}</span>
+          </div>
+          <div class="campo">
+            <span class="label">FIRMA DE RECIBIDO:</span><br>
+            <span class="valor">&nbsp;</span>
+          </div>
+        </div>
+        <div class="campo-row">
+          <div class="campo">
+            <span class="label">FIRMA DE ENTREGADO:</span><br>
+            <span class="valor">&nbsp;</span>
+          </div>
+          <div class="campo">
+            <span class="label">PLACA DE VEHICULO:</span><br>
+            <span class="valor">${memo.PLACA_VEHICULO}</span>
+          </div>
+        </div>
+        <div class="campo-row">
+          <div class="campo">
+            <span class="label">FECHA DE SOLICITUD:</span><br>
+            <span class="valor">${memo.FECHA_SOLICITUD}</span>
+          </div>
+          <div class="campo">
+            <span class="label">FECHA ENTREGA DE MATERIAL:</span><br>
+            <span class="valor">${memo.FECHA_ENTREGA}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabla de materiales -->
+  <table>
+    <thead>
+      <tr>
+        <th style="width:12%">RESERVA</th>
+        <th style="width:10%">STOCK</th>
+        <th style="width:10%">CANTIDAD</th>
+        <th>DESCRIPCIÓN</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${filasMateriales}
+    </tbody>
+  </table>
+
+  ${seccionSeriales}
+
+  <!-- Firmas -->
+  <div class="firmas">
+    <div class="firma">
+      <div class="linea">FIRMA DE ENTREGADO</div>
+    </div>
+    <div class="firma">
+      <div class="linea">FIRMA DE RECIBIDO</div>
+    </div>
+  </div>
+
+  <script>window.onload = () => { window.print(); }</script>
+</body>
+</html>`;
+
+  const w = window.open('', '_blank');
+  if (!w) {
+    showToast('Permite las ventanas emergentes para imprimir.', 'error');
+    return;
   }
-
-  // Cargar plantilla Word desde el repositorio
-  const templateUrl = new URL('Entrega_de_materiales_OTC_2026.docx', window.location.href).href;
-  const resp = await fetch(templateUrl);
-  if (!resp.ok) throw new Error('No se encontró Entrega_de_materiales_OTC_2026.docx en el repositorio.');
-  const arrayBuffer = await resp.arrayBuffer();
-
-  const zip = await JSZip.loadAsync(arrayBuffer);
-  const xmlStr = await zip.file('word/document.xml').async('string');
-
-  // Parsear XML
-  const parser = new DOMParser();
-  const xmlDoc = parser.parseFromString(xmlStr, 'application/xml');
-
-  // Obtener todas las tablas del documento
-  const tables = xmlDoc.querySelectorAll('tbl');
-
-  // ── Función helper: obtener texto de una celda ──
-  function getCellText(cell) {
-    return Array.from(cell.querySelectorAll('t'))
-      .map(t => t.textContent).join('');
-  }
-
-  // ── Función helper: escribir texto en la última celda de un párrafo ──
-  function appendTextToCell(cell, value) {
-    // Encontrar el último párrafo con runs
-    const paras = cell.querySelectorAll('p');
-    const lastPara = paras[paras.length - 1] || paras[0];
-    if (!lastPara) return;
-
-    // Crear un nuevo run con el valor
-    const ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-    const run = xmlDoc.createElementNS(ns, 'w:r');
-    const t   = xmlDoc.createElementNS(ns, 'w:t');
-    t.setAttribute('xml:space', 'preserve');
-    t.textContent = ' ' + value;
-    run.appendChild(t);
-    lastPara.appendChild(run);
-  }
-
-  // ── Función helper: reemplazar todo el texto de una celda ──
-  function setCellText(cell, value) {
-    const ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-    // Limpiar runs existentes
-    cell.querySelectorAll('r').forEach(r => {
-      r.querySelectorAll('t').forEach(t => { t.textContent = ''; });
-    });
-    // Escribir en el primer párrafo
-    const para = cell.querySelector('p');
-    if (!para) return;
-    const run = xmlDoc.createElementNS(ns, 'w:r');
-    const t   = xmlDoc.createElementNS(ns, 'w:t');
-    t.setAttribute('xml:space', 'preserve');
-    t.textContent = String(value);
-    run.appendChild(t);
-    para.appendChild(run);
-  }
-
-  // ── Tabla 0: Encabezado ──
-  const t0 = tables[0];
-  const t0rows = t0.querySelectorAll('tr');
-
-  for (const [campo, [fila, col, label]] of Object.entries(HEADER_MAP_DOCX)) {
-    const valor = memo[campo];
-    if (!valor || valor === '—') continue;
-    const row  = t0rows[fila];
-    if (!row) continue;
-    const cells = row.querySelectorAll('tc');
-    const cell  = cells[col];
-    if (!cell) continue;
-    appendTextToCell(cell, valor);
-  }
-
-  // ── Tabla 1: Cantidades ──
-  const t1 = tables[1];
-  const t1rows = t1.querySelectorAll('tr');
-
-  for (const item of memo.MATERIALES) {
-    const sap = String(item.RESERVA).trim();
-    const rowIdx = SAP_ROW_MAP[sap];
-    if (rowIdx === undefined || !item.CANTIDAD) continue;
-    const row = t1rows[rowIdx];
-    if (!row) continue;
-    const cells = row.querySelectorAll('tc');
-    const cantCell = cells[3]; // columna CANTIDAD
-    if (!cantCell) continue;
-    setCellText(cantCell, String(item.CANTIDAD));
-  }
-
-  // ── Serializar y descargar ──
-  const serializer = new XMLSerializer();
-  const newXml = serializer.serializeToString(xmlDoc);
-  zip.file('word/document.xml', newXml);
-
-  const outBlob = await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-  const url  = URL.createObjectURL(outBlob);
-  const a    = document.createElement('a');
-  a.href     = url;
-  const fecha = (memo.FECHA_ENTREGA || 'sin-fecha').replace(/\//g, '-');
-  const resp2 = memo.USUARIO_RESPONSABLE || '';
-  a.download = `despacho-${resp2}-${fecha}.docx`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  w.document.write(html);
+  w.document.close();
 }
 
 // ─────────────────────────────────────────
