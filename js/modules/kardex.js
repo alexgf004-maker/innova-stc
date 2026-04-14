@@ -1308,130 +1308,197 @@ function showMemo(s) {
     </div>
     <div class="px-5 py-4 border-t border-gray-100 flex gap-3">
       <button id="fm-cancel" class="flex-1 border border-gray-300 text-gray-700 font-medium rounded-lg py-2.5 text-sm hover:bg-gray-50">Cerrar</button>
-      <button id="fm-print"  class="flex-1 text-white font-medium rounded-lg py-2.5 text-sm" style="background-color:#1B4F8A">🖨️ Imprimir</button>
+      <button id="fm-print"  class="flex-1 text-white font-medium rounded-lg py-2.5 text-sm" style="background-color:#1B4F8A">⬇️ Descargar Word</button>
     </div>`);
 
   ov.querySelector('#fm-close').onclick = ov.querySelector('#fm-cancel').onclick = () => ov.remove();
 
+  // Botón descargar JSON (para usar con el script Python en PC)
+  ov.querySelector('#fm-export-json')?.addEventListener('click', () => {
+    const datos = {
+      USUARIO_RESPONSABLE:    memo.USUARIO_RESPONSABLE,
+      EMPRESA_CONTRATISTA:    memo.EMPRESA_CONTRATISTA,
+      INSTALADOR_RESPONSABLE: memo.INSTALADOR_RESPONSABLE,
+      ENTREGADO_POR:          memo.ENTREGADO_POR,
+      PLACA_VEHICULO:         memo.PLACA_VEHICULO,
+      FECHA_SOLICITUD:        memo.FECHA_SOLICITUD,
+      FECHA_ENTREGA:          memo.FECHA_ENTREGA,
+      CANTIDADES: Object.fromEntries(
+        memo.MATERIALES.map(i => [i.RESERVA, String(i.CANTIDAD)])
+      ),
+    };
+    const blob = new Blob([JSON.stringify(datos, null, 2)], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `despacho-${memo.FECHA_ENTREGA || 'datos'}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 3000);
+  });
+
   ov.querySelector('#fm-print').onclick = async () => {
     const btn = ov.querySelector('#fm-print');
     btn.disabled = true;
-    btn.textContent = 'Generando PDF...';
+    btn.textContent = 'Generando...';
     try {
-      await generarPDFOficial(memo);
+      await generarDocx(memo);
     } catch(e) {
-      console.error('Error generando PDF:', e);
-      showToast('Error al generar el PDF. Intenta de nuevo.', 'error');
+      console.error('Error generando documento:', e);
+      showToast('Error al generar el documento. Intenta de nuevo.', 'error');
     } finally {
       btn.disabled = false;
-      btn.innerHTML = '🖨️ Imprimir';
+      btn.innerHTML = '⬇️ Descargar Word';
     }
   };
 }
 
 // ─────────────────────────────────────────
-// GENERADOR DE PDF OFICIAL
-// Usa el PDF original como plantilla y superpone
-// los valores en las coordenadas exactas del documento.
+// GENERADOR DE WORD OFICIAL
+// Carga la plantilla .docx, manipula el XML
+// directamente para llenar encabezado y cantidades,
+// y descarga el archivo llenado.
 // ─────────────────────────────────────────
 
-// Mapa SAP → coordenada Y en el PDF original (origen bottom-left, PDF-lib)
-const SAP_Y_MAP = {
-  "221477": 641, "213719": 632, "328541": 623, "352453": 614,
-  "352460": 603, "352461": 594, "352462": 585, "353112": 576,
-  "354045": 567, "354549": 558, "200129": 549, "355518": 539,
-  "338362": 530, "219359": 521, "328560": 503, "243940": 494,
-  "337775": 485, "337776": 476, "337777": 467, "210525": 458,
-  "212720": 449, "214221": 440, "301560": 430, "245979": 421,
-  "355070": 412, "244569": 403, "353992": 394, "211373": 385,
-  "211375": 376, "353121": 367, "355064": 358, "338357": 349,
-  "353099": 340, "353110": 331, "353088": 322, "200468": 303,
-  "200472": 293, "200469": 284, "200473": 274, "213410": 265,
-  "214726": 255, "214727": 246, "352463": 236, "219527": 216,
-  "221062": 207, "200367": 198, "282485": 188, "350560": 179,
-  "212896": 169, "350564": 160, "221472": 141, "200413": 131,
-  "211829": 122, "213340": 112, "222315": 103, "353730": 94,
-  "338363": 84,  "338361": 75,  "338360": 65,
+// Índice de fila en Tabla 1 (materiales) por código SAP
+const SAP_ROW_MAP = {
+  "221477":2,"213719":3,"328541":4,"352453":5,"352460":6,
+  "352461":7,"352462":8,"353112":9,"354045":10,"354549":11,
+  "200129":12,"355518":13,"338362":14,"219359":15,
+  "328560":17,"243940":18,"337775":19,"337776":20,"337777":21,
+  "210525":22,"212720":23,"214221":24,"301560":25,"245979":26,
+  "355070":27,"244569":28,"353992":29,"211373":30,"211375":31,
+  "353121":32,"355064":33,"338357":34,"353099":35,"353110":36,
+  "353088":37,"200468":39,"200472":40,"200469":41,"200473":42,
+  "213410":43,"214726":44,"214727":45,"352463":46,
+  "219527":48,"221062":49,"200367":50,"282485":51,"350560":52,
+  "212896":53,"350564":54,"221472":56,"200413":57,"211829":58,
+  "213340":59,"222315":60,"353730":61,"338363":62,"338361":63,"338360":64,
 };
 
-// Posiciones del encabezado (origen bottom-left)
-const HEADER_COORDS = {
-  USUARIO_RESPONSABLE:    { x: 312, y: 732 },
-  EMPRESA_CONTRATISTA:    { x: 165, y: 720 },
-  INSTALADOR_RESPONSABLE: { x: 362, y: 720 },
-  ENTREGADO_POR:          { x: 165, y: 708 },
-  PLACA_VEHICULO:         { x: 362, y: 695 },
-  FECHA_SOLICITUD:        { x: 165, y: 683 },
-  FECHA_ENTREGA:          { x: 362, y: 683 },
+// Mapeo encabezado: campo → [tabla0_fila, tabla0_col, label_existente]
+const HEADER_MAP_DOCX = {
+  USUARIO_RESPONSABLE:    [3, 1, "USUARIO RESPONSABLE:"],
+  EMPRESA_CONTRATISTA:    [4, 0, "EMPRESA CONTRATISTA:"],
+  INSTALADOR_RESPONSABLE: [4, 1, "INSTALADOR RESPONSABLE:"],
+  ENTREGADO_POR:          [5, 0, "ENTREGADO POR:"],
+  PLACA_VEHICULO:         [6, 1, "PLACA DE VEHICULO:"],
+  FECHA_SOLICITUD:        [7, 0, "FECHA DE SOLICITUD"],
+  FECHA_ENTREGA:          [7, 1, "FECHA ENTREGA DE MATERIAL:"],
 };
 
-async function generarPDFOficial(memo) {
-  // Cargar PDF-lib si no está disponible
-  if (!window.PDFLib) {
+async function generarDocx(memo) {
+  // Cargar JSZip
+  if (!window.JSZip) {
     await new Promise((res, rej) => {
       const s = document.createElement('script');
-      s.src = 'https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js';
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
       s.onload = res; s.onerror = rej;
       document.head.appendChild(s);
     });
   }
 
-  // Cargar el PDF original como plantilla
-  // El PDF debe estar en la raíz del repositorio
-  const pdfUrl = new URL('despacho-template.pdf', window.location.href).href;
-  let pdfBytes;
-  try {
-    const resp = await fetch(pdfUrl);
-    if (!resp.ok) throw new Error(`No se encontró la plantilla: ${pdfUrl}`);
-    pdfBytes = await resp.arrayBuffer();
-  } catch(e) {
-    throw new Error('No se encontró el archivo despacho-template.pdf en el repositorio.');
+  // Cargar plantilla Word desde el repositorio
+  const templateUrl = new URL('Entrega_de_materiales_OTC_2026.docx', window.location.href).href;
+  const resp = await fetch(templateUrl);
+  if (!resp.ok) throw new Error('No se encontró Entrega_de_materiales_OTC_2026.docx en el repositorio.');
+  const arrayBuffer = await resp.arrayBuffer();
+
+  const zip = await JSZip.loadAsync(arrayBuffer);
+  const xmlStr = await zip.file('word/document.xml').async('string');
+
+  // Parsear XML
+  const parser = new DOMParser();
+  const xmlDoc = parser.parseFromString(xmlStr, 'application/xml');
+
+  // Obtener todas las tablas del documento
+  const tables = xmlDoc.querySelectorAll('tbl');
+
+  // ── Función helper: obtener texto de una celda ──
+  function getCellText(cell) {
+    return Array.from(cell.querySelectorAll('t'))
+      .map(t => t.textContent).join('');
   }
 
-  const { PDFDocument, rgb, StandardFonts } = window.PDFLib;
-  const pdfDoc  = await PDFDocument.load(pdfBytes);
-  const page    = pdfDoc.getPage(0);
-  const font    = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const fontSize = 7.4;
-  const color    = rgb(0, 0, 0);
+  // ── Función helper: escribir texto en la última celda de un párrafo ──
+  function appendTextToCell(cell, value) {
+    // Encontrar el último párrafo con runs
+    const paras = cell.querySelectorAll('p');
+    const lastPara = paras[paras.length - 1] || paras[0];
+    if (!lastPara) return;
 
-  // ── Encabezado ──
-  const drawHeader = (key, value) => {
-    if (!value || value === '—') return;
-    const coords = HEADER_COORDS[key];
-    if (!coords) return;
-    page.drawText(String(value), {
-      x: coords.x, y: coords.y,
-      size: fontSize, font, color,
+    // Crear un nuevo run con el valor
+    const ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    const run = xmlDoc.createElementNS(ns, 'w:r');
+    const t   = xmlDoc.createElementNS(ns, 'w:t');
+    t.setAttribute('xml:space', 'preserve');
+    t.textContent = ' ' + value;
+    run.appendChild(t);
+    lastPara.appendChild(run);
+  }
+
+  // ── Función helper: reemplazar todo el texto de una celda ──
+  function setCellText(cell, value) {
+    const ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    // Limpiar runs existentes
+    cell.querySelectorAll('r').forEach(r => {
+      r.querySelectorAll('t').forEach(t => { t.textContent = ''; });
     });
-  };
+    // Escribir en el primer párrafo
+    const para = cell.querySelector('p');
+    if (!para) return;
+    const run = xmlDoc.createElementNS(ns, 'w:r');
+    const t   = xmlDoc.createElementNS(ns, 'w:t');
+    t.setAttribute('xml:space', 'preserve');
+    t.textContent = String(value);
+    run.appendChild(t);
+    para.appendChild(run);
+  }
 
-  drawHeader('USUARIO_RESPONSABLE',    memo.USUARIO_RESPONSABLE);
-  drawHeader('EMPRESA_CONTRATISTA',    memo.EMPRESA_CONTRATISTA);
-  drawHeader('INSTALADOR_RESPONSABLE', memo.INSTALADOR_RESPONSABLE);
-  drawHeader('ENTREGADO_POR',          memo.ENTREGADO_POR);
-  drawHeader('PLACA_VEHICULO',         memo.PLACA_VEHICULO);
-  drawHeader('FECHA_SOLICITUD',        memo.FECHA_SOLICITUD);
-  drawHeader('FECHA_ENTREGA',          memo.FECHA_ENTREGA);
+  // ── Tabla 0: Encabezado ──
+  const t0 = tables[0];
+  const t0rows = t0.querySelectorAll('tr');
 
-  // ── Cantidades por SAP ──
+  for (const [campo, [fila, col, label]] of Object.entries(HEADER_MAP_DOCX)) {
+    const valor = memo[campo];
+    if (!valor || valor === '—') continue;
+    const row  = t0rows[fila];
+    if (!row) continue;
+    const cells = row.querySelectorAll('tc');
+    const cell  = cells[col];
+    if (!cell) continue;
+    appendTextToCell(cell, valor);
+  }
+
+  // ── Tabla 1: Cantidades ──
+  const t1 = tables[1];
+  const t1rows = t1.querySelectorAll('tr');
+
   for (const item of memo.MATERIALES) {
     const sap = String(item.RESERVA).trim();
-    const y   = SAP_Y_MAP[sap];
-    if (!y || !item.CANTIDAD) continue;
-    page.drawText(String(item.CANTIDAD), {
-      x: 504, y,
-      size: fontSize, font, color,
-    });
+    const rowIdx = SAP_ROW_MAP[sap];
+    if (rowIdx === undefined || !item.CANTIDAD) continue;
+    const row = t1rows[rowIdx];
+    if (!row) continue;
+    const cells = row.querySelectorAll('tc');
+    const cantCell = cells[3]; // columna CANTIDAD
+    if (!cantCell) continue;
+    setCellText(cantCell, String(item.CANTIDAD));
   }
 
-  // ── Descargar ──
-  const filledBytes = await pdfDoc.save();
-  const blob  = new Blob([filledBytes], { type: 'application/pdf' });
-  const url   = URL.createObjectURL(blob);
-  const a     = document.createElement('a');
-  a.href      = url;
-  a.download  = `despacho-${memo.FECHA_ENTREGA || 'sin-fecha'}.pdf`;
+  // ── Serializar y descargar ──
+  const serializer = new XMLSerializer();
+  const newXml = serializer.serializeToString(xmlDoc);
+  zip.file('word/document.xml', newXml);
+
+  const outBlob = await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+  const url  = URL.createObjectURL(outBlob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  const fecha = (memo.FECHA_ENTREGA || 'sin-fecha').replace(/\//g, '-');
+  const resp2 = memo.USUARIO_RESPONSABLE || '';
+  a.download = `despacho-${resp2}-${fecha}.docx`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
