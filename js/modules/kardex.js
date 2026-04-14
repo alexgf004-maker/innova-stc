@@ -1338,20 +1338,7 @@ function showMemo(s) {
     setTimeout(() => URL.revokeObjectURL(url), 3000);
   });
 
-  ov.querySelector('#fm-print').onclick = async () => {
-    const btn = ov.querySelector('#fm-print');
-    btn.disabled = true;
-    btn.textContent = 'Generando PDF...';
-    try {
-      await generarYAbrirPDF(memo);
-    } catch(e) {
-      console.error(e);
-      showToast(e.message || 'Error al generar el PDF.', 'error');
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = '🖨️ Generar PDF';
-    }
-  };
+  ov.querySelector('#fm-print').onclick = () => imprimirDespacho(memo);
 }
 
 // ─────────────────────────────────────────
