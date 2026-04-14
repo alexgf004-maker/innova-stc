@@ -1343,178 +1343,410 @@ function showMemo(s) {
 
 // ─────────────────────────────────────────
 // IMPRIMIR DESPACHO OFICIAL
-// Genera una página HTML con el formato del
-// documento Word y la abre lista para imprimir.
+// Replica el formato físico del documento Word
+// Entrega_de_materiales_OTC_2026.docx
+// Misma tabla, mismas columnas, mismos headers de sección.
 // ─────────────────────────────────────────
+
+// Tabla completa del documento original — 65 filas incluyendo headers de sección
+const DOC_ROWS = [
+  {sap:"RESERVA",ax:"STOCK",desc:"DESCRIPICIÓN",header:true},
+  {sap:"USO HABITUAL",ax:"",desc:"USO HABITUAL",header:true},
+  {sap:"221477",ax:"50203",desc:"ALAMBRE COBRE THHN 8 AWG 600 V FORRO PLASTICO",header:false},
+  {sap:"213719",ax:"50806",desc:"CABLE DUPLEX AL #6 ACSR SETTER",header:false},
+  {sap:"328541",ax:"50807",desc:"CABLE TRIPLEX AL. #6 ACSR PALUDINA",header:false},
+  {sap:"352453",ax:"250201",desc:"CONECTOR DE COMPRESIÓN YPC2A8U",header:false},
+  {sap:"352460",ax:"250202",desc:"CONECTOR DE COMPRESIÓN YPC26R8U",header:false},
+  {sap:"352461",ax:"250203",desc:"CONECTOR DE COMPRESIÓN YP2U3",header:false},
+  {sap:"352462",ax:"250204",desc:"CONECTOR DE COMPRESIÓN YP26AU2",header:false},
+  {sap:"353112",ax:"400910",desc:"ANCLA PLASTICA 1 1/2 X 7 (FTN1-120)",header:false},
+  {sap:"354045",ax:"400919",desc:"TORNILLO CABEZA PLANA DE 11/2 PLG X 7MM (Gruesa de 144 unidades)",header:false},
+  {sap:"354549",ax:"400931",desc:"SELLO ACRILICO VERDE (SERV. NVOS., MTTO.) (CABLE 30 CM) (FTMED-30)",header:false},
+  {sap:"200129",ax:"700101",desc:"MEDIDOR BIFILAR DOMICILIAR BASE A, 100 A (ETE1-330)",header:false},
+  {sap:"355518",ax:"700102",desc:"MEDIDOR TRIFILAR DOMICILIAR BASE A, 100 A (ETE1-330)",header:false},
+  {sap:"338362",ax:"700326",desc:"MEDIDOR FORMA 2(S) T/ESPIGA, CLASE 100, TRIFI. 240 V, 15/100",header:false},
+  {sap:"219359",ax:"750109",desc:"CINTA AISLANTE SUPER 3M #33",header:false},
+  {sap:"MATERIAL PARA CL200",ax:"",desc:"",header:true},
+  {sap:"328560",ax:"50205",desc:"CABLE COBRE THHN # 2 AWG 600 V FORRO PLASTICO (ETM3-310)",header:false},
+  {sap:"243940",ax:"50209",desc:"CABLE COBRE THHN # 1/0 AWG 19 HILOS (ETM3-310)",header:false},
+  {sap:"337775",ax:"250101",desc:"CONECTOR MECANICO PERNO PARTIDO KSU-23",header:false},
+  {sap:"337776",ax:"250102",desc:"CONECTOR MECANICO PERNO PARTIDO KSU-26",header:false},
+  {sap:"337777",ax:"250103",desc:"CONECTOR MECANICO PERNO PARTIDO KSU-29",header:false},
+  {sap:"210525",ax:"400833",desc:"TUBO EMT 2 PLG ALUMINIO UL (FTN1-700)",header:false},
+  {sap:"212720",ax:"400834",desc:"CUERPO TERMINAL PARA EMT DE 2 PLG CON ABRAZADERA",header:false},
+  {sap:"214221",ax:"400836",desc:"CONECTOR EMT DE 2 PLG CON TORNILLO",header:false},
+  {sap:"301560",ax:"400837",desc:"GRAPA CONDUIT EMT DE 2 PLG",header:false},
+  {sap:"245979",ax:"400838",desc:"TUBO EMT DE 2 1/2 PLG (FTN1-700)",header:false},
+  {sap:"355070",ax:"400839",desc:"CUERPO TERMINAL PARA EMT DE 2 1/2 PLG CON ABRAZADERA",header:false},
+  {sap:"244569",ax:"400840",desc:"CONECTOR EMT DE 2 1/2 PLG CON TORNILLO",header:false},
+  {sap:"353992",ax:"400841",desc:"GRAPA CONDUIT EMT DE 2 1/2 PLG",header:false},
+  {sap:"211373",ax:"400903",desc:"CINTA BAND IT 3/4",header:false},
+  {sap:"211375",ax:"400904",desc:"HEBILLA PARA CINTA BAND IT 3/4",header:false},
+  {sap:"353121",ax:"700406",desc:"TAPADERA DE POLICARBONATO PARA BASES SOCKET TIPO ESPIGA",header:false},
+  {sap:"355064",ax:"700332",desc:"MEDIDOR FORMA 16s, CLASE 200, 120-277V. 8 CANALES DE MEM. 200 AMP. C/BASE 7 TERMI. (ETE-16s)",header:false},
+  {sap:"338357",ax:"700333",desc:"MEDIDOR FORMA 12s CLASE 200, 120-277V, TRIFILAR, 60Hz, 8 Canales de memoria, C/Base 5 Term (ETE-12s)",header:false},
+  {sap:"353099",ax:"401102",desc:"BASES SOCKETS DE 5 TERMINALES, 200 AMP",header:false},
+  {sap:"353110",ax:"700404",desc:"BASES SOCKETS 100 AMP. P/MED ESPIGA F 2(S)",header:false},
+  {sap:"353088",ax:"401101",desc:"BASES SOCKETS DE 7 TERMINALES MARCA THOMAS & BETTS, 200 AMPS",header:false},
+  {sap:"ACOMETIDA ESPECIAL",ax:"",desc:"",header:true},
+  {sap:"200468",ax:"50401",desc:"CABLE DE ALUMINIO #2 AWG F.P. 7 HILOS (ETM3-330)",header:false},
+  {sap:"200472",ax:"50809",desc:"CABLE DE ALUMINIO ACSR DESNUDO #2 AWG 7 HILOS SPARROW (ETM3-350)",header:false},
+  {sap:"200469",ax:"50402",desc:"CABLE DE ALUMINIO #1/0 AWG F.P. 7 HILOS (ETM3-330)",header:false},
+  {sap:"200473",ax:"50810",desc:"CABLE DE ALUMINIO ACSR DESNUDO #1/0 AWG 7 HILOS, (ETM3-350)",header:false},
+  {sap:"213410",ax:"50505",desc:"CABLE TRIPLEX ACSR 1/0 AWG NERITINA (ETM3-330)",header:false},
+  {sap:"214726",ax:"150202",desc:"REMATE PREFORMADO ACSR 2 AWG (ETM1-240)",header:false},
+  {sap:"214727",ax:"150205",desc:"REMATE PREFORMADO ACSR 1/0 AWG (ETM1-240)",header:false},
+  {sap:"352463",ax:"250205",desc:"CONECTOR MECANICO COMPRESIÓN YP25U25",header:false},
+  {sap:"SUBTERRÁNEO",ax:"",desc:"",header:true},
+  {sap:"219527",ax:"250418",desc:"TERMINAL DE OJO CABLE 4 AWG, DIAMETRO 3/8 PLG (ETM1-460)",header:false},
+  {sap:"221062",ax:"250420",desc:"TERMINAL DE OJO 1/0 DIAMETRO 3/8 PLG (FTN1-320)",header:false},
+  {sap:"200367",ax:"50220",desc:"CABLE COBRE XHHW # 4 AWG 19 HILOS (ETM3-310)",header:false},
+  {sap:"282485",ax:"50219",desc:"CABLE COBRE XHHW # 6 AWG 7 HILOS (ETM3-310)",header:false},
+  {sap:"350560",ax:"50231",desc:"CABLE COBRE RHHW #1/0 AWG",header:false},
+  {sap:"212896",ax:"250419",desc:"TERMINAL DE OJO NO. 2 DIAMETRO 3/8 PLG",header:false},
+  {sap:"350564",ax:"50234",desc:"CABLE COBRE RHHW # 2 AWG 19 HILOS",header:false},
+  {sap:"PATRON ANTIHURTO Y TELEGESTIÓN",ax:"",desc:"",header:true},
+  {sap:"221472",ax:"50710",desc:"CABLE CONCENTRICO TELESCOPICO CCA BIFILAR 6 AWG PARA ACOMETIDA AEREA (ETM3-470)",header:false},
+  {sap:"200413",ax:"50721",desc:"CABLE CONCENTRICO TELESCOPICO CCA TRIFILAR 6 AWG PARA ACOMETIDA AEREA (ETM3-470)",header:false},
+  {sap:"211829",ax:"400707",desc:"CAJA TRANSPARENTE DE POLICARBONATO PARA MEDIDOR TOTALIZADOR",header:false},
+  {sap:"213340",ax:"150419",desc:"PINZAS DE RETENCION PARA CABLE CONCENTRICO TELESCOPICO #1/0 AWG (FTN1-760)",header:false},
+  {sap:"222315",ax:"150420",desc:"PINZAS DE RETENCION PARA CABLE CONCENTRICO TELESCOPICO DE ACOMETIDA BT #6 (FTN1-770)",header:false},
+  {sap:"353730",ax:"750116",desc:"CINTA DE BLINDAJE 3M, CAT. ARMORCAST 4560-10",header:false},
+  {sap:"338363",ax:"700340",desc:"MEDIDOR TELEGESTIONADO BASE A - 240V (FTMED-32)",header:false},
+  {sap:"338361",ax:"700339",desc:"MEDIDOR RESIDENCIAL PREPAGO CLASE 100, 120V CON TELEGESTION",header:false},
+  {sap:"338360",ax:"700338",desc:"MEDIDOR RESIDENCIAL POSTPAGO CLASE 100, 120-240V CON TELEGESTION",header:false},
+];
+
 function imprimirDespacho(memo) {
+  // Construir mapa SAP → cantidad del despacho actual
+  const cantMap = {};
+  for (const item of memo.MATERIALES) {
+    cantMap[String(item.RESERVA).trim()] = item.CANTIDAD;
+  }
+
+  // Generar filas de la tabla
+  const filas = DOC_ROWS.map(row => {
+    if (row.header) {
+      // Fila de encabezado de sección (ej: "USO HABITUAL", "MATERIAL PARA CL200")
+      if (row.sap === 'RESERVA') {
+        // Encabezado de columnas
+        return `<tr class="col-header">
+          <td><b>RESERVA</b></td>
+          <td><b>STOCK</b></td>
+          <td><b>CANTIDAD</b></td>
+          <td><b>DESCRIPCIÓN</b></td>
+        </tr>`;
+      }
+      return `<tr class="sec-header">
+        <td colspan="4"><b>${row.sap}</b></td>
+      </tr>`;
+    }
+    const cant = cantMap[row.sap] || '';
+    const highlight = cant ? ' class="filled"' : '';
+    return `<tr${highlight}>
+      <td class="code">${row.sap}</td>
+      <td class="code">${row.ax}</td>
+      <td class="cant">${cant}</td>
+      <td>${row.desc}</td>
+    </tr>`;
+  }).join('');
+
+  // Sección de seriales
   const seriales = memo.SERIALES || [];
+  let serialSection = '';
+  if (seriales.length > 0) {
+    const serialRows = seriales.map(i => {
+      const inicio = i.modoSerial === 'rango' ? (i.serialInicio||'') : (i.seriales||[])[0]||'';
+      const fin    = i.modoSerial === 'rango' ? (i.serialFin||'')   : (i.seriales||[]).slice(-1)[0]||'';
+      // Render individual serials as numbered rows if individual mode
+      if (i.modoSerial === 'individual' && (i.seriales||[]).length > 0) {
+        return i.seriales.map((ser, idx) => `
+          <tr>
+            <td class="code">${safeStr(i.axCode,'')}</td>
+            <td class="code">${safeStr(i.sapCode,'')}</td>
+            <td>${idx === 0 ? safeStr(i.nombre||i.name,'').toUpperCase() : ''}</td>
+            <td class="cant">${idx === 0 ? safeNum(i.cantidad) : ''}</td>
+            <td class="cant">${idx+1}</td>
+            <td class="code">${ser}</td>
+            <td class="code"></td>
+          </tr>`).join('');
+      }
+      return `<tr>
+        <td class="code">${safeStr(i.axCode,'')}</td>
+        <td class="code">${safeStr(i.sapCode,'')}</td>
+        <td>${safeStr(i.nombre||i.name,'').toUpperCase()}</td>
+        <td class="cant">${safeNum(i.cantidad)}</td>
+        <td class="cant">1</td>
+        <td class="code">${inicio}</td>
+        <td class="code">${fin}</td>
+      </tr>`;
+    }).join('');
 
-  const filasMateriales = memo.MATERIALES.map(i => `
-    <tr>
-      <td>${i.RESERVA}</td>
-      <td>${i.STOCK}</td>
-      <td class="cant">${i.CANTIDAD}</td>
-      <td>${i.DESCRIPCION}</td>
-    </tr>`).join('');
-
-  const seccionSeriales = seriales.length > 0 ? `
-    <h3>Serial de medidores / sellos entregados</h3>
-    <table>
-      <thead>
-        <tr>
-          <th>STOCK</th><th>RESERVA</th><th>DESCRIPCIÓN</th>
-          <th>CANTIDAD</th><th>INICIO</th><th>FIN</th>
+    serialSection = `
+      <p style="margin-top:6mm;font-size:8pt;font-weight:bold;text-transform:uppercase">
+        Serial de medidores / sellos entregados
+      </p>
+      <table class="serial-table">
+        <tr class="col-header">
+          <td><b>STOCK</b></td>
+          <td><b>RESERVA</b></td>
+          <td><b>DESCRIPCIÓN</b></td>
+          <td><b>CANTIDAD</b></td>
+          <td><b>Cantidad</b></td>
+          <td><b>Inicio</b></td>
+          <td><b>Fin</b></td>
         </tr>
-      </thead>
-      <tbody>
-        ${seriales.map(i => {
-          const inicio = i.modoSerial === 'rango' ? (i.serialInicio||'') : (i.seriales||[])[0]||'';
-          const fin    = i.modoSerial === 'rango' ? (i.serialFin||'')   : (i.seriales||[]).slice(-1)[0]||'';
-          return `<tr>
-            <td>${safeStr(i.axCode,'')}</td>
-            <td>${safeStr(i.sapCode,'')}</td>
-            <td>${safeStr(i.nombre||i.name,'').toUpperCase()}</td>
-            <td class="cant">${safeNum(i.cantidad)}</td>
-            <td>${inicio}</td>
-            <td>${fin}</td>
-          </tr>`;
-        }).join('')}
-      </tbody>
-    </table>` : '';
+        ${serialRows}
+      </table>`;
+  }
 
   const html = `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8"/>
-  <title>Despacho DELSUR</title>
+  <meta name="viewport" content="width=device-width"/>
+  <title>Despacho / Carga de Materiales</title>
   <style>
+    /* ── Reset ── */
     * { margin:0; padding:0; box-sizing:border-box; }
-    body { font-family: Arial, sans-serif; font-size: 9pt; color: #000; padding: 12mm; }
 
-    /* Encabezado */
-    .header { border: 1px solid #000; margin-bottom: 4px; }
-    .header-top { display: flex; }
-    .header-logo { width: 40%; padding: 4px 6px; border-right: 1px solid #000; }
-    .header-logo .empresa { font-weight: bold; font-size: 9pt; }
-    .header-logo .sub { font-size: 8pt; }
-    .header-campos { width: 60%; }
-    .campo-row { display: flex; border-bottom: 1px solid #000; min-height: 18px; }
-    .campo-row:last-child { border-bottom: none; }
-    .campo { flex: 1; padding: 2px 5px; border-right: 1px solid #000; font-size: 7.5pt; }
-    .campo:last-child { border-right: none; }
-    .campo .label { color: #444; font-size: 7pt; }
-    .campo .valor { font-weight: bold; font-size: 8pt; }
+    /* ── Página: carta, márgenes del Word original ── */
+    @page {
+      size: letter portrait;
+      margin: 8.8mm 6.3mm 4.9mm 12.7mm;
+    }
+    body {
+      font-family: Arial, sans-serif;
+      font-size: 8pt;
+      color: #000;
+      background: #fff;
+    }
 
-    /* Tabla materiales */
-    table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 8pt; }
-    th, td { border: 1px solid #000; padding: 2px 4px; }
-    th { background: #e0e0e0; font-weight: bold; text-align: center; font-size: 7.5pt; }
-    td { vertical-align: middle; }
-    td.cant { text-align: center; font-weight: bold; }
-    .section-header td { background: #d0d0d0; font-weight: bold; font-size: 7.5pt; }
+    /* ── Tabla de encabezado institucional ── */
+    /* Replica exactamente la tabla 0 del Word:
+       col0=68.8mm (empresa+labels izquierda), col1=68.7mm (labels derecha) */
+    .t-header {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid #000;
+      margin-bottom: 2mm;
+      table-layout: fixed;
+    }
+    .t-header td {
+      border: 1px solid #000;
+      padding: 1mm 1.5mm;
+      vertical-align: top;
+      font-size: 7.5pt;
+    }
+    .t-header .empresa {
+      font-size: 8pt;
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+    .t-header .label {
+      font-size: 6.5pt;
+      color: #333;
+      text-transform: uppercase;
+    }
+    .t-header .valor {
+      font-size: 7.5pt;
+      font-weight: bold;
+      min-height: 4mm;
+      display: block;
+      border-bottom: 0.5pt solid #666;
+      padding-bottom: 0.5mm;
+    }
 
-    /* Firmas */
-    .firmas { display: flex; margin-top: 20mm; gap: 20mm; }
-    .firma { flex: 1; text-align: center; }
-    .firma .linea { border-top: 1px solid #000; padding-top: 3px; font-size: 7.5pt; font-weight: bold; text-transform: uppercase; }
+    /* ── Tabla de materiales ── */
+    /* Replica tabla 1 del Word:
+       col0=10.6% (RESERVA/SAP), col1=7% (STOCK/AX),
+       col2=72.8% (DESCRIPCIÓN), col3=9.6% (CANTIDAD) */
+    .t-materiales {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 7.5pt;
+    }
+    .t-materiales td {
+      border: 1px solid #000;
+      padding: 0.5mm 1mm;
+      vertical-align: middle;
+    }
+    .t-materiales col.c-reserva  { width: 10.6%; }
+    .t-materiales col.c-stock    { width: 7.0%;  }
+    .t-materiales col.c-cantidad { width: 9.6%;  }
+    .t-materiales col.c-desc     { width: 72.8%; }
 
-    h3 { margin-top: 8px; margin-bottom: 3px; font-size: 8pt; text-transform: uppercase; }
+    /* Encabezado de columnas */
+    tr.col-header td {
+      background: #d9d9d9;
+      font-weight: bold;
+      text-align: center;
+      font-size: 7.5pt;
+      border: 1px solid #000;
+      padding: 1mm;
+    }
+    /* Encabezados de sección (USO HABITUAL, MATERIAL PARA CL200, etc.) */
+    tr.sec-header td {
+      background: #d9d9d9;
+      font-weight: bold;
+      font-size: 7.5pt;
+      padding: 0.5mm 1mm;
+      border: 1px solid #000;
+    }
+    /* Filas normales */
+    .t-materiales .code {
+      text-align: center;
+      font-size: 7pt;
+    }
+    .t-materiales .cant {
+      text-align: center;
+      font-weight: bold;
+      font-size: 8pt;
+    }
+    /* Filas con cantidad marcadas sutilmente */
+    tr.filled td { background: #f0f7ff; }
 
+    /* ── Tabla de seriales ── */
+    .serial-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 7pt;
+      margin-top: 1mm;
+    }
+    .serial-table td {
+      border: 1px solid #000;
+      padding: 0.5mm 1mm;
+      vertical-align: middle;
+    }
+
+    /* ── Área de firmas ── */
+    .firmas {
+      display: flex;
+      justify-content: space-around;
+      margin-top: 15mm;
+      gap: 20mm;
+    }
+    .firma {
+      flex: 1;
+      text-align: center;
+    }
+    .firma .linea {
+      border-top: 0.75pt solid #000;
+      padding-top: 1mm;
+      font-size: 7pt;
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+
+    /* ── Control de saltos de página ── */
     @media print {
-      body { padding: 8mm; }
-      @page { margin: 8mm; size: letter; }
+      .t-materiales { page-break-inside: auto; }
+      tr { page-break-inside: avoid; }
     }
   </style>
 </head>
 <body>
 
-  <!-- Encabezado institucional -->
-  <div class="header">
-    <div class="header-top">
-      <div class="header-logo">
-        <p class="empresa">DISTRIBUIDORA DE ELECTRICIDAD DELSUR S.A. DE C.V.</p>
-        <p class="sub">OTC - GERENCIA COMERCIAL</p>
-        <p class="sub"><strong>DESPACHO / CARGA DE MATERIALES</strong></p>
-      </div>
-      <div class="header-campos">
-        <div class="campo-row">
-          <div class="campo" style="flex:2">
-            <span class="label">USUARIO RESPONSABLE:</span><br>
-            <span class="valor">${memo.USUARIO_RESPONSABLE}</span>
-          </div>
-        </div>
-        <div class="campo-row">
-          <div class="campo">
-            <span class="label">EMPRESA CONTRATISTA:</span><br>
+  <!-- ══ TABLA 0: ENCABEZADO INSTITUCIONAL ══
+       Estructura idéntica al Word: 8 filas × 2 columnas
+       Fila 0: empresa (col0) | vacío (col1)
+       Fila 1-2: OTC / DESPACHO (col0)
+       Filas 3-7: labels izquierda y derecha con valores -->
+  <table class="t-header">
+    <colgroup>
+      <col style="width:50%">
+      <col style="width:50%">
+    </colgroup>
+    <!-- Fila 0: nombre empresa -->
+    <tr>
+      <td rowspan="3" style="vertical-align:middle;text-align:center;border-right:1px solid #000">
+        <span class="empresa">DISTRUIBUIDORA DE ELECTRICIDAD DELSUR S.A. DE C.V.</span><br>
+        <span style="font-size:7.5pt">OTC - GERENCIA COMERCIAL</span><br>
+        <span style="font-size:7.5pt">DESPACHO/ CARGA DE MATERIALES</span>
+      </td>
+      <td>
+        <span class="label">USUARIO RESPONSABLE:</span>
+        <span class="valor">${memo.USUARIO_RESPONSABLE}</span>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <div style="display:flex;gap:2mm">
+          <div style="flex:1">
+            <span class="label">EMPRESA CONTRATISTA:</span>
             <span class="valor">${memo.EMPRESA_CONTRATISTA}</span>
           </div>
-          <div class="campo">
-            <span class="label">INSTALADOR RESPONSABLE:</span><br>
+          <div style="flex:1;border-left:0.5pt solid #ccc;padding-left:2mm">
+            <span class="label">INSTALADOR RESPONSABLE:</span>
             <span class="valor">${memo.INSTALADOR_RESPONSABLE}</span>
           </div>
         </div>
-        <div class="campo-row">
-          <div class="campo">
-            <span class="label">ENTREGADO POR:</span><br>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <div style="display:flex;gap:2mm">
+          <div style="flex:1">
+            <span class="label">ENTREGADO POR:</span>
             <span class="valor">${memo.ENTREGADO_POR}</span>
           </div>
-          <div class="campo">
-            <span class="label">FIRMA DE RECIBIDO:</span><br>
+          <div style="flex:1;border-left:0.5pt solid #ccc;padding-left:2mm">
+            <span class="label">FIRMA DE RECIBIDO:</span>
             <span class="valor">&nbsp;</span>
           </div>
         </div>
-        <div class="campo-row">
-          <div class="campo">
-            <span class="label">FIRMA DE ENTREGADO:</span><br>
-            <span class="valor">&nbsp;</span>
-          </div>
-          <div class="campo">
-            <span class="label">PLACA DE VEHICULO:</span><br>
-            <span class="valor">${memo.PLACA_VEHICULO}</span>
-          </div>
-        </div>
-        <div class="campo-row">
-          <div class="campo">
-            <span class="label">FECHA DE SOLICITUD:</span><br>
-            <span class="valor">${memo.FECHA_SOLICITUD}</span>
-          </div>
-          <div class="campo">
-            <span class="label">FECHA ENTREGA DE MATERIAL:</span><br>
-            <span class="valor">${memo.FECHA_ENTREGA}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Tabla de materiales -->
-  <table>
-    <thead>
-      <tr>
-        <th style="width:12%">RESERVA</th>
-        <th style="width:10%">STOCK</th>
-        <th style="width:10%">CANTIDAD</th>
-        <th>DESCRIPCIÓN</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${filasMateriales}
-    </tbody>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <span class="label">FIRMA DE ENTREGADO:</span>
+        <span class="valor">&nbsp;</span>
+      </td>
+      <td>
+        <span class="label">PLACA DE VEHICULO:</span>
+        <span class="valor">${memo.PLACA_VEHICULO}</span>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <span class="label">FECHA DE SOLICITUD</span>
+        <span class="valor">${memo.FECHA_SOLICITUD}</span>
+      </td>
+      <td>
+        <span class="label">FECHA ENTREGA DE MATERIAL:</span>
+        <span class="valor">${memo.FECHA_ENTREGA}</span>
+      </td>
+    </tr>
   </table>
 
-  ${seccionSeriales}
+  <!-- ══ TABLA 1: MATERIALES ══
+       Replica exactamente la estructura del Word:
+       col RESERVA(10.6%) | STOCK(7%) | CANTIDAD(9.6%) | DESCRIPCIÓN(72.8%)
+       Incluye headers de sección en gris: USO HABITUAL, MATERIAL PARA CL200,
+       ACOMETIDA ESPECIAL, SUBTERRÁNEO, PATRON ANTIHURTO Y TELEGESTIÓN -->
+  <table class="t-materiales">
+    <colgroup>
+      <col class="c-reserva">
+      <col class="c-stock">
+      <col class="c-cantidad">
+      <col class="c-desc">
+    </colgroup>
+    ${filas}
+  </table>
 
-  <!-- Firmas -->
+  ${serialSection}
+
+  <!-- ══ FIRMAS ══ -->
   <div class="firmas">
-    <div class="firma">
-      <div class="linea">FIRMA DE ENTREGADO</div>
-    </div>
-    <div class="firma">
-      <div class="linea">FIRMA DE RECIBIDO</div>
-    </div>
+    <div class="firma"><div class="linea">FIRMA DE ENTREGADO</div></div>
+    <div class="firma"><div class="linea">FIRMA DE RECIBIDO</div></div>
   </div>
 
-  <script>window.onload = () => { window.print(); }</script>
+  <script>
+    window.onload = function() {
+      window.print();
+    };
+  </script>
 </body>
 </html>`;
 
