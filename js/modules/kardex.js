@@ -975,8 +975,7 @@ async function showFormSalida(db, session) {
             ${s.modoSerial==='individual' ? `
             <textarea data-ser="${idx}" rows="2" placeholder="Un serial por línea"
               class="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs font-mono bg-white focus:outline-none focus:border-blue-400 resize-none"
-            >${(s.seriales||[]).join('
-')}</textarea>
+            >${(s.seriales||[]).join('\x0A')}</textarea>
             <p class="text-xs text-gray-400">${(s.seriales||[]).length} de ${s.cantidad}</p>` : `
             <div class="grid grid-cols-2 gap-1.5">
               <div>
@@ -1033,8 +1032,7 @@ async function showFormSalida(db, session) {
     lista.querySelectorAll('[data-ser]').forEach(ta => {
       ta.oninput = () => {
         const idx = parseInt(ta.dataset.ser);
-        sel[idx].seriales = ta.value.split('
-').map(s=>s.trim()).filter(Boolean);
+        sel[idx].seriales = ta.value.split('\n').map(s=>s.trim()).filter(Boolean);
         const p = ta.nextElementSibling;
         if (p) p.textContent = `${sel[idx].seriales.length} de ${sel[idx].cantidad}`;
       };
