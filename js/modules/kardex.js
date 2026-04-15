@@ -978,6 +978,25 @@ async function showFormSalida(db, session) {
     });
   }
 
+  // ── Advertencia stock usuario ──
+  function buildStockWarning(item, hdr) {
+    const resp = hdr.responsable;
+    if (!resp || !window.__kardexStockUsuario) return '';
+    const yaT = safeNum((window.__kardexStockUsuario[resp] || {})[item.id]);
+    if (yaT <= 0) return '';
+    const min        = safeNum(item.minStock || 5);
+    const suficiente = yaT > min;
+    const color = suficiente ? '#166534' : '#B45309';
+    const bg    = suficiente ? '#F0FDF4'  : '#FFFBEB';
+    const bdr   = suficiente ? '#BBF7D0'  : '#FDE68A';
+    const icon  = suficiente ? '✅' : '⚠️';
+    const unit  = safeStr(item.unit, '');
+    const msg   = suficiente
+      ? 'Este usuario ya tiene <strong>' + yaT + ' ' + unit + '</strong> — suficiente'
+      : 'Este usuario ya tiene <strong>' + yaT + ' ' + unit + '</strong> — stock bajo';
+    return '<div class="rounded-xl px-3 py-2 text-xs font-medium" style="background:' + bg + ';border:1px solid ' + bdr + ';color:' + color + '">' + icon + ' ' + msg + '</div>';
+  }
+
   // ── Modal cantidad ──
   function showCantidadModal(item) {
     const modal = document.createElement('div');
@@ -990,25 +1009,7 @@ async function showFormSalida(db, session) {
           <p class="font-bold text-gray-900 text-lg leading-tight">${tc(item.name)}</p>
           <p class="text-sm text-gray-400 mt-0.5">${item.stock} ${safeStr(item.unit,'')} en bodega</p>
         </div>
-        ${(() => {
-          // Calcular stock que ya tiene este usuario
-          const resp = hdr.responsable;
-          if (!resp || !window.__kardexStockUsuario) return '';
-          const yaT = safeNum(window.__kardexStockUsuario?.[resp]?.[item.id]);
-          const min  = safeNum(item.minStock || 5);
-          if (yaT <= 0) return '';
-          const suficiente = yaT > min;
-          const color = suficiente ? '#166534' : '#B45309';
-          const bg    = suficiente ? '#F0FDF4'  : '#FFFBEB';
-          const bdr   = suficiente ? '#BBF7D0'  : '#FDE68A';
-          const icon  = suficiente ? '✅' : '⚠️';
-          const msg   = suficiente
-            ? \`Este usuario ya tiene <strong>${yaT} ${safeStr(item.unit,'')}</strong> — suficiente\`
-            : \`Este usuario ya tiene <strong>${yaT} ${safeStr(item.unit,'')}</strong> — stock bajo\`;
-          return \`<div class="rounded-xl px-3 py-2 text-xs font-medium" style="background:\${bg};border:1px solid \${bdr};color:\${color}">
-            \${icon} \${msg}
-          </div>\`;
-        })()}
+        ${buildStockWarning(item, hdr)}
         <div class="flex items-center justify-between gap-4">
           <button id="mc-dec"
             class="w-16 h-16 rounded-2xl border-2 border-gray-200 bg-gray-50 text-3xl font-bold text-gray-400 flex items-center justify-center active:bg-gray-200">−</button>
