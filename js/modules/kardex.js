@@ -3071,8 +3071,8 @@ async function showFormSalidaConPreset(db, session, selInicial, hdrPreset) {
     sessionStorage.setItem('kardex_rec', JSON.stringify([id,...p].slice(0,6)));
   }
 
-  // Ir directo al step 2 si ya hay materiales prellenados
-  if (sel.length > 0) step = 2;
+  // Siempre empezar en paso 1 para llenar encabezado obligatorio
+  step = 1;
 
   function renderStep1() {
     ov.innerHTML = '<div class="flex flex-col h-full bg-white" style="max-height:100dvh">' +
@@ -3312,3 +3312,4 @@ async function showFormSalidaConPreset(db, session, selInicial, hdrPreset) {
 
   if (step === 2) renderStep2(); else renderStep1();
 }
+
