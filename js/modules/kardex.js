@@ -2038,8 +2038,6 @@ async function generarYAbrirPDF(memo) {
 
 // ─────────────────────────────────────────
 // STOCK POR USUARIO
-// Calcula en tiempo real desde los movimientos.
-// Salidas suman al stock del usuario responsable.
 // ─────────────────────────────────────────
 async function showStockUsuarios(db, session) {
   setTab('usuarios');
@@ -2052,14 +2050,12 @@ async function showStockUsuarios(db, session) {
       getDocs(collection(db, 'kardex/inventario/items')),
     ]);
 
-    // Mapa id → item normalizado
     const itemMap = {};
     snapItems.docs.forEach(d => {
       const item = normalizeItem({ id: d.id, ...d.data() });
       if (esValido(item)) itemMap[d.id] = item;
     });
 
-    // Acumular stock por usuario
     const stockUsuario = {};
     snapSalidas.docs.forEach(d => {
       const salida  = d.data();
@@ -2073,200 +2069,169 @@ async function showStockUsuarios(db, session) {
       });
     });
 
-    // ── Función de estado ──────────────────────
-    // Critico: cant <= minStock/2  (o minStock si minStock<=2)
-    // Bajo:    cant <= minStock
-    // OK:      cant > minStock
+    window.__kardexStockUsuario = stockUsuario;
+
     function getEstado(cant, item) {
-      const min = safeNum(item?.minStock || 5);
-      if (cant <= 0)                   return 'critico';
-      if (cant <= Math.max(1, min / 2)) return 'critico';
-      if (cant <= min)                  return 'bajo';
+      const min = safeNum(item && item.minStock ? item.minStock : 5);
+      if (cant <= 0)                      return 'critico';
+      if (cant <= Math.max(1, min / 2))   return 'critico';
+      if (cant <= min)                    return 'bajo';
       return 'ok';
     }
 
-    const ESTADO = {
-      critico: { icon: '🔴', label: 'Stock crítico',    order: 0, bg: '#FEF2F2', border: '#FECACA', text: '#C62828' },
-      bajo:    { icon: '🟡', label: 'Stock bajo',       order: 1, bg: '#FFFBEB', border: '#FDE68A', text: '#B45309' },
-      ok:      { icon: '🟢', label: 'Suficiente',       order: 2, bg: '#F0FDF4', border: '#BBF7D0', text: '#166534' },
+    const ESTADO_CFG = {
+      critico: { icon: '🔴', label: 'Stock crítico', order: 0, bg: '#FEF2F2', border: '#FECACA', color: '#C62828' },
+      bajo:    { icon: '🟡', label: 'Stock bajo',    order: 1, bg: '#FFFBEB', border: '#FDE68A', color: '#B45309' },
+      ok:      { icon: '🟢', label: 'Suficiente',    order: 2, bg: 'transparent', border: 'transparent', color: '#166534' },
     };
 
     const usuariosConDatos = USUARIOS_RESPONSABLES.filter(u => stockUsuario[u]);
     if (!usuariosConDatos.length) {
-      content.innerHTML = `<div class="bg-white rounded-xl border border-gray-200 py-12 text-center">
-        <p class="text-sm text-gray-400">Sin movimientos registrados aún</p></div>`;
+      content.innerHTML = '<div class="bg-white rounded-xl border border-gray-200 py-12 text-center"><p class="text-sm text-gray-400">Sin movimientos registrados aún</p></div>';
       return;
     }
 
     const expanded = {};
     usuariosConDatos.forEach(u => { expanded[u] = true; });
-
-    // Filtro activo: 'todos' | 'critico' | 'bajo'
     let filtro = 'todos';
 
+    function buildBanner(totalCriticos, totalBajos) {
+      if (totalCriticos + totalBajos === 0) {
+        return '<div class="rounded-xl border px-4 py-3 flex items-center gap-3" style="background:#F0FDF4;border-color:#BBF7D0"><span class="text-xl">✅</span><p class="text-sm font-semibold text-green-800">Todo el material está en niveles normales</p></div>';
+      }
+      const partes = [];
+      if (totalCriticos > 0) partes.push(totalCriticos + ' crítico' + (totalCriticos !== 1 ? 's' : ''));
+      if (totalBajos > 0)    partes.push(totalBajos + ' bajo' + (totalBajos !== 1 ? 's' : ''));
+      return '<div class="rounded-xl border px-4 py-3 flex items-center gap-3" style="background:#FEF2F2;border-color:#FECACA"><span class="text-xl">⚠️</span><div><p class="text-sm font-bold text-red-800">Atención requerida</p><p class="text-xs text-red-600">' + partes.join(' · ') + '</p></div></div>';
+    }
+
+    function buildFiltros() {
+      const btns = [
+        { key: 'todos',   label: 'Todos' },
+        { key: 'critico', label: '🔴 Críticos' },
+        { key: 'bajo',    label: '🟡 Bajos' },
+      ];
+      return '<div class="flex gap-2">' + btns.map(f => {
+        const active = filtro === f.key;
+        const style  = active ? 'background:#1B4F8A' : '';
+        const cls    = active
+          ? 'px-3 py-1.5 rounded-xl text-xs font-semibold border border-transparent text-white'
+          : 'px-3 py-1.5 rounded-xl text-xs font-semibold border border-gray-200 bg-white text-gray-600';
+        return '<button data-filtro="' + f.key + '" class="' + cls + '" style="' + style + '">' + f.label + '</button>';
+      }).join('') + '</div>';
+    }
+
+    function buildItemRow(e) {
+      const est   = ESTADO_CFG[e.estado];
+      const name  = safeStr(e.item ? e.item.name : e.id, '—');
+      const unit  = safeStr(e.item ? e.item.unit : '', '');
+      const sap   = safeStr(e.item ? e.item.sapCode : '', '');
+      const min   = safeNum(e.item ? (e.item.minStock || 5) : 5);
+      const bg    = e.estado !== 'ok' ? 'background:' + est.bg + ';' : '';
+      const sapTxt = sap ? '<p class="text-xs text-gray-400 font-mono">SAP ' + sap + ' · mín. ' + min + ' ' + unit + '</p>' : '';
+      return '<div class="flex items-center gap-3 px-4 py-3 border-b border-gray-50 last:border-0" style="' + bg + '">' +
+        '<span class="text-base shrink-0">' + est.icon + '</span>' +
+        '<div class="flex-1 min-w-0">' +
+          '<p class="text-sm font-semibold text-gray-900 truncate leading-tight">' + name + '</p>' +
+          '<p class="text-xs mt-0.5 font-medium" style="color:' + est.color + '">' + est.label + '</p>' +
+          sapTxt +
+        '</div>' +
+        '<div class="text-right shrink-0">' +
+          '<p class="text-xl font-black" style="color:' + est.color + '">' + e.cant + '</p>' +
+          '<p class="text-xs text-gray-400">' + unit + '</p>' +
+        '</div>' +
+      '</div>';
+    }
+
+    function buildUsuarioCard(usuario) {
+      const stockU = stockUsuario[usuario] || {};
+      let itemsU = Object.entries(stockU)
+        .map(function(entry) {
+          return { id: entry[0], cant: entry[1], item: itemMap[entry[0]], estado: getEstado(entry[1], itemMap[entry[0]]) };
+        })
+        .filter(function(e) { return e.cant > 0; });
+
+      itemsU.sort(function(a, b) {
+        const od = ESTADO_CFG[a.estado].order - ESTADO_CFG[b.estado].order;
+        if (od !== 0) return od;
+        return safeStr(a.item ? a.item.name : a.id).localeCompare(safeStr(b.item ? b.item.name : b.id));
+      });
+
+      const itemsMostrar = filtro === 'todos' ? itemsU : itemsU.filter(function(e) { return e.estado === filtro; });
+      const criticos  = itemsU.filter(function(e) { return e.estado === 'critico'; }).length;
+      const bajos     = itemsU.filter(function(e) { return e.estado === 'bajo'; }).length;
+      const isOpen    = expanded[usuario];
+
+      const alertaTexto = criticos > 0
+        ? '⚠️ ' + criticos + ' crítico' + (criticos !== 1 ? 's' : '')
+        : bajos > 0
+        ? '⚠️ ' + bajos + ' bajo' + (bajos !== 1 ? 's' : '')
+        : '✓ Sin alertas';
+      const alertaColor = criticos > 0 ? '#C62828' : bajos > 0 ? '#B45309' : '#166534';
+      const chevron = isOpen ? 'rotate-180' : '';
+
+      let detalle = '';
+      if (isOpen) {
+        if (itemsMostrar.length === 0) {
+          detalle = '<p class="text-xs text-gray-400 text-center py-4">Sin materiales en este filtro</p>';
+        } else {
+          detalle = itemsMostrar.map(buildItemRow).join('');
+        }
+        detalle = '<div class="border-t border-gray-100">' + detalle + '</div>';
+      }
+
+      return '<div class="bg-white rounded-xl border border-gray-200 overflow-hidden">' +
+        '<button data-toggle="' + usuario + '" class="w-full flex items-center justify-between px-4 py-3.5 text-left">' +
+          '<div class="flex items-center gap-3">' +
+            '<div class="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm text-white shrink-0" style="background:#1B4F8A">' + usuario.slice(0,2) + '</div>' +
+            '<div>' +
+              '<p class="font-bold text-gray-900 text-base">' + usuario + '</p>' +
+              '<p class="text-xs font-semibold" style="color:' + alertaColor + '">' + alertaTexto + '</p>' +
+            '</div>' +
+          '</div>' +
+          '<div class="flex items-center gap-2">' +
+            '<span class="text-xs text-gray-400">' + itemsU.length + ' mat.</span>' +
+            '<svg class="w-5 h-5 text-gray-400 ' + chevron + ' transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>' +
+          '</div>' +
+        '</button>' +
+        detalle +
+      '</div>';
+    }
+
     function renderUsuarios() {
-      // Calcular resumen global para el banner superior
       let totalCriticos = 0, totalBajos = 0;
-      usuariosConDatos.forEach(u => {
-        Object.entries(stockUsuario[u] || {}).forEach(([id, cant]) => {
-          const est = getEstado(cant, itemMap[id]);
+      usuariosConDatos.forEach(function(u) {
+        Object.entries(stockUsuario[u] || {}).forEach(function(entry) {
+          const est = getEstado(entry[1], itemMap[entry[0]]);
           if (est === 'critico') totalCriticos++;
           else if (est === 'bajo') totalBajos++;
         });
       });
 
-      content.innerHTML = `<div class="space-y-3">
+      const html = '<div class="space-y-3">' +
+        buildBanner(totalCriticos, totalBajos) +
+        buildFiltros() +
+        usuariosConDatos.map(buildUsuarioCard).join('') +
+        '<p class="text-xs text-gray-400 text-center pb-2">Calculado desde movimientos registrados.</p>' +
+      '</div>';
 
-        <!-- Banner de alerta global -->
-        ${(totalCriticos + totalBajos) > 0 ? `
-        <div class="rounded-xl border px-4 py-3 flex items-center gap-3"
-          style="background:#FEF2F2;border-color:#FECACA">
-          <span class="text-xl shrink-0">⚠️</span>
-          <div class="flex-1 min-w-0">
-            <p class="text-sm font-bold text-red-800">Atención requerida</p>
-            <p class="text-xs text-red-600">
-              ${totalCriticos > 0 ? `${totalCriticos} material${totalCriticos!==1?'es':''} crítico${totalCriticos!==1?'s':''}` : ''}
-              ${totalCriticos > 0 && totalBajos > 0 ? ' · ' : ''}
-              ${totalBajos > 0 ? `${totalBajos} bajo${totalBajos!==1?'s':''}` : ''}
-            </p>
-          </div>
-        </div>` : `
-        <div class="rounded-xl border px-4 py-3 flex items-center gap-3"
-          style="background:#F0FDF4;border-color:#BBF7D0">
-          <span class="text-xl shrink-0">✅</span>
-          <p class="text-sm font-semibold text-green-800">Todo el material está en niveles normales</p>
-        </div>`}
+      content.innerHTML = html;
 
-        <!-- Filtros rápidos -->
-        <div class="flex gap-2">
-          ${[
-            { key:'todos',   label:'Todos' },
-            { key:'critico', label:'🔴 Críticos' },
-            { key:'bajo',    label:'🟡 Bajos' },
-          ].map(f => `
-          <button data-filtro="${f.key}"
-            class="px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors
-              ${filtro===f.key ? 'text-white border-transparent' : 'bg-white border-gray-200 text-gray-600'}"
-            style="${filtro===f.key ? 'background:#1B4F8A' : ''}">
-            ${f.label}
-          </button>`).join('')}
-        </div>
-
-        <!-- Tarjetas por usuario -->
-        ${usuariosConDatos.map(usuario => {
-          const stockU = stockUsuario[usuario] || {};
-
-          // Construir lista con estado
-          let itemsU = Object.entries(stockU)
-            .map(([id, cant]) => ({
-              id, cant,
-              item:   itemMap[id],
-              estado: getEstado(cant, itemMap[id]),
-            }))
-            .filter(e => e.cant > 0);
-
-          // Aplicar filtro
-          const itemsFiltrados = filtro === 'todos'
-            ? itemsU
-            : itemsU.filter(e => e.estado === filtro);
-
-          // Ordenar: crítico → bajo → ok, luego por nombre
-          itemsU.sort((a,b) => {
-            const od = ESTADO[a.estado].order - ESTADO[b.estado].order;
-            if (od !== 0) return od;
-            return safeStr(a.item?.name||a.id).localeCompare(safeStr(b.item?.name||b.id));
-          });
-
-          const criticos = itemsU.filter(e=>e.estado==='critico').length;
-          const bajos    = itemsU.filter(e=>e.estado==='bajo').length;
-          const isOpen   = expanded[usuario];
-
-          // Resumen de alertas para el header
-          const alertaTexto = criticos > 0
-            ? `⚠️ ${criticos} crítico${criticos!==1?'s':''}`
-            : bajos > 0
-            ? `⚠️ ${bajos} bajo${bajos!==1?'s':''}`
-            : `✓ Sin alertas`;
-          const alertaColor = criticos > 0 ? '#C62828' : bajos > 0 ? '#B45309' : '#166534';
-
-          // Items a mostrar según filtro
-          const itemsMostrar = filtro === 'todos'
-            ? itemsU
-            : itemsU.filter(e => e.estado === filtro);
-
-          return `
-          <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <button data-toggle="${usuario}"
-              class="w-full flex items-center justify-between px-4 py-3.5 text-left">
-              <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm text-white shrink-0"
-                  style="background:#1B4F8A">${usuario.slice(0,2)}</div>
-                <div>
-                  <p class="font-bold text-gray-900 text-base">${usuario}</p>
-                  <p class="text-xs font-semibold" style="color:${alertaColor}">${alertaTexto}</p>
-                </div>
-              </div>
-              <div class="flex items-center gap-2">
-                <span class="text-xs text-gray-400">${itemsU.length} mat.</span>
-                <svg class="w-5 h-5 text-gray-400 ${isOpen?'rotate-180':''} transition-transform"
-                  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="6 9 12 15 18 9"/>
-                </svg>
-              </div>
-            </button>
-
-            ${isOpen ? `
-            <div class="border-t border-gray-100 divide-y divide-gray-50">
-              ${itemsMostrar.length === 0
-                ? `<p class="text-xs text-gray-400 text-center py-4">Sin materiales en este filtro</p>`
-                : itemsMostrar.map(e => {
-                    const est  = ESTADO[e.estado];
-                    const name = safeStr(e.item?.name||e.id, '—');
-                    const unit = safeStr(e.item?.unit, '');
-                    const sap  = safeStr(e.item?.sapCode, '');
-                    const min  = safeNum(e.item?.minStock || 5);
-                    return `
-                    <div class="flex items-center gap-3 px-4 py-3"
-                      style="background:${e.estado!=='ok' ? est.bg : 'transparent'}">
-                      <span class="text-base shrink-0">${est.icon}</span>
-                      <div class="flex-1 min-w-0">
-                        <p class="text-sm font-semibold text-gray-900 truncate leading-tight">${name}</p>
-                        <p class="text-xs mt-0.5 font-medium" style="color:${est.text}">${est.label}</p>
-                        ${sap ? `<p class="text-xs text-gray-400 font-mono">SAP ${sap} · mín. ${min} ${unit}</p>` : ''}
-                      </div>
-                      <div class="text-right shrink-0">
-                        <p class="text-xl font-black" style="color:${est.text}">${e.cant}</p>
-                        <p class="text-xs text-gray-400">${unit}</p>
-                      </div>
-                    </div>`;
-                  }).join('')
-              }
-            </div>` : ''}
-          </div>`;
-        }).join('')}
-
-        <p class="text-xs text-gray-400 text-center pb-2">Calculado desde movimientos registrados.</p>
-      </div>`;
-
-      // Bind
-      content.querySelectorAll('[data-toggle]').forEach(btn => {
-        btn.addEventListener('click', () => {
+      content.querySelectorAll('[data-toggle]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
           expanded[btn.dataset.toggle] = !expanded[btn.dataset.toggle];
           renderUsuarios();
         });
       });
-      content.querySelectorAll('[data-filtro]').forEach(btn => {
-        btn.addEventListener('click', () => {
+      content.querySelectorAll('[data-filtro]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
           filtro = btn.dataset.filtro;
           renderUsuarios();
         });
       });
     }
 
-    // Cachear en window para que el modal de salida pueda leerlo
-    window.__kardexStockUsuario = stockUsuario;
     renderUsuarios();
 
   } catch(e) { content.innerHTML = errHtml(); console.error(e); }
 }
-
