@@ -988,8 +988,27 @@ async function showFormSalida(db, session) {
         <div class="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-1"></div>
         <div>
           <p class="font-bold text-gray-900 text-lg leading-tight">${tc(item.name)}</p>
-          <p class="text-sm text-gray-400 mt-0.5">${item.stock} ${safeStr(item.unit,'')} disponibles</p>
+          <p class="text-sm text-gray-400 mt-0.5">${item.stock} ${safeStr(item.unit,'')} en bodega</p>
         </div>
+        ${(() => {
+          // Calcular stock que ya tiene este usuario
+          const resp = hdr.responsable;
+          if (!resp || !window.__kardexStockUsuario) return '';
+          const yaT = safeNum(window.__kardexStockUsuario?.[resp]?.[item.id]);
+          const min  = safeNum(item.minStock || 5);
+          if (yaT <= 0) return '';
+          const suficiente = yaT > min;
+          const color = suficiente ? '#166534' : '#B45309';
+          const bg    = suficiente ? '#F0FDF4'  : '#FFFBEB';
+          const bdr   = suficiente ? '#BBF7D0'  : '#FDE68A';
+          const icon  = suficiente ? '✅' : '⚠️';
+          const msg   = suficiente
+            ? \`Este usuario ya tiene <strong>${yaT} ${safeStr(item.unit,'')}</strong> — suficiente\`
+            : \`Este usuario ya tiene <strong>${yaT} ${safeStr(item.unit,'')}</strong> — stock bajo\`;
+          return \`<div class="rounded-xl px-3 py-2 text-xs font-medium" style="background:\${bg};border:1px solid \${bdr};color:\${color}">
+            \${icon} \${msg}
+          </div>\`;
+        })()}
         <div class="flex items-center justify-between gap-4">
           <button id="mc-dec"
             class="w-16 h-16 rounded-2xl border-2 border-gray-200 bg-gray-50 text-3xl font-bold text-gray-400 flex items-center justify-center active:bg-gray-200">−</button>
@@ -2027,135 +2046,226 @@ async function showStockUsuarios(db, session) {
   content.innerHTML = loading();
 
   try {
-    // Cargar salidas e inventario en paralelo
     const [snapSalidas, snapItems] = await Promise.all([
       getDocs(query(collection(db, 'kardex/movimientos/salidas'), orderBy('fecha', 'desc'))),
       getDocs(collection(db, 'kardex/inventario/items')),
     ]);
 
-    // Mapa de items: id → datos normalizados
+    // Mapa id → item normalizado
     const itemMap = {};
     snapItems.docs.forEach(d => {
       const item = normalizeItem({ id: d.id, ...d.data() });
       if (esValido(item)) itemMap[d.id] = item;
     });
 
-    // Calcular stock por usuario desde movimientos
-    // stockUsuario[usuario][itemId] = cantidad acumulada
+    // Acumular stock por usuario
     const stockUsuario = {};
-
     snapSalidas.docs.forEach(d => {
-      const salida = d.data();
+      const salida  = d.data();
       const usuario = safeStr(salida.usuarioResponsable || salida.tecnicoNombre, '');
       if (!usuario || usuario === '—') return;
-
       if (!stockUsuario[usuario]) stockUsuario[usuario] = {};
-
-      (salida.items || []).forEach(item => {
-        const id   = item.itemId;
-        const cant = safeNum(item.cantidad);
-        if (!id || cant <= 0) return;
-        stockUsuario[usuario][id] = (stockUsuario[usuario][id] || 0) + cant;
+      (salida.items || []).forEach(i => {
+        const cant = safeNum(i.cantidad);
+        if (!i.itemId || cant <= 0) return;
+        stockUsuario[usuario][i.itemId] = (stockUsuario[usuario][i.itemId] || 0) + cant;
       });
     });
 
-    const usuarios = USUARIOS_RESPONSABLES.filter(u => stockUsuario[u]);
-    const usuariosConDatos = usuarios.length > 0 ? usuarios : Object.keys(stockUsuario);
+    // ── Función de estado ──────────────────────
+    // Critico: cant <= minStock/2  (o minStock si minStock<=2)
+    // Bajo:    cant <= minStock
+    // OK:      cant > minStock
+    function getEstado(cant, item) {
+      const min = safeNum(item?.minStock || 5);
+      if (cant <= 0)                   return 'critico';
+      if (cant <= Math.max(1, min / 2)) return 'critico';
+      if (cant <= min)                  return 'bajo';
+      return 'ok';
+    }
 
-    if (usuariosConDatos.length === 0) {
-      content.innerHTML = `
-        <div class="bg-white rounded-xl border border-gray-200 py-12 text-center">
-          <p class="text-sm text-gray-400">Sin movimientos registrados aún</p>
-        </div>`;
+    const ESTADO = {
+      critico: { icon: '🔴', label: 'Stock crítico',    order: 0, bg: '#FEF2F2', border: '#FECACA', text: '#C62828' },
+      bajo:    { icon: '🟡', label: 'Stock bajo',       order: 1, bg: '#FFFBEB', border: '#FDE68A', text: '#B45309' },
+      ok:      { icon: '🟢', label: 'Suficiente',       order: 2, bg: '#F0FDF4', border: '#BBF7D0', text: '#166534' },
+    };
+
+    const usuariosConDatos = USUARIOS_RESPONSABLES.filter(u => stockUsuario[u]);
+    if (!usuariosConDatos.length) {
+      content.innerHTML = `<div class="bg-white rounded-xl border border-gray-200 py-12 text-center">
+        <p class="text-sm text-gray-400">Sin movimientos registrados aún</p></div>`;
       return;
     }
 
-    // Estado de expansión por usuario
     const expanded = {};
     usuariosConDatos.forEach(u => { expanded[u] = true; });
 
+    // Filtro activo: 'todos' | 'critico' | 'bajo'
+    let filtro = 'todos';
+
     function renderUsuarios() {
-      content.innerHTML = `
-        <div class="space-y-3">
-          ${usuariosConDatos.map(usuario => {
-            const stockU = stockUsuario[usuario] || {};
-            const itemsU = Object.entries(stockU)
-              .map(([id, cant]) => ({ id, cant, item: itemMap[id] }))
-              .filter(e => e.cant > 0)
-              .sort((a,b) => {
-                const na = safeStr(a.item?.name || a.id);
-                const nb = safeStr(b.item?.name || b.id);
-                return na.localeCompare(nb);
-              });
+      // Calcular resumen global para el banner superior
+      let totalCriticos = 0, totalBajos = 0;
+      usuariosConDatos.forEach(u => {
+        Object.entries(stockUsuario[u] || {}).forEach(([id, cant]) => {
+          const est = getEstado(cant, itemMap[id]);
+          if (est === 'critico') totalCriticos++;
+          else if (est === 'bajo') totalBajos++;
+        });
+      });
 
-            const totalItems = itemsU.length;
-            const totalUnidades = itemsU.reduce((s,e) => s+e.cant, 0);
-            const isOpen = expanded[usuario];
+      content.innerHTML = `<div class="space-y-3">
 
-            return `
-            <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <!-- Header del usuario -->
-              <button data-toggle="${usuario}"
-                class="w-full flex items-center justify-between px-4 py-3.5 text-left">
-                <div class="flex items-center gap-3">
-                  <div class="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm text-white shrink-0"
-                    style="background:#1B4F8A">
-                    ${usuario.slice(0,2).toUpperCase()}
-                  </div>
-                  <div>
-                    <p class="font-bold text-gray-900">${usuario}</p>
-                    <p class="text-xs text-gray-400">${totalItems} material${totalItems!==1?'es':''} · ${totalUnidades} unidad${totalUnidades!==1?'es':''}</p>
-                  </div>
+        <!-- Banner de alerta global -->
+        ${(totalCriticos + totalBajos) > 0 ? `
+        <div class="rounded-xl border px-4 py-3 flex items-center gap-3"
+          style="background:#FEF2F2;border-color:#FECACA">
+          <span class="text-xl shrink-0">⚠️</span>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-bold text-red-800">Atención requerida</p>
+            <p class="text-xs text-red-600">
+              ${totalCriticos > 0 ? `${totalCriticos} material${totalCriticos!==1?'es':''} crítico${totalCriticos!==1?'s':''}` : ''}
+              ${totalCriticos > 0 && totalBajos > 0 ? ' · ' : ''}
+              ${totalBajos > 0 ? `${totalBajos} bajo${totalBajos!==1?'s':''}` : ''}
+            </p>
+          </div>
+        </div>` : `
+        <div class="rounded-xl border px-4 py-3 flex items-center gap-3"
+          style="background:#F0FDF4;border-color:#BBF7D0">
+          <span class="text-xl shrink-0">✅</span>
+          <p class="text-sm font-semibold text-green-800">Todo el material está en niveles normales</p>
+        </div>`}
+
+        <!-- Filtros rápidos -->
+        <div class="flex gap-2">
+          ${[
+            { key:'todos',   label:'Todos' },
+            { key:'critico', label:'🔴 Críticos' },
+            { key:'bajo',    label:'🟡 Bajos' },
+          ].map(f => `
+          <button data-filtro="${f.key}"
+            class="px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors
+              ${filtro===f.key ? 'text-white border-transparent' : 'bg-white border-gray-200 text-gray-600'}"
+            style="${filtro===f.key ? 'background:#1B4F8A' : ''}">
+            ${f.label}
+          </button>`).join('')}
+        </div>
+
+        <!-- Tarjetas por usuario -->
+        ${usuariosConDatos.map(usuario => {
+          const stockU = stockUsuario[usuario] || {};
+
+          // Construir lista con estado
+          let itemsU = Object.entries(stockU)
+            .map(([id, cant]) => ({
+              id, cant,
+              item:   itemMap[id],
+              estado: getEstado(cant, itemMap[id]),
+            }))
+            .filter(e => e.cant > 0);
+
+          // Aplicar filtro
+          const itemsFiltrados = filtro === 'todos'
+            ? itemsU
+            : itemsU.filter(e => e.estado === filtro);
+
+          // Ordenar: crítico → bajo → ok, luego por nombre
+          itemsU.sort((a,b) => {
+            const od = ESTADO[a.estado].order - ESTADO[b.estado].order;
+            if (od !== 0) return od;
+            return safeStr(a.item?.name||a.id).localeCompare(safeStr(b.item?.name||b.id));
+          });
+
+          const criticos = itemsU.filter(e=>e.estado==='critico').length;
+          const bajos    = itemsU.filter(e=>e.estado==='bajo').length;
+          const isOpen   = expanded[usuario];
+
+          // Resumen de alertas para el header
+          const alertaTexto = criticos > 0
+            ? `⚠️ ${criticos} crítico${criticos!==1?'s':''}`
+            : bajos > 0
+            ? `⚠️ ${bajos} bajo${bajos!==1?'s':''}`
+            : `✓ Sin alertas`;
+          const alertaColor = criticos > 0 ? '#C62828' : bajos > 0 ? '#B45309' : '#166534';
+
+          // Items a mostrar según filtro
+          const itemsMostrar = filtro === 'todos'
+            ? itemsU
+            : itemsU.filter(e => e.estado === filtro);
+
+          return `
+          <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <button data-toggle="${usuario}"
+              class="w-full flex items-center justify-between px-4 py-3.5 text-left">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm text-white shrink-0"
+                  style="background:#1B4F8A">${usuario.slice(0,2)}</div>
+                <div>
+                  <p class="font-bold text-gray-900 text-base">${usuario}</p>
+                  <p class="text-xs font-semibold" style="color:${alertaColor}">${alertaTexto}</p>
                 </div>
-                <svg class="w-5 h-5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}"
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-gray-400">${itemsU.length} mat.</span>
+                <svg class="w-5 h-5 text-gray-400 ${isOpen?'rotate-180':''} transition-transform"
                   viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <polyline points="6 9 12 15 18 9"/>
                 </svg>
-              </button>
+              </div>
+            </button>
 
-              <!-- Detalle de materiales -->
-              ${isOpen ? `
-              <div class="border-t border-gray-100">
-                ${itemsU.length === 0
-                  ? '<p class="text-xs text-gray-400 text-center py-4">Sin materiales</p>'
-                  : itemsU.map(e => {
-                      const name   = safeStr(e.item?.name || e.id, '—');
-                      const sap    = safeStr(e.item?.sapCode, '');
-                      const unit   = safeStr(e.item?.unit, '');
-                      return `
-                      <div class="flex items-center justify-between px-4 py-2.5 border-b border-gray-50 last:border-0">
-                        <div class="min-w-0">
-                          <p class="text-sm font-medium text-gray-900 truncate">${name}</p>
-                          ${sap ? `<p class="text-xs text-gray-400 font-mono">SAP ${sap}</p>` : ''}
-                        </div>
-                        <div class="text-right shrink-0 ml-3">
-                          <span class="text-base font-bold text-gray-900">${e.cant}</span>
-                          <span class="text-xs text-gray-400 ml-0.5">${unit}</span>
-                        </div>
-                      </div>`;
-                    }).join('')
-                }
-              </div>` : ''}
-            </div>`;
-          }).join('')}
+            ${isOpen ? `
+            <div class="border-t border-gray-100 divide-y divide-gray-50">
+              ${itemsMostrar.length === 0
+                ? `<p class="text-xs text-gray-400 text-center py-4">Sin materiales en este filtro</p>`
+                : itemsMostrar.map(e => {
+                    const est  = ESTADO[e.estado];
+                    const name = safeStr(e.item?.name||e.id, '—');
+                    const unit = safeStr(e.item?.unit, '');
+                    const sap  = safeStr(e.item?.sapCode, '');
+                    const min  = safeNum(e.item?.minStock || 5);
+                    return `
+                    <div class="flex items-center gap-3 px-4 py-3"
+                      style="background:${e.estado!=='ok' ? est.bg : 'transparent'}">
+                      <span class="text-base shrink-0">${est.icon}</span>
+                      <div class="flex-1 min-w-0">
+                        <p class="text-sm font-semibold text-gray-900 truncate leading-tight">${name}</p>
+                        <p class="text-xs mt-0.5 font-medium" style="color:${est.text}">${est.label}</p>
+                        ${sap ? `<p class="text-xs text-gray-400 font-mono">SAP ${sap} · mín. ${min} ${unit}</p>` : ''}
+                      </div>
+                      <div class="text-right shrink-0">
+                        <p class="text-xl font-black" style="color:${est.text}">${e.cant}</p>
+                        <p class="text-xs text-gray-400">${unit}</p>
+                      </div>
+                    </div>`;
+                  }).join('')
+              }
+            </div>` : ''}
+          </div>`;
+        }).join('')}
 
-          <!-- Nota al pie -->
-          <p class="text-xs text-gray-400 text-center pb-2">
-            Calculado desde movimientos registrados. Solo incluye salidas.
-          </p>
-        </div>`;
+        <p class="text-xs text-gray-400 text-center pb-2">Calculado desde movimientos registrados.</p>
+      </div>`;
 
-      // Bind toggles
+      // Bind
       content.querySelectorAll('[data-toggle]').forEach(btn => {
         btn.addEventListener('click', () => {
-          const u = btn.dataset.toggle;
-          expanded[u] = !expanded[u];
+          expanded[btn.dataset.toggle] = !expanded[btn.dataset.toggle];
+          renderUsuarios();
+        });
+      });
+      content.querySelectorAll('[data-filtro]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          filtro = btn.dataset.filtro;
           renderUsuarios();
         });
       });
     }
 
+    // Cachear en window para que el modal de salida pueda leerlo
+    window.__kardexStockUsuario = stockUsuario;
     renderUsuarios();
 
   } catch(e) { content.innerHTML = errHtml(); console.error(e); }
 }
+
