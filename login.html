@@ -1808,10 +1808,28 @@ ${serialHtml}
 <script>window.onload=()=>window.print();</script>
 </body></html>`;
 
-  const w = window.open('','_blank');
-  if (!w) { showToast('Permite las ventanas emergentes para imprimir.','error'); return; }
-  w.document.write(html);
-  w.document.close();
+  // Usar iframe oculto para evitar bloqueo de popups en móvil
+  let iframe = document.getElementById('__print_frame');
+  if (iframe) iframe.remove();
+  iframe = document.createElement('iframe');
+  iframe.id = '__print_frame';
+  iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:210mm;height:297mm;border:none;';
+  document.body.appendChild(iframe);
+
+  const iDoc = iframe.contentDocument || iframe.contentWindow.document;
+  iDoc.open();
+  iDoc.write(html.replace('<script>window.onload=()=>window.print();</script>', ''));
+  iDoc.close();
+
+  setTimeout(function() {
+    try {
+      iframe.contentWindow.print();
+    } catch(e) {
+      // Fallback: abrir en nueva pestaña
+      const w = window.open('','_blank');
+      if (w) { w.document.write(html); w.document.close(); }
+    }
+  }, 400);
 }
 
 // ─────────────────────────────────────────
