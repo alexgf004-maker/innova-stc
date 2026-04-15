@@ -645,247 +645,413 @@ async function showFormSalida(db, session) {
     .filter(u => ['campo','coordinadora'].includes(u.role))
     .sort((a,b) => safeStr(a.displayName).localeCompare(safeStr(b.displayName)));
 
-  let sel = []; // { itemId, name, unit, sapCode, axCode, stock, cantidad, requiereSerial, modoSerial, seriales, serialInicio, serialFin }
+  let sel = [];
 
-  // ── Overlay de pantalla completa para móvil ──
+  // ── Pantalla completa ──
   const ov = document.createElement('div');
-  ov.className = 'fixed inset-0 bg-white z-50 flex flex-col';
-  ov.style.cssText = 'max-height:100dvh;overflow:hidden;';
-  ov.innerHTML = `
-    <!-- Header fijo -->
-    <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0" style="background:#1B4F8A">
-      <div>
-        <h2 class="font-semibold text-white text-base">Nueva salida</h2>
-        <p class="text-xs text-blue-200 mt-0.5">Despacho / Carga de materiales</p>
+  ov.className = 'fixed inset-0 z-50 flex flex-col bg-gray-50';
+  ov.style.cssText = 'max-height:100dvh;';
+  document.body.appendChild(ov);
+
+  function tc(str) {
+    return safeStr(str).toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  function getRec() {
+    try { return JSON.parse(sessionStorage.getItem('kardex_rec')||'[]'); } catch { return []; }
+  }
+  function addRec(id) {
+    const p = getRec().filter(x=>x!==id);
+    sessionStorage.setItem('kardex_rec', JSON.stringify([id,...p].slice(0,6)));
+  }
+
+  // ── Render principal ──
+  function render() {
+    const totalSel = sel.length;
+    const hasResp  = ov.querySelector('#fs-responsable')?.value || '';
+    const btnOk    = totalSel > 0 && hasResp;
+
+    ov.innerHTML = `
+    <!-- TOP BAR -->
+    <div class="flex items-center gap-3 px-4 py-3 shrink-0 border-b border-gray-200 bg-white">
+      <button id="fs-close" class="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-100 text-gray-600 shrink-0">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+      <div class="min-w-0">
+        <p class="font-semibold text-gray-900 text-base leading-tight">Nueva salida</p>
+        <p class="text-xs text-gray-400">Despacho de materiales</p>
       </div>
-      <button id="fs-close" class="text-white/80 hover:text-white text-2xl leading-none w-8 h-8 flex items-center justify-center">✕</button>
     </div>
 
-    <!-- Área scrolleable -->
-    <div class="flex-1 overflow-y-auto">
+    <!-- SCROLL AREA -->
+    <div id="fs-scroll" class="flex-1 overflow-y-auto">
 
-      <!-- Encabezado del despacho -->
-      <div class="px-4 py-3 space-y-2.5 border-b border-gray-100 bg-gray-50">
-        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Encabezado del despacho</p>
-        <div>
-          <label class="block text-xs font-medium text-gray-600 mb-1">Usuario responsable *</label>
-          <select id="fs-responsable" class="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white">
-            <option value="">Seleccionar...</option>
-            ${USUARIOS_RESPONSABLES.map(u => `<option value="${u}">${u}</option>`).join('')}
-          </select>
-        </div>
-        <div class="grid grid-cols-2 gap-2">
-          <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1">Empresa contratista</label>
-            <select id="fs-contratista" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white">
-              ${EMPRESAS_CONTRATISTAS.map(e => `<option value="${e}">${e}</option>`).join('')}
-              <option value="">Otra...</option>
-            </select>
+      <!-- ① ENCABEZADO (colapsable, tono secundario) -->
+      <details id="fs-header-details" class="bg-white border-b border-gray-200">
+        <summary class="flex items-center justify-between px-4 py-3 cursor-pointer list-none select-none">
+          <div class="flex items-center gap-2">
+            <span class="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0" style="background:#1B4F8A">1</span>
+            <span class="text-sm font-semibold text-gray-700">Encabezado del despacho</span>
           </div>
-          <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1">Instalador responsable</label>
-            <select id="fs-instalador" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white">
+          <svg id="fs-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div class="px-4 pb-4 space-y-2.5 border-t border-gray-100">
+          <div class="pt-3">
+            <label class="block text-xs font-medium text-gray-500 mb-1">Usuario responsable *</label>
+            <select id="fs-responsable" class="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
               <option value="">Seleccionar...</option>
-              ${usuarios.map(u => `<option value="${safeStr(u.displayName)}">${safeStr(u.displayName)}</option>`).join('')}
+              ${USUARIOS_RESPONSABLES.map(u=>`<option value="${u}">${u}</option>`).join('')}
             </select>
           </div>
-        </div>
-        <div class="grid grid-cols-2 gap-2">
-          <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1">Placa del vehículo</label>
-            <select id="fs-placa-sel" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white">
-              <option value="">Seleccionar...</option>
-              ${PLACAS.map(p => `<option value="${p}">${p}</option>`).join('')}
-              <option value="__otro__">Otro / temporal</option>
-            </select>
-            <input id="fs-placa-otro" type="text" placeholder="Escribe la placa"
-              class="hidden w-full border border-gray-300 rounded-xl px-3 py-2 text-sm font-mono mt-1 focus:outline-none focus:ring-2 focus:ring-blue-400"/>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-xs font-medium text-gray-500 mb-1">Empresa contratista</label>
+              <select id="fs-contratista" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
+                ${EMPRESAS_CONTRATISTAS.map(e=>`<option value="${e}">${e}</option>`).join('')}
+                <option value="">Otra...</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-500 mb-1">Instalador</label>
+              <select id="fs-instalador" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
+                <option value="">Seleccionar...</option>
+                ${usuarios.map(u=>`<option value="${safeStr(u.displayName)}">${safeStr(u.displayName)}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-xs font-medium text-gray-500 mb-1">Placa</label>
+              <select id="fs-placa-sel" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
+                <option value="">Seleccionar...</option>
+                ${PLACAS.map(p=>`<option value="${p}">${p}</option>`).join('')}
+                <option value="__otro__">Otro / temporal</option>
+              </select>
+              <input id="fs-placa-otro" type="text" placeholder="Escribe la placa"
+                class="hidden w-full border border-gray-300 rounded-xl px-3 py-2 text-sm mt-1 font-mono focus:outline-none focus:ring-2 focus:ring-blue-400"/>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-500 mb-1">F. solicitud</label>
+              <input id="fs-fecha-sol" type="date" value="${today()}"
+                class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"/>
+            </div>
           </div>
           <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1">Fecha solicitud</label>
-            <input id="fs-fecha-sol" type="date" value="${today()}"
-              class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"/>
+            <label class="block text-xs font-medium text-gray-500 mb-1">F. entrega de material</label>
+            <input id="fs-fecha-ent" type="date" value="${today()}"
+              class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"/>
           </div>
         </div>
-        <div>
-          <label class="block text-xs font-medium text-gray-600 mb-1">Fecha entrega de material</label>
-          <input id="fs-fecha-ent" type="date" value="${today()}"
-            class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"/>
+      </details>
+
+      <!-- ② CARRITO: MATERIALES SELECCIONADOS -->
+      <div class="px-4 pt-4 pb-2">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <span class="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0" style="background:#1B4F8A">2</span>
+            <span class="text-sm font-semibold text-gray-700">Materiales seleccionados</span>
+          </div>
+          ${totalSel > 0 ? `<span class="text-xs font-bold px-2.5 py-1 rounded-full text-white" style="background:#1B4F8A">${totalSel}</span>` : ''}
         </div>
+
+        ${totalSel === 0
+          ? `<div class="border-2 border-dashed border-gray-200 rounded-2xl py-8 text-center">
+              <p class="text-sm text-gray-400">Aún no hay materiales</p>
+              <p class="text-xs text-gray-300 mt-1">Búscalos abajo y tócalos para agregar</p>
+             </div>`
+          : `<div class="space-y-2" id="fs-carrito">
+              ${sel.map((s,idx) => {
+                const restante = s.stock - s.cantidad;
+                const stockStyle = restante <= 0
+                  ? 'color:#C62828'
+                  : restante <= safeNum(items.find(i=>i.id===s.itemId)?.minStock||5)
+                  ? 'color:#E65100' : 'color:#166534';
+                return `
+                <div class="bg-white rounded-2xl border border-gray-200 p-3.5 shadow-sm">
+                  <div class="flex items-start justify-between gap-2 mb-2.5">
+                    <div class="min-w-0">
+                      <p class="font-semibold text-gray-900 text-sm leading-tight">${tc(s.name)}</p>
+                      <p class="text-xs text-gray-400 font-mono mt-0.5">SAP ${s.sapCode||'—'} · AX ${s.axCode||'—'}</p>
+                    </div>
+                    <button data-del="${idx}"
+                      class="w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center shrink-0 text-red-400 hover:bg-red-100">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  </div>
+                  <!-- Control cantidad -->
+                  <div class="flex items-center gap-2">
+                    <button data-dec="${idx}"
+                      class="w-10 h-10 rounded-xl border-2 border-gray-200 bg-gray-50 text-xl font-bold text-gray-500 flex items-center justify-center shrink-0 active:bg-gray-200">−</button>
+                    <div class="flex-1 text-center">
+                      <span data-qty-display="${idx}" class="text-2xl font-bold text-gray-900">${s.cantidad}</span>
+                      <span class="text-sm text-gray-400 ml-1">${safeStr(s.unit,'')}</span>
+                    </div>
+                    <button data-inc="${idx}"
+                      class="w-10 h-10 rounded-xl border-2 flex items-center justify-center shrink-0 text-xl font-bold active:opacity-80
+                        ${s.cantidad >= s.stock
+                          ? 'border-gray-200 bg-gray-100 text-gray-300 cursor-not-allowed'
+                          : 'border-blue-200 bg-blue-50 text-blue-600'}"
+                      ${s.cantidad >= s.stock ? 'disabled' : ''}>+</button>
+                  </div>
+                  <p class="text-xs font-medium mt-2" style="${stockStyle}">
+                    Stock restante: ${restante} ${safeStr(s.unit,'')}${restante <= 0 ? ' — sin stock' : ''}
+                  </p>
+                  ${s.requiereSerial ? `
+                  <div class="mt-2.5 pt-2.5 border-t border-gray-100 space-y-2">
+                    <div class="flex gap-1.5">
+                      <button data-modo="${idx}" data-tipo="individual"
+                        class="flex-1 text-xs py-1.5 rounded-lg border font-medium
+                          ${s.modoSerial==='individual' ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500'}">
+                        Individual
+                      </button>
+                      <button data-modo="${idx}" data-tipo="rango"
+                        class="flex-1 text-xs py-1.5 rounded-lg border font-medium
+                          ${s.modoSerial==='rango' ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500'}">
+                        Rango
+                      </button>
+                    </div>
+                    ${s.modoSerial==='individual'
+                      ? `<textarea data-ser="${idx}" rows="2" placeholder="Un serial por línea"
+                           class="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs font-mono bg-white focus:outline-none focus:border-blue-400 resize-none"
+                         >${(s.seriales||[]).join('\n')}</textarea>
+                         <p class="text-xs text-gray-400">${(s.seriales||[]).length} de ${s.cantidad} serial(es)</p>`
+                      : `<div class="grid grid-cols-2 gap-2">
+                           <div>
+                             <p class="text-xs text-gray-500 mb-1">Inicio</p>
+                             <input data-ri="${idx}" type="text" value="${s.serialInicio||''}" placeholder="ABC001"
+                               class="w-full border border-gray-200 rounded-xl px-3 py-1.5 text-xs font-mono bg-white focus:outline-none focus:border-blue-400"/>
+                           </div>
+                           <div>
+                             <p class="text-xs text-gray-500 mb-1">Fin</p>
+                             <input data-rf="${idx}" type="text" value="${s.serialFin||''}" placeholder="ABC010"
+                               class="w-full border border-gray-200 rounded-xl px-3 py-1.5 text-xs font-mono bg-white focus:outline-none focus:border-blue-400"/>
+                           </div>
+                         </div>`
+                    }
+                  </div>` : ''}
+                </div>`;
+              }).join('')}
+             </div>`
+        }
       </div>
 
-      <!-- Bloque: Materiales seleccionados -->
-      <div class="px-4 py-3 border-b border-gray-100">
-        <div class="flex items-center justify-between mb-2">
-          <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Materiales seleccionados</p>
-          <span id="fs-sel-count" class="text-xs font-semibold px-2 py-0.5 rounded-full" style="background:#EFF6FF;color:#1D4ED8">0 ítems</span>
+      <!-- ③ AGREGAR MATERIAL -->
+      <div class="px-4 pt-2 pb-24">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0" style="background:#1B4F8A">3</span>
+          <span class="text-sm font-semibold text-gray-700">Agregar material</span>
         </div>
-        <div id="fs-sel-lista" class="space-y-2">
-          <p class="text-xs text-gray-400 text-center py-3 border border-dashed border-gray-200 rounded-xl">
-            Toca un material de la lista para agregarlo
-          </p>
-        </div>
-      </div>
-
-      <!-- Bloque: Materiales disponibles -->
-      <div class="px-4 py-3">
-        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Materiales disponibles</p>
-        <div class="relative mb-2">
-          <svg class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <!-- Buscador -->
+        <div class="relative mb-3">
+          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
           <input id="fs-buscar" type="text" placeholder="Buscar por nombre o SAP..."
-            autocomplete="off"
-            class="w-full border border-gray-300 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>
+            autocomplete="off" value="${ov._q||''}"
+            class="w-full bg-white border border-gray-300 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>
         </div>
-        <div id="fs-disponibles" class="space-y-1.5"></div>
+        <!-- Lista -->
+        <div id="fs-lista-items" class="space-y-1.5"></div>
       </div>
 
     </div><!-- fin scroll -->
 
-    <!-- Error -->
-    <div id="fs-err" class="hidden mx-4 mb-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2 shrink-0"></div>
+    <!-- ERROR -->
+    <div id="fs-err" class="hidden mx-4 mb-1 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2 shrink-0"></div>
 
-    <!-- Botón sticky -->
-    <div class="px-4 py-3 border-t border-gray-200 bg-white shrink-0" style="padding-bottom: max(12px, env(safe-area-inset-bottom))">
+    <!-- BOTÓN STICKY -->
+    <div class="px-4 pb-4 pt-2 bg-gray-50 border-t border-gray-200 shrink-0" style="padding-bottom:max(16px,env(safe-area-inset-bottom))">
       <button id="fs-submit"
-        class="w-full text-white font-semibold rounded-xl py-3.5 text-sm transition-opacity"
-        style="background:#1B4F8A">
-        Registrar salida
+        class="w-full font-bold rounded-2xl py-4 text-sm transition-all text-white"
+        style="background:${btnOk ? '#1B4F8A' : '#9CA3AF'}"
+        ${btnOk ? '' : 'disabled'}>
+        ${totalSel > 0
+          ? `Registrar salida · ${totalSel} material${totalSel!==1?'es':''}`
+          : 'Registrar salida'}
       </button>
     </div>`;
 
-  document.body.appendChild(ov);
+    // ── Bind events ──
+    ov.querySelector('#fs-close').onclick = () => ov.remove();
 
-  // ── Helpers ──
-  function getStockRestante(itemId) {
-    const item  = items.find(i => i.id === itemId);
-    const stock = safeNum(item?.stock);
-    const enSel = sel.find(s => s.itemId === itemId);
-    return stock - (enSel ? enSel.cantidad : 0);
+    // Encabezado - placa otro
+    ov.querySelector('#fs-placa-sel')?.addEventListener('change', e => {
+      const otro = ov.querySelector('#fs-placa-otro');
+      if (e.target.value === '__otro__') { otro.classList.remove('hidden'); otro.focus(); }
+      else { otro.classList.add('hidden'); otro.value = ''; }
+    });
+
+    // Actualizar botón cuando cambia responsable
+    ov.querySelector('#fs-responsable')?.addEventListener('change', () => render());
+
+    // Carrito: eliminar
+    ov.querySelectorAll('[data-del]').forEach(b => {
+      b.onclick = () => { sel.splice(parseInt(b.dataset.del),1); render(); };
+    });
+
+    // Carrito: decrementar
+    ov.querySelectorAll('[data-dec]').forEach(b => {
+      b.onclick = () => {
+        const idx = parseInt(b.dataset.dec);
+        if (sel[idx].cantidad > 1) {
+          sel[idx].cantidad--;
+          // Update display without full re-render
+          const disp = ov.querySelector(`[data-qty-display="${idx}"]`);
+          if (disp) {
+            disp.textContent = sel[idx].cantidad;
+            // Re-render for stock restante update
+            render();
+          }
+        }
+      };
+    });
+
+    // Carrito: incrementar
+    ov.querySelectorAll('[data-inc]').forEach(b => {
+      b.onclick = () => {
+        const idx = parseInt(b.dataset.inc);
+        if (sel[idx].cantidad < sel[idx].stock) {
+          sel[idx].cantidad++;
+          render();
+        }
+      };
+    });
+
+    // Carrito: modo serial
+    ov.querySelectorAll('[data-modo]').forEach(b => {
+      b.onclick = () => {
+        const idx = parseInt(b.dataset.modo);
+        sel[idx].modoSerial = b.dataset.tipo;
+        sel[idx].seriales=[]; sel[idx].serialInicio=''; sel[idx].serialFin='';
+        render();
+      };
+    });
+
+    // Carrito: seriales individuales
+    ov.querySelectorAll('[data-ser]').forEach(ta => {
+      ta.oninput = () => {
+        const idx = parseInt(ta.dataset.ser);
+        sel[idx].seriales = ta.value.split('\n').map(s=>s.trim()).filter(Boolean);
+        const p = ta.nextElementSibling;
+        if (p) p.textContent = `${sel[idx].seriales.length} de ${sel[idx].cantidad} serial(es)`;
+      };
+    });
+    ov.querySelectorAll('[data-ri]').forEach(inp => {
+      inp.oninput = () => { sel[parseInt(inp.dataset.ri)].serialInicio = inp.value.trim(); };
+    });
+    ov.querySelectorAll('[data-rf]').forEach(inp => {
+      inp.oninput = () => { sel[parseInt(inp.dataset.rf)].serialFin = inp.value.trim(); };
+    });
+
+    // Buscador
+    ov.querySelector('#fs-buscar')?.addEventListener('input', e => {
+      ov._q = e.target.value;
+      renderItems(e.target.value);
+    });
+
+    // Submit
+    ov.querySelector('#fs-submit')?.addEventListener('click', handleSubmit);
+
+    // Renderizar items
+    renderItems(ov._q || '');
   }
 
-  function titleCase(str) {
-    return safeStr(str).toLowerCase().replace(/\w/g, c => c.toUpperCase());
-  }
-
-  function getRecientes() {
-    try { return JSON.parse(sessionStorage.getItem('kardex_recientes') || '[]'); } catch { return []; }
-  }
-  function addReciente(id) {
-    const prev = getRecientes().filter(x => x !== id);
-    sessionStorage.setItem('kardex_recientes', JSON.stringify([id, ...prev].slice(0, 5)));
-  }
-
-  // ── Render lista disponibles ──
-  function renderDisponibles(q) {
-    const el = document.getElementById('fs-disponibles');
+  // ── Render lista de items disponibles ──
+  function renderItems(q) {
+    const el = ov.querySelector('#fs-lista-items');
     if (!el) return;
-    const query = (q || '').trim().toLowerCase();
+
+    const selIds = new Set(sel.map(s=>s.itemId));
+    const query  = (q||'').trim().toLowerCase();
 
     let lista = query
       ? items.filter(i =>
           safeStr(i.name).toLowerCase().includes(query) ||
-          safeStr(i.sapCode,'').toLowerCase().includes(query) ||
-          safeStr(i.axCode,'').toLowerCase().includes(query)
-        )
-      : items;
+          safeStr(i.sapCode,'').includes(query) ||
+          safeStr(i.axCode,'').includes(query))
+      : (() => {
+          const rec   = getRec().map(id=>items.find(i=>i.id===id)).filter(Boolean);
+          const resto = items.filter(i=>!getRec().includes(i.id));
+          return [...rec, ...resto];
+        })();
 
     if (lista.length === 0) {
-      el.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Sin resultados</p>';
+      el.innerHTML = '<p class="text-sm text-gray-400 text-center py-6">Sin resultados</p>';
       return;
     }
 
-    // Mostrar recientes primero si no hay búsqueda
-    if (!query) {
-      const rec   = getRecientes().map(id => items.find(i => i.id === id)).filter(Boolean);
-      const resto = items.filter(i => !getRecientes().includes(i.id));
-      lista = [...rec, ...resto];
-    }
-
     el.innerHTML = lista.map(item => {
-      const enSel     = sel.some(s => s.itemId === item.id);
-      const restante  = getStockRestante(item.id);
-      const stockColor = item.stock <= safeNum(item.minStock||5) ? '#E65100' : '#166534';
+      const agregado = selIds.has(item.id);
+      const stockColor = safeNum(item.stock) <= safeNum(item.minStock||5) ? '#E65100' : '#6B7280';
       return `
-        <button data-avail="${item.id}"
-          class="w-full text-left rounded-xl px-3 py-2.5 border transition-colors ${enSel
-            ? 'border-blue-300 bg-blue-50'
-            : 'border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50'
-          }">
-          <div class="flex items-center justify-between gap-2">
-            <div class="min-w-0">
-              <p class="text-sm font-medium text-gray-900 truncate">${titleCase(item.name)}</p>
-              <p class="text-xs text-gray-400 font-mono mt-0.5">SAP ${safeStr(item.sapCode,'—')} · AX ${safeStr(item.axCode,'—')}</p>
-            </div>
-            <div class="text-right shrink-0">
-              ${enSel
-                ? `<span class="text-xs font-semibold px-2 py-0.5 rounded-full" style="background:#DCFCE7;color:#166534">✓ Agregado</span>`
-                : `<span class="text-xs font-semibold" style="color:${stockColor}">${item.stock} ${safeStr(item.unit,'')}</span>`
-              }
-            </div>
+        <button data-item="${item.id}" ${agregado ? 'disabled' : ''}
+          class="w-full text-left rounded-xl px-4 py-3 border transition-colors
+            ${agregado
+              ? 'border-gray-100 bg-gray-50 opacity-60 cursor-not-allowed'
+              : 'border-gray-200 bg-white active:bg-blue-50 active:border-blue-300'}">
+          <div class="flex items-center justify-between gap-3">
+            <p class="text-sm font-medium text-gray-900 leading-tight truncate">${tc(item.name)}</p>
+            ${agregado
+              ? `<span class="text-xs font-semibold px-2 py-0.5 rounded-full shrink-0" style="background:#DCFCE7;color:#166534">✓</span>`
+              : `<span class="text-xs font-semibold shrink-0" style="color:${stockColor}">${item.stock} ${safeStr(item.unit,'')}</span>`
+            }
           </div>
         </button>`;
     }).join('');
 
-    el.querySelectorAll('[data-avail]').forEach(btn => {
+    el.querySelectorAll('[data-item]').forEach(btn => {
       btn.addEventListener('click', () => {
-        const item = items.find(i => i.id === btn.dataset.avail);
-        if (!item) return;
-        const yaEsta = sel.find(s => s.itemId === item.id);
-        if (yaEsta) {
-          // Si ya está, hacer scroll a la tarjeta seleccionada
-          document.getElementById('fs-sel-lista')?.scrollIntoView({ behavior: 'smooth' });
-          return;
-        }
-        mostrarModalCantidad(item);
+        const item = items.find(i=>i.id===btn.dataset.item);
+        if (!item || sel.some(s=>s.itemId===item.id)) return;
+        showCantidadModal(item);
       });
     });
   }
 
-  // ── Modal de cantidad ──
-  function mostrarModalCantidad(item) {
+  // ── Modal cantidad — minimalista ──
+  function showCantidadModal(item) {
     const modal = document.createElement('div');
-    modal.className = 'fixed inset-0 bg-black/50 flex items-end justify-center z-50 p-4';
+    modal.className = 'fixed inset-0 bg-black/40 flex items-end z-50';
     modal.innerHTML = `
-      <div class="bg-white rounded-2xl w-full max-w-md p-5 space-y-4">
+      <div class="bg-white w-full rounded-t-3xl px-5 pt-5 pb-8 space-y-5" style="padding-bottom:max(32px,env(safe-area-inset-bottom))">
         <div class="flex items-start justify-between gap-2">
           <div class="min-w-0">
-            <p class="font-semibold text-gray-900 leading-tight">${titleCase(item.name)}</p>
-            <p class="text-xs text-gray-400 font-mono mt-0.5">SAP ${safeStr(item.sapCode,'—')} · Disponible: <strong>${item.stock} ${safeStr(item.unit,'')}</strong></p>
+            <p class="font-bold text-gray-900 text-base leading-tight">${tc(item.name)}</p>
+            <p class="text-xs text-gray-400 mt-0.5">${item.stock} ${safeStr(item.unit,'')} disponibles</p>
           </div>
-          <button id="mc-x" class="text-gray-400 text-2xl leading-none shrink-0">✕</button>
+          <button id="mc-x" class="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 text-gray-500 shrink-0">✕</button>
         </div>
-        <div>
-          <label class="block text-xs font-medium text-gray-600 mb-2 text-center">¿Cuántas unidades?</label>
-          <div class="flex items-center gap-3 justify-center">
-            <button id="mc-minus" class="w-11 h-11 rounded-xl border-2 border-gray-300 text-xl font-bold text-gray-600 hover:border-blue-400 hover:text-blue-600 transition-colors flex items-center justify-center">−</button>
+        <!-- +/- grande -->
+        <div class="flex items-center justify-between gap-4">
+          <button id="mc-dec"
+            class="w-16 h-16 rounded-2xl border-2 border-gray-200 bg-gray-50 text-3xl font-bold text-gray-500 flex items-center justify-center">−</button>
+          <div class="flex-1 text-center">
             <input id="mc-cant" type="number" min="1" max="${item.stock}" value="1"
-              class="w-24 text-center text-2xl font-bold border-2 border-gray-300 rounded-xl py-2 focus:outline-none focus:border-blue-400"/>
-            <button id="mc-plus" class="w-11 h-11 rounded-xl border-2 border-gray-300 text-xl font-bold text-gray-600 hover:border-blue-400 hover:text-blue-600 transition-colors flex items-center justify-center">+</button>
+              class="w-full text-center text-4xl font-black text-gray-900 bg-transparent border-none focus:outline-none py-1"/>
+            <p class="text-xs text-gray-400">${safeStr(item.unit,'')}</p>
           </div>
-          <p class="text-xs text-center text-gray-400 mt-2">Máximo: ${item.stock} ${safeStr(item.unit,'')}</p>
+          <button id="mc-inc"
+            class="w-16 h-16 rounded-2xl border-2 border-blue-300 bg-blue-50 text-3xl font-bold text-blue-600 flex items-center justify-center">+</button>
         </div>
-        <div id="mc-err" class="hidden text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2 text-center"></div>
-        <div class="flex gap-3">
-          <button id="mc-cancel" class="flex-1 border border-gray-300 text-gray-700 font-medium rounded-xl py-3 text-sm">Cancelar</button>
-          <button id="mc-add" class="flex-1 text-white font-semibold rounded-xl py-3 text-sm" style="background:#1B4F8A">Agregar</button>
-        </div>
+        <div id="mc-err" class="hidden text-xs text-red-600 bg-red-50 rounded-xl px-3 py-2 text-center"></div>
+        <button id="mc-add"
+          class="w-full text-white font-bold rounded-2xl py-4 text-base" style="background:#1B4F8A">
+          Agregar al despacho
+        </button>
       </div>`;
+
     document.body.appendChild(modal);
-
     const cantEl = modal.querySelector('#mc-cant');
-    cantEl.focus(); cantEl.select();
+    setTimeout(() => { cantEl.focus(); cantEl.select(); }, 100);
 
-    modal.querySelector('#mc-x').onclick      = () => modal.remove();
-    modal.querySelector('#mc-cancel').onclick = () => modal.remove();
-    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+    modal.addEventListener('click', e => { if (e.target===modal) modal.remove(); });
+    modal.querySelector('#mc-x').onclick = () => modal.remove();
 
-    modal.querySelector('#mc-minus').onclick = () => {
+    modal.querySelector('#mc-dec').onclick = () => {
       const v = safeNum(cantEl.value);
       if (v > 1) cantEl.value = v - 1;
     };
-    modal.querySelector('#mc-plus').onclick = () => {
+    modal.querySelector('#mc-inc').onclick = () => {
       const v = safeNum(cantEl.value);
       if (v < item.stock) cantEl.value = v + 1;
     };
@@ -894,8 +1060,8 @@ async function showFormSalida(db, session) {
       const cant  = safeNum(cantEl.value);
       const errEl = modal.querySelector('#mc-err');
       errEl.classList.add('hidden');
-      if (cant <= 0)          { errEl.textContent = 'Ingresa una cantidad mayor a 0.'; errEl.classList.remove('hidden'); return; }
-      if (cant > item.stock)  { errEl.textContent = `Máximo disponible: ${item.stock} ${safeStr(item.unit,'')}.`; errEl.classList.remove('hidden'); return; }
+      if (cant <= 0)         { errEl.textContent = 'Ingresa una cantidad mayor a 0.'; errEl.classList.remove('hidden'); return; }
+      if (cant > item.stock) { errEl.textContent = `Máximo: ${item.stock} ${safeStr(item.unit,'')}`; errEl.classList.remove('hidden'); return; }
 
       sel.push({
         itemId: item.id, name: item.name, unit: item.unit,
@@ -904,185 +1070,42 @@ async function showFormSalida(db, session) {
         requiereSerial: item.requiereSerial,
         modoSerial: 'individual', seriales: [], serialInicio: '', serialFin: '',
       });
-      addReciente(item.id);
+      addRec(item.id);
       modal.remove();
-      renderSeleccionados();
-      renderDisponibles(document.getElementById('fs-buscar')?.value || '');
+      render();
+      // Scroll al carrito
+      setTimeout(() => {
+        ov.querySelector('#fs-scroll')?.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 50);
     };
 
     modal.querySelector('#mc-add').addEventListener('click', doAdd);
-    cantEl.addEventListener('keydown', e => { if (e.key === 'Enter') doAdd(); });
+    cantEl.addEventListener('keydown', e => { if (e.key==='Enter') doAdd(); });
   }
 
-  // ── Render materiales seleccionados ──
-  function renderSeleccionados() {
-    const lista  = document.getElementById('fs-sel-lista');
-    const countEl = document.getElementById('fs-sel-count');
-    if (!lista) return;
-
-    if (countEl) {
-      countEl.textContent = `${sel.length} ítem${sel.length !== 1 ? 's' : ''}`;
-      countEl.style.background = sel.length > 0 ? '#EFF6FF' : '#F3F4F6';
-      countEl.style.color      = sel.length > 0 ? '#1D4ED8' : '#9CA3AF';
-    }
-
-    if (sel.length === 0) {
-      lista.innerHTML = `<p class="text-xs text-gray-400 text-center py-3 border border-dashed border-gray-200 rounded-xl">
-        Toca un material de la lista para agregarlo
-      </p>`;
-      return;
-    }
-
-    lista.innerHTML = sel.map((s, idx) => {
-      const restante   = s.stock - s.cantidad;
-      const lowStock   = restante <= safeNum(items.find(i=>i.id===s.itemId)?.minStock || 5);
-      const stockColor = restante <= 0 ? '#C62828' : lowStock ? '#E65100' : '#166534';
-      return `
-        <div class="rounded-xl border-2 border-blue-200 bg-blue-50 p-3 space-y-2">
-          <div class="flex items-start justify-between gap-2">
-            <div class="min-w-0">
-              <p class="text-sm font-semibold text-gray-900 leading-tight truncate">${titleCase(s.name)}</p>
-              <p class="text-xs text-gray-400 font-mono mt-0.5">SAP ${s.sapCode||'—'} · AX ${s.axCode||'—'}</p>
-            </div>
-            <button data-del="${idx}" class="text-gray-400 hover:text-red-500 shrink-0 text-lg leading-none mt-0.5">✕</button>
-          </div>
-          <!-- Cantidad editable con +/- -->
-          <div class="flex items-center gap-2">
-            <button data-dec="${idx}" class="w-9 h-9 rounded-lg border border-gray-300 bg-white text-lg font-bold text-gray-600 hover:border-blue-400 hover:text-blue-600 flex items-center justify-center shrink-0">−</button>
-            <input data-qty="${idx}" type="number" min="1" max="${s.stock}" value="${s.cantidad}"
-              class="flex-1 text-center text-base font-bold border border-gray-300 rounded-lg py-1.5 bg-white focus:outline-none focus:border-blue-400"/>
-            <button data-inc="${idx}" class="w-9 h-9 rounded-lg border border-gray-300 bg-white text-lg font-bold text-gray-600 hover:border-blue-400 hover:text-blue-600 flex items-center justify-center shrink-0">+</button>
-            <span class="text-xs text-gray-500 shrink-0">${safeStr(s.unit,'')}</span>
-          </div>
-          <!-- Stock restante -->
-          <p class="text-xs font-medium" style="color:${stockColor}">
-            Stock restante: ${restante} ${safeStr(s.unit,'')}${restante <= 0 ? ' ⚠️ Sin stock' : ''}
-          </p>
-          <!-- Seriales si aplica -->
-          ${s.requiereSerial ? `
-          <div class="space-y-1.5 border-t border-blue-200 pt-2">
-            <p class="text-xs font-semibold text-blue-700">Seriales / sellos</p>
-            <div class="flex gap-1.5">
-              <button data-modo="${idx}" data-tipo="individual"
-                class="flex-1 text-xs py-1.5 rounded-lg border font-medium transition-colors ${s.modoSerial==='individual' ? 'border-blue-400 bg-white text-blue-700' : 'border-gray-200 text-gray-500'}">
-                Individual
-              </button>
-              <button data-modo="${idx}" data-tipo="rango"
-                class="flex-1 text-xs py-1.5 rounded-lg border font-medium transition-colors ${s.modoSerial==='rango' ? 'border-blue-400 bg-white text-blue-700' : 'border-gray-200 text-gray-500'}">
-                Rango
-              </button>
-            </div>
-            ${s.modoSerial==='individual' ? `
-            <textarea data-ser="${idx}" rows="2" placeholder="Un serial por línea"
-              class="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs font-mono bg-white focus:outline-none focus:border-blue-400 resize-none"
-            >${(s.seriales||[]).join('\x0A')}</textarea>
-            <p class="text-xs text-gray-400">${(s.seriales||[]).length} de ${s.cantidad}</p>` : `
-            <div class="grid grid-cols-2 gap-1.5">
-              <div>
-                <p class="text-xs text-gray-500 mb-1">Inicio</p>
-                <input data-ri="${idx}" type="text" value="${s.serialInicio||''}" placeholder="ABC001"
-                  class="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs font-mono bg-white focus:outline-none focus:border-blue-400"/>
-              </div>
-              <div>
-                <p class="text-xs text-gray-500 mb-1">Fin</p>
-                <input data-rf="${idx}" type="text" value="${s.serialFin||''}" placeholder="ABC010"
-                  class="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs font-mono bg-white focus:outline-none focus:border-blue-400"/>
-              </div>
-            </div>`}
-          </div>` : ''}
-        </div>`;
-    }).join('');
-
-    // Eventos
-    lista.querySelectorAll('[data-del]').forEach(b => {
-      b.onclick = () => { sel.splice(parseInt(b.dataset.del), 1); renderSeleccionados(); renderDisponibles(document.getElementById('fs-buscar')?.value||''); };
-    });
-    lista.querySelectorAll('[data-dec]').forEach(b => {
-      b.onclick = () => {
-        const idx = parseInt(b.dataset.dec);
-        if (sel[idx].cantidad > 1) { sel[idx].cantidad--; renderSeleccionados(); renderDisponibles(document.getElementById('fs-buscar')?.value||''); }
-      };
-    });
-    lista.querySelectorAll('[data-inc]').forEach(b => {
-      b.onclick = () => {
-        const idx = parseInt(b.dataset.inc);
-        if (sel[idx].cantidad < sel[idx].stock) { sel[idx].cantidad++; renderSeleccionados(); renderDisponibles(document.getElementById('fs-buscar')?.value||''); }
-      };
-    });
-    lista.querySelectorAll('[data-qty]').forEach(inp => {
-      inp.onchange = () => {
-        const idx  = parseInt(inp.dataset.qty);
-        const cant = safeNum(inp.value);
-        if (cant > 0 && cant <= sel[idx].stock) {
-          sel[idx].cantidad = cant;
-        } else {
-          inp.value = sel[idx].cantidad;
-        }
-        renderSeleccionados(); renderDisponibles(document.getElementById('fs-buscar')?.value||'');
-      };
-    });
-    lista.querySelectorAll('[data-modo]').forEach(b => {
-      b.onclick = () => {
-        const idx = parseInt(b.dataset.modo);
-        sel[idx].modoSerial = b.dataset.tipo;
-        sel[idx].seriales=[]; sel[idx].serialInicio=''; sel[idx].serialFin='';
-        renderSeleccionados();
-      };
-    });
-    lista.querySelectorAll('[data-ser]').forEach(ta => {
-      ta.oninput = () => {
-        const idx = parseInt(ta.dataset.ser);
-        sel[idx].seriales = ta.value.split('\n').map(s=>s.trim()).filter(Boolean);
-        const p = ta.nextElementSibling;
-        if (p) p.textContent = `${sel[idx].seriales.length} de ${sel[idx].cantidad}`;
-      };
-    });
-    lista.querySelectorAll('[data-ri]').forEach(inp => {
-      inp.oninput = () => { sel[parseInt(inp.dataset.ri)].serialInicio = inp.value.trim(); };
-    });
-    lista.querySelectorAll('[data-rf]').forEach(inp => {
-      inp.oninput = () => { sel[parseInt(inp.dataset.rf)].serialFin = inp.value.trim(); };
-    });
-  }
-
-  // Init
-  renderDisponibles('');
-  renderSeleccionados();
-
-  // Placa "otro"
-  ov.querySelector('#fs-placa-sel').addEventListener('change', e => {
-    const otro = ov.querySelector('#fs-placa-otro');
-    if (e.target.value === '__otro__') { otro.classList.remove('hidden'); otro.focus(); }
-    else { otro.classList.add('hidden'); otro.value = ''; }
-  });
-
-  // Búsqueda
-  ov.querySelector('#fs-buscar').addEventListener('input', e => renderDisponibles(e.target.value));
-
-  // Cerrar
-  ov.querySelector('#fs-close').onclick = () => ov.remove();
-
-  // Registrar
-  ov.querySelector('#fs-submit').onclick = async () => {
-    const responsableVal = ov.querySelector('#fs-responsable').value;
+  // ── Submit ──
+  async function handleSubmit() {
+    const responsable    = ov.querySelector('#fs-responsable').value;
     const contratista    = ov.querySelector('#fs-contratista').value.trim();
     const instalador     = ov.querySelector('#fs-instalador').value.trim();
     const placaSel       = ov.querySelector('#fs-placa-sel').value;
-    const placa          = placaSel === '__otro__' ? ov.querySelector('#fs-placa-otro').value.trim() : placaSel;
+    const placa          = placaSel==='__otro__' ? ov.querySelector('#fs-placa-otro').value.trim() : placaSel;
     const fechaSolicitud = ov.querySelector('#fs-fecha-sol').value;
     const fechaEntrega   = ov.querySelector('#fs-fecha-ent').value;
     const errEl          = ov.querySelector('#fs-err');
     const btn            = ov.querySelector('#fs-submit');
 
     errEl.classList.add('hidden');
-    if (!responsableVal) { errEl.textContent = 'Selecciona el usuario responsable.'; errEl.classList.remove('hidden'); return; }
-    if (sel.length === 0) { errEl.textContent = 'Agrega al menos un material.'; errEl.classList.remove('hidden'); return; }
+    if (!responsable)  { errEl.textContent = 'Selecciona el usuario responsable.'; errEl.classList.remove('hidden'); return; }
+    if (sel.length===0){ errEl.textContent = 'Agrega al menos un material.';       errEl.classList.remove('hidden'); return; }
 
-    btn.disabled = true; btn.textContent = 'Registrando...';
+    btn.disabled = true;
+    btn.textContent = 'Registrando...';
+
     try {
       const ref = await addDoc(collection(db, 'kardex/movimientos/salidas'), {
-        usuarioResponsableUid: responsableVal,
-        usuarioResponsable:    responsableVal,
+        usuarioResponsableUid: responsable,
+        usuarioResponsable:    responsable,
         empresaContratista:    contratista,
         instaladorResponsable: instalador,
         placaVehiculo:         placa,
@@ -1093,7 +1116,7 @@ async function showFormSalida(db, session) {
           itemId: s.itemId, sapCode: s.sapCode, axCode: s.axCode,
           nombre: s.name, unit: s.unit, cantidad: s.cantidad,
           requiereSerial: s.requiereSerial,
-          modoSerial:    s.requiereSerial ? s.modoSerial    : null,
+          modoSerial:    s.requiereSerial ? s.modoSerial : null,
           seriales:      s.requiereSerial && s.modoSerial==='individual' ? s.seriales : [],
           serialInicio:  s.requiereSerial && s.modoSerial==='rango' ? s.serialInicio : '',
           serialFin:     s.requiereSerial && s.modoSerial==='rango' ? s.serialFin    : '',
@@ -1109,23 +1132,25 @@ async function showFormSalida(db, session) {
       showToast('Salida registrada correctamente.', 'success');
       showMemo({
         id: ref.id,
-        usuarioResponsable:    responsableVal,
-        empresaContratista:    contratista,
-        instaladorResponsable: instalador,
-        entregadoPor:          session.displayName,
-        placaVehiculo:         placa,
-        fechaSolicitud, fechaEntrega,
+        usuarioResponsable: responsable, empresaContratista: contratista,
+        instaladorResponsable: instalador, entregadoPor: session.displayName,
+        placaVehiculo: placa, fechaSolicitud, fechaEntrega,
         items: sel,
       });
       await showDashboard(db, session);
     } catch(e) {
       errEl.textContent = 'Error al registrar. Intenta de nuevo.';
       errEl.classList.remove('hidden');
-      btn.disabled = false; btn.textContent = 'Registrar salida';
+      btn.disabled = false;
+      btn.textContent = `Registrar salida · ${sel.length} material${sel.length!==1?'es':''}`;
       console.error(e);
     }
-  };
+  }
+
+  // Init
+  render();
 }
+
 // ─────────────────────────────────────────
 // HISTORIAL
 // ─────────────────────────────────────────
