@@ -2949,7 +2949,7 @@ function showModalRevisar(db, session, sol) {
       const btn = modal.querySelector('#mr-aprobar');
       btn.disabled = true; btn.textContent = 'Aprobando...';
       try {
-        // Marcar como listo para despacho con materiales ajustados
+        // Guardar materiales aprobados y estado
         await updateDoc(doc(db, 'solicitudes_material', sol.id), {
           estado: 'listo_para_despacho',
           materialesAprobados: mats,
@@ -2957,10 +2957,18 @@ function showModalRevisar(db, session, sol) {
           aprobadoPorNombre: session.displayName,
           fechaAprobacion: serverTimestamp(),
         });
+        // Cerrar modal y abrir INMEDIATAMENTE el formulario de despacho
         modal.remove();
-        showToast('Solicitud aprobada. Completa el despacho.', 'success');
-        await showSolicitudes(db, session);
-      } catch(e) { showToast('Error al aprobar.', 'error'); btn.disabled = false; btn.textContent = '✓ Aprobar'; }
+        const solActualizada = Object.assign({}, sol, {
+          estado: 'listo_para_despacho',
+          materialesAprobados: mats,
+        });
+        await abrirDespachoDesdeSolicitud(db, session, solActualizada);
+      } catch(e) {
+        showToast('Error al aprobar.', 'error');
+        btn.disabled = false; btn.textContent = '✓ Aprobar';
+        console.error(e);
+      }
     });
   }
 
