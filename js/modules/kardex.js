@@ -90,6 +90,7 @@ function renderShell(container, session) {
         <button data-tab="dashboard"  class="ktab flex-1 py-2 text-sm font-medium rounded-lg transition-colors">Inicio</button>
         <button data-tab="inventario" class="ktab flex-1 py-2 text-sm font-medium rounded-lg transition-colors">Inventario</button>
         <button data-tab="historial"  class="ktab flex-1 py-2 text-sm font-medium rounded-lg transition-colors">Historial</button>
+        <button data-tab="usuarios"   class="ktab flex-1 py-2 text-sm font-medium rounded-lg transition-colors">Usuarios</button>
       </div>
       <div id="kardex-content"></div>
     </div>`;
@@ -111,6 +112,7 @@ function bindNav(db, session) {
       if (t === 'dashboard')  await showDashboard(db, session);
       if (t === 'inventario') await showInventario(db, session);
       if (t === 'historial')  await showHistorial(db, session);
+      if (t === 'usuarios')   await showStockUsuarios(db, session);
     });
   });
   document.getElementById('btn-nueva-salida')?.addEventListener('click', () => showFormSalida(db, session));
@@ -208,6 +210,7 @@ async function showDashboard(db, session) {
         if (t === 'dashboard')  await showDashboard(db, session);
         if (t === 'inventario') await showInventario(db, session);
         if (t === 'historial')  await showHistorial(db, session);
+        if (t === 'usuarios')   await showStockUsuarios(db, session);
       });
     });
   } catch(e) { content.innerHTML = errHtml(); console.error(e); }
@@ -2011,4 +2014,148 @@ async function generarYAbrirPDF(memo) {
     document.body.removeChild(a);
   }
   setTimeout(() => URL.revokeObjectURL(pdfUrl), 10000);
+}
+
+// ─────────────────────────────────────────
+// STOCK POR USUARIO
+// Calcula en tiempo real desde los movimientos.
+// Salidas suman al stock del usuario responsable.
+// ─────────────────────────────────────────
+async function showStockUsuarios(db, session) {
+  setTab('usuarios');
+  const content = document.getElementById('kardex-content');
+  content.innerHTML = loading();
+
+  try {
+    // Cargar salidas e inventario en paralelo
+    const [snapSalidas, snapItems] = await Promise.all([
+      getDocs(query(collection(db, 'kardex/movimientos/salidas'), orderBy('fecha', 'desc'))),
+      getDocs(collection(db, 'kardex/inventario/items')),
+    ]);
+
+    // Mapa de items: id → datos normalizados
+    const itemMap = {};
+    snapItems.docs.forEach(d => {
+      const item = normalizeItem({ id: d.id, ...d.data() });
+      if (esValido(item)) itemMap[d.id] = item;
+    });
+
+    // Calcular stock por usuario desde movimientos
+    // stockUsuario[usuario][itemId] = cantidad acumulada
+    const stockUsuario = {};
+
+    snapSalidas.docs.forEach(d => {
+      const salida = d.data();
+      const usuario = safeStr(salida.usuarioResponsable || salida.tecnicoNombre, '');
+      if (!usuario || usuario === '—') return;
+
+      if (!stockUsuario[usuario]) stockUsuario[usuario] = {};
+
+      (salida.items || []).forEach(item => {
+        const id   = item.itemId;
+        const cant = safeNum(item.cantidad);
+        if (!id || cant <= 0) return;
+        stockUsuario[usuario][id] = (stockUsuario[usuario][id] || 0) + cant;
+      });
+    });
+
+    const usuarios = USUARIOS_RESPONSABLES.filter(u => stockUsuario[u]);
+    const usuariosConDatos = usuarios.length > 0 ? usuarios : Object.keys(stockUsuario);
+
+    if (usuariosConDatos.length === 0) {
+      content.innerHTML = `
+        <div class="bg-white rounded-xl border border-gray-200 py-12 text-center">
+          <p class="text-sm text-gray-400">Sin movimientos registrados aún</p>
+        </div>`;
+      return;
+    }
+
+    // Estado de expansión por usuario
+    const expanded = {};
+    usuariosConDatos.forEach(u => { expanded[u] = true; });
+
+    function renderUsuarios() {
+      content.innerHTML = `
+        <div class="space-y-3">
+          ${usuariosConDatos.map(usuario => {
+            const stockU = stockUsuario[usuario] || {};
+            const itemsU = Object.entries(stockU)
+              .map(([id, cant]) => ({ id, cant, item: itemMap[id] }))
+              .filter(e => e.cant > 0)
+              .sort((a,b) => {
+                const na = safeStr(a.item?.name || a.id);
+                const nb = safeStr(b.item?.name || b.id);
+                return na.localeCompare(nb);
+              });
+
+            const totalItems = itemsU.length;
+            const totalUnidades = itemsU.reduce((s,e) => s+e.cant, 0);
+            const isOpen = expanded[usuario];
+
+            return `
+            <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <!-- Header del usuario -->
+              <button data-toggle="${usuario}"
+                class="w-full flex items-center justify-between px-4 py-3.5 text-left">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm text-white shrink-0"
+                    style="background:#1B4F8A">
+                    ${usuario.slice(0,2).toUpperCase()}
+                  </div>
+                  <div>
+                    <p class="font-bold text-gray-900">${usuario}</p>
+                    <p class="text-xs text-gray-400">${totalItems} material${totalItems!==1?'es':''} · ${totalUnidades} unidad${totalUnidades!==1?'es':''}</p>
+                  </div>
+                </div>
+                <svg class="w-5 h-5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}"
+                  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              </button>
+
+              <!-- Detalle de materiales -->
+              ${isOpen ? `
+              <div class="border-t border-gray-100">
+                ${itemsU.length === 0
+                  ? '<p class="text-xs text-gray-400 text-center py-4">Sin materiales</p>'
+                  : itemsU.map(e => {
+                      const name   = safeStr(e.item?.name || e.id, '—');
+                      const sap    = safeStr(e.item?.sapCode, '');
+                      const unit   = safeStr(e.item?.unit, '');
+                      return `
+                      <div class="flex items-center justify-between px-4 py-2.5 border-b border-gray-50 last:border-0">
+                        <div class="min-w-0">
+                          <p class="text-sm font-medium text-gray-900 truncate">${name}</p>
+                          ${sap ? `<p class="text-xs text-gray-400 font-mono">SAP ${sap}</p>` : ''}
+                        </div>
+                        <div class="text-right shrink-0 ml-3">
+                          <span class="text-base font-bold text-gray-900">${e.cant}</span>
+                          <span class="text-xs text-gray-400 ml-0.5">${unit}</span>
+                        </div>
+                      </div>`;
+                    }).join('')
+                }
+              </div>` : ''}
+            </div>`;
+          }).join('')}
+
+          <!-- Nota al pie -->
+          <p class="text-xs text-gray-400 text-center pb-2">
+            Calculado desde movimientos registrados. Solo incluye salidas.
+          </p>
+        </div>`;
+
+      // Bind toggles
+      content.querySelectorAll('[data-toggle]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const u = btn.dataset.toggle;
+          expanded[u] = !expanded[u];
+          renderUsuarios();
+        });
+      });
+    }
+
+    renderUsuarios();
+
+  } catch(e) { content.innerHTML = errHtml(); console.error(e); }
 }
