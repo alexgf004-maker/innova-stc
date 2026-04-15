@@ -1,26 +1,26 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>INNOVA STC — Acceso</title>
+  <title>INNOVA STC</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/base.css" />
-  <link rel="stylesheet" href="css/pages/login.css" />
+  <link rel="stylesheet" href="css/layout.css" />
+  <link rel="stylesheet" href="css/components.css" />
   <script>
     tailwind.config = {
       theme: {
         extend: {
           colors: {
-            primary:   '#1B4F8A',
-            accent:    '#2196F3',
-            success:   '#2E7D32',
-            danger:    '#C62828',
-            surface:   '#F5F7FA',
+            primary: '#1B4F8A',
+            accent:  '#2196F3',
+            success: '#2E7D32',
+            danger:  '#C62828',
+            surface: '#F5F7FA',
           },
           fontFamily: {
             sans: ['Inter', 'system-ui', 'sans-serif'],
@@ -30,291 +30,198 @@
       }
     }
   </script>
+  <style>
+    .avatar-btn {
+      width: 32px;
+      height: 32px;
+      min-width: 32px;
+      min-height: 32px;
+      border-radius: 50%;
+      background-color: #1B4F8A;
+      color: white;
+      font-size: 11px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      border: none;
+      flex-shrink: 0;
+    }
+    .avatar-btn:hover { opacity: 0.85; }
+  </style>
 </head>
-<body class="min-h-screen bg-primary flex items-center justify-center p-4 login-bg">
+<body class="bg-surface font-sans text-gray-900">
 
-  <div class="w-full max-w-sm">
+  <div id="app-shell" class="flex h-screen overflow-hidden opacity-0 transition-opacity duration-300">
 
-    <!-- Card principal -->
-    <div class="bg-white rounded-2xl shadow-2xl overflow-hidden">
-
-      <!-- Header de la card -->
-      <div class="bg-primary px-8 py-8 text-center border-b-4 border-accent">
-        <div class="inline-flex items-center justify-center w-16 h-16 rounded-xl bg-white/10 mb-4 login-logo">
-          <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-            <path d="M4 8h6v16H4zM13 8h6l6 16h-6zM19 8h6" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
+    <!-- ── SIDEBAR (desktop) ── -->
+    <aside id="sidebar" class="hidden md:flex flex-col w-60 bg-primary text-white shrink-0 overflow-y-auto">
+      <div class="px-5 py-5 border-b border-white/10">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
+            <svg width="20" height="20" viewBox="0 0 32 32" fill="none">
+              <path d="M4 8h6v16H4zM13 8h6l6 16h-6z" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="min-w-0">
+            <p class="font-bold text-sm leading-tight">INNOVA</p>
+            <p class="text-white/50 text-xs truncate">Servicios Técnicos</p>
+          </div>
         </div>
-        <h1 class="text-white font-bold text-xl tracking-wide">INNOVA</h1>
-        <p class="text-white/60 text-sm mt-1">Servicios Técnicos y Comerciales</p>
       </div>
+      <nav id="sidebar-nav" class="flex-1 py-3 px-2 space-y-0.5"></nav>
+      <div class="px-4 py-4 border-t border-white/10">
+        <p id="sidebar-username" class="text-white/60 text-xs mb-1 truncate"></p>
+        <p id="sidebar-role" class="text-white/40 text-xs mb-3 capitalize"></p>
+        <button id="btn-logout-sidebar"
+          class="flex items-center gap-2 text-white/50 hover:text-white text-xs transition-colors">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>
+          </svg>
+          Cerrar sesión
+        </button>
+      </div>
+    </aside>
 
-      <!-- Formulario -->
-      <div class="px-8 py-8">
+    <!-- ── ÁREA PRINCIPAL ── -->
+    <div class="flex flex-col flex-1 min-w-0 overflow-hidden">
 
-        <!-- Paso 1: Username -->
-        <div id="step-username">
-          <h2 class="text-gray-800 font-semibold text-base mb-1">Iniciar sesión</h2>
-          <p class="text-gray-500 text-sm mb-6">Ingresa tu nombre de usuario</p>
+      <!-- Topbar -->
+      <header id="topbar" class="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4 shrink-0 z-10">
 
-          <div class="space-y-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1.5">Usuario</label>
-              <input
-                id="input-username"
-                type="text"
-                autocomplete="username"
-                autocapitalize="none"
-                spellcheck="false"
-                placeholder="ej. juan.perez"
-                class="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all"
-              />
+        <!-- Logo móvil -->
+        <div class="flex items-center gap-2 md:hidden">
+          <div class="w-7 h-7 rounded flex items-center justify-center" style="background-color:#1B4F8A">
+            <svg width="14" height="14" viewBox="0 0 32 32" fill="none">
+              <path d="M4 8h6v16H4zM13 8h6l6 16h-6z" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <span class="font-semibold text-sm text-gray-900">INNOVA STC</span>
+        </div>
+
+        <!-- Spacer desktop -->
+        <div class="hidden md:block"></div>
+
+        <!-- Usuario + Avatar -->
+        <div class="flex items-center gap-3">
+          <div class="text-right hidden sm:block">
+            <p id="topbar-name" class="text-sm font-medium text-gray-800 leading-tight"></p>
+            <p id="topbar-role" class="text-xs text-gray-400 capitalize"></p>
+          </div>
+
+          <!-- Avatar con menú -->
+          <div class="relative" id="avatar-wrapper">
+            <button class="avatar-btn" id="topbar-avatar">AD</button>
+            <div id="avatar-menu" class="hidden absolute right-0 top-10 bg-white border border-gray-200 rounded-xl shadow-lg py-1 z-50 w-48">
+              <div id="avatar-menu-name" class="px-4 py-2 text-xs text-gray-400 border-b border-gray-100 truncate"></div>
+              <button id="btn-logout-menu" class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>
+                </svg>
+                Cerrar sesión
+              </button>
             </div>
-
-            <div id="error-username" class="hidden text-sm text-danger bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5"></div>
-
-            <button
-              id="btn-username"
-              class="w-full bg-primary hover:bg-accent text-white font-semibold rounded-lg py-2.5 text-sm transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Continuar
-            </button>
           </div>
         </div>
 
-        <!-- Paso 2: PIN -->
-        <div id="step-pin" class="hidden">
-          <div class="flex items-center gap-2 mb-6">
-            <button id="btn-back" class="text-gray-400 hover:text-gray-700 transition-colors">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M19 12H5M12 5l-7 7 7 7"/>
-              </svg>
-            </button>
-            <div>
-              <h2 class="text-gray-800 font-semibold text-base leading-tight">Ingresa tu PIN</h2>
-              <p id="pin-username-label" class="text-gray-500 text-sm"></p>
-            </div>
-          </div>
+      </header>
 
-          <div class="space-y-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1.5">PIN</label>
-              <input
-                id="input-pin"
-                type="password"
-                inputmode="numeric"
-                maxlength="8"
-                placeholder="••••"
-                class="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-center text-2xl tracking-widest font-mono focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all"
-              />
-            </div>
-
-            <div id="error-pin" class="hidden text-sm text-danger bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5"></div>
-
-            <button
-              id="btn-pin"
-              class="w-full bg-primary hover:bg-accent text-white font-semibold rounded-lg py-2.5 text-sm transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Entrar
-            </button>
-          </div>
-        </div>
-
-        <!-- Estado de carga -->
-        <div id="step-loading" class="hidden text-center py-4">
-          <div class="inline-flex items-center gap-3 text-gray-500 text-sm">
-            <svg class="animate-spin w-5 h-5 text-accent" viewBox="0 0 24 24" fill="none">
+      <!-- Contenido principal -->
+      <main id="content-area" class="flex-1 overflow-y-auto p-4 pb-20 md:pb-6">
+        <div class="flex items-center justify-center h-full">
+          <div class="flex items-center gap-3 text-gray-400 text-sm">
+            <svg class="animate-spin w-5 h-5" viewBox="0 0 24 24" fill="none">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
             </svg>
-            Verificando...
+            Cargando...
           </div>
         </div>
-
-      </div>
+      </main>
     </div>
 
-    <p class="text-center text-white/30 text-xs mt-6">INNOVA STC · Uso interno</p>
+    <!-- ── BOTTOM NAV (móvil) ── -->
+    <nav id="bottom-nav"
+      class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around items-center px-2 py-1 z-50 safe-area-bottom">
+    </nav>
+
   </div>
+
+  <!-- Toast container -->
+  <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2 pointer-events-none"></div>
 
   <!-- Firebase CDN -->
   <script type="module">
-    import { initializeApp }               from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-    import { getAuth, signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-    import { getFirestore, collection, query, where, getDocs, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
-    import { FIREBASE_CONFIG, SEED } from './js/firebase-config.js';
-    import { hashPin, derivePassword } from './js/crypto.js';
+    import { initializeApp }  from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+    import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+    import { getFirestore }   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+    import { FIREBASE_CONFIG } from './js/firebase-config.js';
+    import { initRouter }      from './js/router.js';
+    import { initUI }          from './js/ui.js';
 
     const app  = initializeApp(FIREBASE_CONFIG);
     const auth = getAuth(app);
     const db   = getFirestore(app);
 
-    // --- Estado local del login ---
-    let currentUser = null; // { uid, internalEmail, username }
+    window.__firebase = { app, auth, db };
 
-    // --- Elementos del DOM ---
-    const stepUsername = document.getElementById('step-username');
-    const stepPin      = document.getElementById('step-pin');
-    const stepLoading  = document.getElementById('step-loading');
-    const inputUsername = document.getElementById('input-username');
-    const inputPin      = document.getElementById('input-pin');
-    const btnUsername   = document.getElementById('btn-username');
-    const btnPin        = document.getElementById('btn-pin');
-    const btnBack       = document.getElementById('btn-back');
-    const errorUsername = document.getElementById('error-username');
-    const errorPin      = document.getElementById('error-pin');
-    const pinLabel      = document.getElementById('pin-username-label');
-
-    // --- Helpers UI ---
-    function showStep(step) {
-      stepUsername.classList.add('hidden');
-      stepPin.classList.add('hidden');
-      stepLoading.classList.add('hidden');
-      step.classList.remove('hidden');
-    }
-
-    function showError(el, msg) {
-      el.textContent = msg;
-      el.classList.remove('hidden');
-    }
-
-    function hideError(el) {
-      el.classList.add('hidden');
-    }
-
-    function setLoading(btn, loading) {
-      btn.disabled = loading;
-      if (loading) showStep(stepLoading);
-    }
-
-    // --- Paso 1: validar username ---
-    async function handleUsername() {
-      const username = inputUsername.value.trim().toLowerCase();
-      if (!username) return;
-
-      hideError(errorUsername);
-      setLoading(btnUsername, true);
-
-      try {
-        // Busca solo los campos mínimos necesarios para el login.
-        // La Security Rule permite leer SOLO username, uid e internalEmail
-        // a cualquier usuario autenticado o anónimo en esta consulta.
-        const q    = query(collection(db, 'users'), where('username', '==', username));
-        const snap = await getDocs(q);
-
-        if (snap.empty) {
-          showStep(stepUsername);
-          showError(errorUsername, 'Usuario no encontrado.');
-          return;
-        }
-
-        const data = snap.docs[0].data();
-
-        if (!data.active) {
-          showStep(stepUsername);
-          showError(errorUsername, 'Usuario inactivo. Contacta al administrador.');
-          return;
-        }
-
-        currentUser = {
-          uid:           data.uid,
-          internalEmail: data.internalEmail,
-          username:      data.username,
-        };
-
-        pinLabel.textContent = username;
-        showStep(stepPin);
-        inputPin.focus();
-
-      } catch (err) {
-        showStep(stepUsername);
-        showError(errorUsername, 'Error al conectar. Intenta de nuevo.');
-        console.error(err);
+    const sessionRaw = sessionStorage.getItem('innova_session');
+    if (!sessionRaw) {
+      window.location.href = 'login.html';
+    } else {
+      const session = JSON.parse(sessionRaw);
+      if (!session.pinVerified) {
+        window.location.href = 'login.html';
+      } else {
+        window.__session = session;
+        initApp(session);
       }
     }
 
-    // --- Paso 2: validar PIN ---
-    async function handlePin() {
-      const pinInput = inputPin.value.replace(/\D/g, '');
-      if (pinInput.length < 4) return;
+    function initApp(session) {
+      // Iniciales del avatar
+      const initials = session.displayName
+        .split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
 
-      hideError(errorPin);
-      setLoading(btnPin, true);
+      document.getElementById('sidebar-username').textContent = session.displayName;
+      document.getElementById('sidebar-role').textContent     = session.role;
+      document.getElementById('topbar-name').textContent      = session.displayName;
+      document.getElementById('topbar-role').textContent      = session.role;
+      document.getElementById('topbar-avatar').textContent    = initials;
+      document.getElementById('avatar-menu-name').textContent = session.displayName;
 
-      try {
-        // Derivar contraseña interna única por usuario
-        const internalPass = await derivePassword(currentUser.uid, SEED);
+      initUI();
+      initRouter(session);
 
-        // Autenticar con Firebase Auth
-        await signInWithEmailAndPassword(auth, currentUser.internalEmail, internalPass);
+      document.getElementById('app-shell').classList.remove('opacity-0');
 
-        // Leer perfil completo (ya autenticado, la regla permite leer /users/{uid})
-        const snap = await getDoc(doc(db, 'users', currentUser.uid));
-        if (!snap.exists()) throw new Error('Perfil no encontrado.');
-
-        const profile = snap.data();
-
-        if (!profile.active) {
-          await signOut(auth);
-          showStep(stepPin);
-          showError(errorPin, 'Usuario inactivo.');
-          return;
-        }
-
-        // Verificar PIN
-        const computed = await hashPin(profile.pinSalt, pinInput);
-        if (computed !== profile.pinHash) {
-          await signOut(auth);
-          inputPin.value = '';
-          showStep(stepPin);
-          showError(errorPin, 'PIN incorrecto.');
-          return;
-        }
-
-        // Sesión válida — guardar perfil en sessionStorage
-        sessionStorage.setItem('innova_session', JSON.stringify({
-          uid:                      profile.uid,
-          username:                 profile.username,
-          displayName:              profile.displayName,
-          role:                     profile.role,
-          usuarioOperativoAsignado: profile.usuarioOperativoAsignado || null,
-          pinVerified:              true,
-        }));
-
-        window.location.href = 'index.html';
-
-      } catch (err) {
-        await signOut(auth).catch(() => {});
-        inputPin.value = '';
-        showStep(stepPin);
-        showError(errorPin, 'Error de autenticación. Intenta de nuevo.');
-        console.error(err);
+      async function handleLogout() {
+        try { await signOut(auth); } catch (_) {}
+        sessionStorage.removeItem('innova_session');
+        window.location.href = 'login.html';
       }
+
+      document.getElementById('btn-logout-sidebar').addEventListener('click', handleLogout);
+      document.getElementById('btn-logout-menu').addEventListener('click', handleLogout);
+
+      // Abrir/cerrar menú del avatar
+      document.getElementById('topbar-avatar').addEventListener('click', (e) => {
+        e.stopPropagation();
+        document.getElementById('avatar-menu').classList.toggle('hidden');
+      });
+
+      document.addEventListener('click', () => {
+        document.getElementById('avatar-menu').classList.add('hidden');
+      });
+
+      onAuthStateChanged(auth, (user) => {
+        if (!user) {
+          sessionStorage.removeItem('innova_session');
+          window.location.href = 'login.html';
+        }
+      });
     }
-
-    // --- Eventos ---
-    btnUsername.addEventListener('click', handleUsername);
-    inputUsername.addEventListener('keydown', e => { if (e.key === 'Enter') handleUsername(); });
-
-    btnPin.addEventListener('click', handlePin);
-    inputPin.addEventListener('keydown', e => { if (e.key === 'Enter') handlePin(); });
-    inputPin.addEventListener('input', e => {
-      e.target.value = e.target.value.replace(/\D/g, '').slice(0, 8);
-    });
-
-    btnBack.addEventListener('click', () => {
-      currentUser = null;
-      inputPin.value = '';
-      hideError(errorPin);
-      showStep(stepUsername);
-      inputUsername.focus();
-    });
-
-    // Si ya hay sesión activa, redirigir
-    const existing = sessionStorage.getItem('innova_session');
-    if (existing) window.location.href = 'index.html';
-
-    inputUsername.focus();
   </script>
 
 </body>
