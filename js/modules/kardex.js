@@ -68,32 +68,36 @@ export async function initKardex(session) {
 // SHELL
 // ─────────────────────────────────────────
 function renderShell(container, session) {
-  const canEdit = ['admin','coordinadora'].includes(session.role);
-  container.innerHTML = `
-    <div class="space-y-4">
-      <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-xl font-semibold text-gray-900">Kardex</h1>
-          <p class="text-sm text-gray-500 mt-0.5">Control de materiales</p>
-        </div>
-        ${canEdit ? `
-        <button id="btn-nueva-salida"
-          class="inline-flex items-center gap-2 text-white text-sm font-medium px-4 py-2.5 rounded-lg"
-          style="background-color:#1B4F8A">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
-          Nueva salida
-        </button>` : ''}
-      </div>
-      <div class="flex gap-1 bg-gray-100 rounded-xl p-1">
-        <button data-tab="dashboard"  class="ktab flex-1 py-2 text-sm font-medium rounded-lg transition-colors">Inicio</button>
-        <button data-tab="inventario" class="ktab flex-1 py-2 text-sm font-medium rounded-lg transition-colors">Inventario</button>
-        <button data-tab="historial"  class="ktab flex-1 py-2 text-sm font-medium rounded-lg transition-colors">Historial</button>
-        <button data-tab="usuarios"   class="ktab flex-1 py-2 text-sm font-medium rounded-lg transition-colors">Usuarios</button>
-      </div>
-      <div id="kardex-content"></div>
-    </div>`;
+  const canEdit  = ['admin','coordinadora'].includes(session.role);
+  const isCampo  = session.role === 'campo';
+
+  // Tabs por rol
+  const tabsAdmin = `
+    <button data-tab="dashboard"  class="ktab flex-1 py-2 text-xs font-medium rounded-lg transition-colors">Inicio</button>
+    <button data-tab="inventario" class="ktab flex-1 py-2 text-xs font-medium rounded-lg transition-colors">Inventario</button>
+    <button data-tab="historial"  class="ktab flex-1 py-2 text-xs font-medium rounded-lg transition-colors">Historial</button>
+    <button data-tab="usuarios"   class="ktab flex-1 py-2 text-xs font-medium rounded-lg transition-colors">Usuarios</button>
+    <button data-tab="solicitudes" class="ktab flex-1 py-2 text-xs font-medium rounded-lg transition-colors">Pedidos</button>`;
+
+  const tabsCampo = `
+    <button data-tab="dashboard"   class="ktab flex-1 py-2 text-sm font-medium rounded-lg transition-colors">Inicio</button>
+    <button data-tab="solicitar"   class="ktab flex-1 py-2 text-sm font-medium rounded-lg transition-colors">Solicitar</button>
+    <button data-tab="mis-pedidos" class="ktab flex-1 py-2 text-sm font-medium rounded-lg transition-colors">Mis pedidos</button>`;
+
+  container.innerHTML =
+    '<div class="space-y-4">' +
+      '<div class="flex items-center justify-between">' +
+        '<div>' +
+          '<h1 class="text-xl font-semibold text-gray-900">Kardex</h1>' +
+          '<p class="text-sm text-gray-500 mt-0.5">Control de materiales</p>' +
+        '</div>' +
+        (canEdit ? '<button id="btn-nueva-salida" class="inline-flex items-center gap-2 text-white text-sm font-medium px-4 py-2.5 rounded-lg" style="background-color:#1B4F8A"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Nueva salida</button>' : '') +
+      '</div>' +
+      '<div class="flex gap-1 bg-gray-100 rounded-xl p-1">' +
+        (isCampo ? tabsCampo : tabsAdmin) +
+      '</div>' +
+      '<div id="kardex-content"></div>' +
+    '</div>';
 }
 
 function setTab(tab) {
@@ -109,10 +113,13 @@ function bindNav(db, session) {
   document.querySelectorAll('.ktab').forEach(b => {
     b.addEventListener('click', async () => {
       const t = b.dataset.tab;
-      if (t === 'dashboard')  await showDashboard(db, session);
-      if (t === 'inventario') await showInventario(db, session);
-      if (t === 'historial')  await showHistorial(db, session);
-      if (t === 'usuarios')   await showStockUsuarios(db, session);
+      if (t === 'dashboard')   await showDashboard(db, session);
+      if (t === 'inventario')  await showInventario(db, session);
+      if (t === 'historial')   await showHistorial(db, session);
+      if (t === 'usuarios')    await showStockUsuarios(db, session);
+      if (t === 'solicitudes') await showSolicitudes(db, session);
+      if (t === 'solicitar')   await showSolicitarMaterial(db, session);
+      if (t === 'mis-pedidos') await showMisSolicitudes(db, session);
     });
   });
   document.getElementById('btn-nueva-salida')?.addEventListener('click', () => showFormSalida(db, session));
@@ -207,10 +214,13 @@ async function showDashboard(db, session) {
     document.querySelectorAll('.ktab').forEach(b => {
       b.addEventListener('click', async () => {
         const t = b.dataset.tab;
-        if (t === 'dashboard')  await showDashboard(db, session);
-        if (t === 'inventario') await showInventario(db, session);
-        if (t === 'historial')  await showHistorial(db, session);
-        if (t === 'usuarios')   await showStockUsuarios(db, session);
+        if (t === 'dashboard')   await showDashboard(db, session);
+        if (t === 'inventario')  await showInventario(db, session);
+        if (t === 'historial')   await showHistorial(db, session);
+        if (t === 'usuarios')    await showStockUsuarios(db, session);
+        if (t === 'solicitudes') await showSolicitudes(db, session);
+        if (t === 'solicitar')   await showSolicitarMaterial(db, session);
+        if (t === 'mis-pedidos') await showMisSolicitudes(db, session);
       });
     });
   } catch(e) { content.innerHTML = errHtml(); console.error(e); }
@@ -2232,6 +2242,395 @@ async function showStockUsuarios(db, session) {
     }
 
     renderUsuarios();
+
+  } catch(e) { content.innerHTML = errHtml(); console.error(e); }
+}
+
+// ─────────────────────────────────────────
+// SOLICITAR MATERIAL (vista campo)
+// ─────────────────────────────────────────
+async function showSolicitarMaterial(db, session) {
+  setTab('solicitar');
+  const content = document.getElementById('kardex-content');
+  content.innerHTML = loading();
+
+  try {
+    const snapItems = await getDocs(collection(db, 'kardex/inventario/items'));
+    const items = snapItems.docs
+      .map(d => normalizeItem({ id: d.id, ...d.data() }))
+      .filter(i => esValido(i) && safeNum(i.stock) > 0)
+      .sort((a,b) => safeStr(a.name).localeCompare(safeStr(b.name)));
+
+    let sel  = [];   // { itemId, name, unit, stock, cantidad }
+    let busq = '';
+
+    function tc(str) {
+      return safeStr(str).toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+    }
+
+    function render() {
+      const html =
+        '<div class="space-y-4">' +
+
+          // Carrito
+          '<div>' +
+            '<div class="flex items-center justify-between mb-2">' +
+              '<p class="text-sm font-semibold text-gray-700">Tu pedido</p>' +
+              (sel.length > 0 ? '<span class="text-xs font-bold px-2 py-0.5 rounded-full text-white" style="background:#1B4F8A">' + sel.length + '</span>' : '') +
+            '</div>' +
+            (sel.length === 0
+              ? '<div class="border-2 border-dashed border-gray-200 rounded-2xl py-6 text-center"><p class="text-sm text-gray-400">Busca materiales abajo y tócalos para agregar</p></div>'
+              : '<div class="space-y-2">' + sel.map(function(s, idx) {
+                  return '<div class="bg-white rounded-2xl border-2 border-blue-200 px-4 py-3 flex items-center gap-3">' +
+                    '<div class="flex-1 min-w-0">' +
+                      '<p class="text-sm font-semibold text-gray-900 truncate">' + tc(s.name) + '</p>' +
+                      '<p class="text-xs text-gray-400">' + s.stock + ' ' + safeStr(s.unit,'') + ' disponibles</p>' +
+                    '</div>' +
+                    '<div class="flex items-center gap-1.5 shrink-0">' +
+                      '<button data-dec="' + idx + '" class="w-8 h-8 rounded-xl border border-gray-300 bg-gray-50 text-lg font-bold text-gray-500 flex items-center justify-center">−</button>' +
+                      '<span class="w-8 text-center text-base font-bold text-gray-900">' + s.cantidad + '</span>' +
+                      '<button data-inc="' + idx + '" class="w-8 h-8 rounded-xl border border-blue-300 bg-blue-50 text-lg font-bold text-blue-600 flex items-center justify-center ' + (s.cantidad >= s.stock ? 'opacity-40 cursor-not-allowed' : '') + '" ' + (s.cantidad >= s.stock ? 'disabled' : '') + '>+</button>' +
+                    '</div>' +
+                    '<button data-del="' + idx + '" class="w-7 h-7 rounded-xl bg-red-50 flex items-center justify-center shrink-0"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' +
+                  '</div>';
+                }).join('') + '</div>'
+            ) +
+          '</div>' +
+
+          // Buscador
+          '<div>' +
+            '<p class="text-sm font-semibold text-gray-700 mb-2">Materiales disponibles</p>' +
+            '<div class="relative mb-2">' +
+              '<svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' +
+              '<input id="sol-buscar" type="text" value="' + busq + '" placeholder="Buscar material..." autocomplete="off" class="w-full bg-white border-2 border-gray-200 rounded-2xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-blue-400"/>' +
+            '</div>' +
+            '<div id="sol-lista" class="space-y-1.5"></div>' +
+          '</div>' +
+
+          // Error
+          '<div id="sol-err" class="hidden text-sm text-red-600 text-center"></div>' +
+
+          // Botón
+          '<button id="sol-submit" class="w-full font-bold rounded-2xl py-4 text-sm text-white transition-all" style="background:' + (sel.length > 0 ? '#1B4F8A' : '#D1D5DB') + '" ' + (sel.length === 0 ? 'disabled' : '') + '>' +
+            (sel.length > 0 ? 'Enviar solicitud · ' + sel.length + ' material' + (sel.length !== 1 ? 'es' : '') : 'Selecciona materiales para continuar') +
+          '</button>' +
+
+        '</div>';
+
+      content.innerHTML = html;
+
+      // Carrito events
+      content.querySelectorAll('[data-dec]').forEach(function(b) {
+        b.onclick = function() { if (sel[+b.dataset.dec].cantidad > 1) { sel[+b.dataset.dec].cantidad--; render(); } };
+      });
+      content.querySelectorAll('[data-inc]').forEach(function(b) {
+        b.onclick = function() { if (sel[+b.dataset.inc].cantidad < sel[+b.dataset.inc].stock) { sel[+b.dataset.inc].cantidad++; render(); } };
+      });
+      content.querySelectorAll('[data-del]').forEach(function(b) {
+        b.onclick = function() { sel.splice(+b.dataset.del, 1); render(); };
+      });
+
+      // Buscador
+      content.querySelector('#sol-buscar').addEventListener('input', function(e) {
+        busq = e.target.value;
+        renderLista();
+      });
+
+      // Submit
+      content.querySelector('#sol-submit').addEventListener('click', handleEnviar);
+
+      renderLista();
+    }
+
+    function renderLista() {
+      const el = content.querySelector('#sol-lista');
+      if (!el) return;
+      const selIds = new Set(sel.map(function(s) { return s.itemId; }));
+      const q = busq.trim().toLowerCase();
+      const lista = q
+        ? items.filter(function(i) { return safeStr(i.name).toLowerCase().includes(q); })
+        : items;
+
+      if (!lista.length) {
+        el.innerHTML = '<p class="text-sm text-gray-400 text-center py-4">Sin resultados</p>';
+        return;
+      }
+
+      el.innerHTML = lista.map(function(item) {
+        const agregado = selIds.has(item.id);
+        const stockColor = safeNum(item.stock) <= safeNum(item.minStock || 5) ? '#E65100' : '#374151';
+        return '<button data-item="' + item.id + '" ' + (agregado ? 'disabled' : '') + ' class="w-full flex items-center justify-between gap-3 text-left px-4 py-3 rounded-2xl border-2 ' + (agregado ? 'border-green-200 bg-green-50 cursor-not-allowed' : 'border-gray-200 bg-white active:border-blue-400 active:bg-blue-50') + '">' +
+          '<p class="text-sm font-semibold truncate ' + (agregado ? 'text-green-700' : 'text-gray-900') + '">' + tc(item.name) + '</p>' +
+          (agregado
+            ? '<span class="text-xs font-bold text-green-600 shrink-0">✓</span>'
+            : '<span class="text-sm font-bold shrink-0" style="color:' + stockColor + '">' + item.stock + ' <span class="text-xs font-normal text-gray-400">' + safeStr(item.unit,'') + '</span></span>'
+          ) +
+        '</button>';
+      }).join('');
+
+      el.querySelectorAll('[data-item]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          const item = items.find(function(i) { return i.id === btn.dataset.item; });
+          if (!item || sel.some(function(s) { return s.itemId === item.id; })) return;
+          showModalCantidadSol(item);
+        });
+      });
+    }
+
+    function showModalCantidadSol(item) {
+      const modal = document.createElement('div');
+      modal.className = 'fixed inset-0 bg-black/50 flex items-end z-50';
+      modal.innerHTML =
+        '<div class="bg-white w-full rounded-t-3xl px-5 pt-5 pb-8 space-y-4">' +
+          '<div class="w-10 h-1 bg-gray-200 rounded-full mx-auto"></div>' +
+          '<div>' +
+            '<p class="font-bold text-gray-900 text-lg">' + tc(item.name) + '</p>' +
+            '<p class="text-sm text-gray-400">' + item.stock + ' ' + safeStr(item.unit,'') + ' disponibles</p>' +
+          '</div>' +
+          '<div class="flex items-center justify-between gap-4">' +
+            '<button id="mcs-dec" class="w-16 h-16 rounded-2xl border-2 border-gray-200 bg-gray-50 text-3xl font-bold text-gray-400 flex items-center justify-center">−</button>' +
+            '<div class="flex-1 text-center">' +
+              '<input id="mcs-cant" type="number" min="1" max="' + item.stock + '" value="1" class="w-full text-center text-5xl font-black text-gray-900 bg-transparent border-none focus:outline-none"/>' +
+              '<p class="text-sm text-gray-400">' + safeStr(item.unit,'') + '</p>' +
+            '</div>' +
+            '<button id="mcs-inc" class="w-16 h-16 rounded-2xl border-2 border-blue-300 bg-blue-50 text-3xl font-bold text-blue-600 flex items-center justify-center">+</button>' +
+          '</div>' +
+          '<div id="mcs-err" class="hidden text-sm text-red-500 text-center"></div>' +
+          '<button id="mcs-add" class="w-full text-white font-bold rounded-2xl py-4" style="background:#1B4F8A">Agregar al pedido</button>' +
+        '</div>';
+      document.body.appendChild(modal);
+
+      const cantEl = modal.querySelector('#mcs-cant');
+      setTimeout(function() { cantEl.focus(); cantEl.select(); }, 80);
+
+      modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+      modal.querySelector('#mcs-dec').onclick = function() { const v=safeNum(cantEl.value); if(v>1) cantEl.value=v-1; };
+      modal.querySelector('#mcs-inc').onclick = function() { const v=safeNum(cantEl.value); if(v<item.stock) cantEl.value=v+1; };
+
+      modal.querySelector('#mcs-add').addEventListener('click', function() {
+        const cant  = safeNum(cantEl.value);
+        const errEl = modal.querySelector('#mcs-err');
+        if (cant <= 0)         { errEl.textContent='Ingresa una cantidad mayor a 0.'; errEl.classList.remove('hidden'); return; }
+        if (cant > item.stock) { errEl.textContent='Máximo: ' + item.stock + ' ' + safeStr(item.unit,''); errEl.classList.remove('hidden'); return; }
+        sel.push({ itemId:item.id, name:item.name, unit:item.unit, stock:item.stock, cantidad:cant });
+        modal.remove();
+        render();
+      });
+    }
+
+    async function handleEnviar() {
+      if (!sel.length) return;
+      const btn   = content.querySelector('#sol-submit');
+      const errEl = content.querySelector('#sol-err');
+      errEl.classList.add('hidden');
+      btn.disabled = true;
+      btn.textContent = 'Enviando...';
+
+      try {
+        await addDoc(collection(db, 'solicitudes_material'), {
+          usuarioUid:    session.uid,
+          usuarioNombre: session.displayName,
+          usuarioRole:   session.role,
+          materiales: sel.map(function(s) {
+            return { itemId:s.itemId, nombre:s.name, unit:s.unit, cantidad:s.cantidad };
+          }),
+          estado:    'pendiente',
+          fecha:     serverTimestamp(),
+          notas:     '',
+        });
+        showToast('Solicitud enviada correctamente.', 'success');
+        sel = [];
+        render();
+      } catch(e) {
+        errEl.textContent = 'Error al enviar. Intenta de nuevo.';
+        errEl.classList.remove('hidden');
+        btn.disabled = false;
+        btn.textContent = 'Enviar solicitud · ' + sel.length + ' material' + (sel.length !== 1 ? 'es' : '');
+        console.error(e);
+      }
+    }
+
+    render();
+
+  } catch(e) { content.innerHTML = errHtml(); console.error(e); }
+}
+
+// ─────────────────────────────────────────
+// MIS SOLICITUDES (vista campo)
+// ─────────────────────────────────────────
+async function showMisSolicitudes(db, session) {
+  setTab('mis-pedidos');
+  const content = document.getElementById('kardex-content');
+  content.innerHTML = loading();
+
+  try {
+    const snap = await getDocs(query(
+      collection(db, 'solicitudes_material'),
+      where('usuarioUid', '==', session.uid),
+      orderBy('fecha', 'desc')
+    ));
+    const solicitudes = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+
+    const ESTADO_BADGE = {
+      pendiente:  { label: 'Pendiente',  bg: '#FEF3C7', color: '#B45309' },
+      aprobado:   { label: 'Aprobado',   bg: '#DCFCE7', color: '#166534' },
+      rechazado:  { label: 'Rechazado',  bg: '#FEE2E2', color: '#C62828' },
+    };
+
+    function tc(str) {
+      return safeStr(str).toLowerCase().replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+    }
+
+    if (!solicitudes.length) {
+      content.innerHTML =
+        '<div class="bg-white rounded-xl border border-gray-200 py-12 text-center space-y-2">' +
+          '<p class="text-2xl">📦</p>' +
+          '<p class="text-sm font-medium text-gray-600">Sin solicitudes aún</p>' +
+          '<p class="text-xs text-gray-400">Usa la pestaña "Solicitar" para pedir materiales</p>' +
+        '</div>';
+      return;
+    }
+
+    const rows = solicitudes.map(function(s) {
+      const badge = ESTADO_BADGE[s.estado] || ESTADO_BADGE.pendiente;
+      const mats  = (s.materiales || []).map(function(m) {
+        return '<span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">' + m.cantidad + ' ' + tc(m.nombre) + '</span>';
+      }).join(' ');
+      return '<div class="px-4 py-3 border-b border-gray-100 last:border-0">' +
+        '<div class="flex items-center justify-between mb-1.5">' +
+          '<p class="text-xs text-gray-400">' + fmtDate(s.fecha) + '</p>' +
+          '<span class="text-xs font-semibold px-2 py-0.5 rounded-full" style="background:' + badge.bg + ';color:' + badge.color + '">' + badge.label + '</span>' +
+        '</div>' +
+        '<div class="flex flex-wrap gap-1">' + mats + '</div>' +
+        (s.notas ? '<p class="text-xs text-gray-500 mt-1 italic">' + s.notas + '</p>' : '') +
+      '</div>';
+    }).join('');
+
+    content.innerHTML =
+      '<div class="bg-white rounded-xl border border-gray-200 overflow-hidden">' +
+        '<div class="px-4 py-3 border-b border-gray-100">' +
+          '<p class="font-semibold text-sm text-gray-900">Mis solicitudes</p>' +
+          '<p class="text-xs text-gray-400 mt-0.5">' + solicitudes.length + ' registro(s)</p>' +
+        '</div>' +
+        rows +
+      '</div>';
+
+  } catch(e) { content.innerHTML = errHtml(); console.error(e); }
+}
+
+// ─────────────────────────────────────────
+// GESTIÓN DE SOLICITUDES (vista admin/coordinadora)
+// ─────────────────────────────────────────
+async function showSolicitudes(db, session) {
+  setTab('solicitudes');
+  const content = document.getElementById('kardex-content');
+  content.innerHTML = loading();
+
+  try {
+    const snap = await getDocs(query(
+      collection(db, 'solicitudes_material'),
+      orderBy('fecha', 'desc')
+    ));
+    const solicitudes = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+
+    const ESTADO_BADGE = {
+      pendiente: { label: 'Pendiente', bg: '#FEF3C7', color: '#B45309' },
+      aprobado:  { label: 'Aprobado',  bg: '#DCFCE7', color: '#166534' },
+      rechazado: { label: 'Rechazado', bg: '#FEE2E2', color: '#C62828' },
+    };
+
+    const pendientes = solicitudes.filter(function(s) { return s.estado === 'pendiente'; });
+
+    function tc(str) {
+      return safeStr(str).toLowerCase().replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+    }
+
+    function renderSolicitudes() {
+      const pendientesBadge = pendientes.length > 0
+        ? ' <span class="ml-1 text-xs font-bold px-1.5 py-0.5 rounded-full text-white" style="background:#C62828">' + pendientes.length + '</span>'
+        : '';
+
+      const rows = solicitudes.map(function(s) {
+        const badge = ESTADO_BADGE[s.estado] || ESTADO_BADGE.pendiente;
+        const mats  = (s.materiales || []).map(function(m) {
+          return '<div class="flex items-center justify-between py-1">' +
+            '<p class="text-sm text-gray-800">' + tc(m.nombre) + '</p>' +
+            '<p class="text-sm font-bold text-gray-900">' + m.cantidad + ' <span class="text-xs font-normal text-gray-400">' + safeStr(m.unit,'') + '</span></p>' +
+          '</div>';
+        }).join('');
+
+        const acciones = s.estado === 'pendiente'
+          ? '<div class="flex gap-2 mt-3">' +
+              '<button data-rechazar="' + s.id + '" class="flex-1 border border-red-200 text-red-600 font-medium rounded-xl py-2.5 text-sm bg-red-50 active:bg-red-100">Rechazar</button>' +
+              '<button data-aprobar="' + s.id + '" class="flex-1 text-white font-semibold rounded-xl py-2.5 text-sm active:opacity-90" style="background:#166534">✓ Aprobar</button>' +
+            '</div>'
+          : '';
+
+        return '<div class="px-4 py-4 border-b border-gray-100 last:border-0">' +
+          '<div class="flex items-center justify-between mb-2">' +
+            '<div>' +
+              '<p class="font-bold text-gray-900">' + safeStr(s.usuarioNombre) + '</p>' +
+              '<p class="text-xs text-gray-400">' + fmtDate(s.fecha) + '</p>' +
+            '</div>' +
+            '<span class="text-xs font-semibold px-2 py-1 rounded-full" style="background:' + badge.bg + ';color:' + badge.color + '">' + badge.label + '</span>' +
+          '</div>' +
+          '<div class="border border-gray-100 rounded-xl px-3 py-1 bg-gray-50">' + mats + '</div>' +
+          (s.notas ? '<p class="text-xs text-gray-500 mt-2 italic">' + s.notas + '</p>' : '') +
+          acciones +
+        '</div>';
+      }).join('');
+
+      content.innerHTML =
+        '<div class="space-y-3">' +
+          '<div class="bg-white rounded-xl border border-gray-200 overflow-hidden">' +
+            '<div class="px-4 py-3 border-b border-gray-100 flex items-center">' +
+              '<p class="font-semibold text-sm text-gray-900">Solicitudes de material' + pendientesBadge + '</p>' +
+            '</div>' +
+            (solicitudes.length === 0
+              ? '<p class="text-sm text-gray-400 text-center py-10">Sin solicitudes aún</p>'
+              : rows
+            ) +
+          '</div>' +
+        '</div>';
+
+      // Aprobar
+      content.querySelectorAll('[data-aprobar]').forEach(function(btn) {
+        btn.addEventListener('click', async function() {
+          btn.disabled = true;
+          btn.textContent = 'Aprobando...';
+          try {
+            await updateDoc(doc(db, 'solicitudes_material', btn.dataset.aprobar), {
+              estado: 'aprobado',
+              aprobadoPor: session.uid,
+              aprobadoPorNombre: session.displayName,
+              fechaAprobacion: serverTimestamp(),
+            });
+            showToast('Solicitud aprobada.', 'success');
+            await showSolicitudes(db, session);
+          } catch(e) { showToast('Error al aprobar.', 'error'); btn.disabled = false; btn.textContent = '✓ Aprobar'; }
+        });
+      });
+
+      // Rechazar
+      content.querySelectorAll('[data-rechazar]').forEach(function(btn) {
+        btn.addEventListener('click', async function() {
+          btn.disabled = true;
+          btn.textContent = 'Rechazando...';
+          try {
+            await updateDoc(doc(db, 'solicitudes_material', btn.dataset.rechazar), {
+              estado: 'rechazado',
+              rechazadoPor: session.uid,
+              rechazadoPorNombre: session.displayName,
+              fechaRespuesta: serverTimestamp(),
+            });
+            showToast('Solicitud rechazada.', 'success');
+            await showSolicitudes(db, session);
+          } catch(e) { showToast('Error.', 'error'); btn.disabled = false; btn.textContent = 'Rechazar'; }
+        });
+      });
+    }
+
+    renderSolicitudes();
 
   } catch(e) { content.innerHTML = errHtml(); console.error(e); }
 }
