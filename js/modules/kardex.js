@@ -309,18 +309,23 @@ async function showDashboardCampo(db, session) {
       .filter(function(e) { return e.cant > 0 && e.item; })
       .sort(function(a, b) { return safeStr(a.item.name).localeCompare(safeStr(b.item.name)); });
 
-    // Solicitudes recientes del usuario
-    const snapSol = await getDocs(query(
-      collection(db, 'solicitudes_material'),
-      where('usuarioUid', '==', session.uid),
-      orderBy('fecha', 'desc')
-    ));
-    const solRecientes = snapSol.docs.slice(0, 3).map(function(d) {
-      return Object.assign({ id: d.id }, d.data());
-    });
-    const solPendientes = snapSol.docs.filter(function(d) {
-      return d.data().estado === 'pendiente';
-    }).length;
+    // Solicitudes recientes del usuario (sin orderBy para evitar índice compuesto)
+    let solRecientes = [];
+    let solPendientes = 0;
+    try {
+      const snapSol = await getDocs(query(
+        collection(db, 'solicitudes_material'),
+        where('usuarioUid', '==', session.uid)
+      ));
+      const todas = snapSol.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+      todas.sort(function(a, b) {
+        const fa = a.fecha?.seconds || 0;
+        const fb = b.fecha?.seconds || 0;
+        return fb - fa;
+      });
+      solRecientes  = todas.slice(0, 3);
+      solPendientes = todas.filter(function(d) { return d.estado === 'pendiente'; }).length;
+    } catch(solErr) { console.warn('No se pudieron cargar solicitudes:', solErr); }
 
     const ESTADO_BADGE = {
       pendiente: { label: 'Pendiente', bg: '#FEF3C7', color: '#B45309' },
@@ -2667,10 +2672,11 @@ async function showMisSolicitudes(db, session) {
   try {
     const snap = await getDocs(query(
       collection(db, 'solicitudes_material'),
-      where('usuarioUid', '==', session.uid),
-      orderBy('fecha', 'desc')
+      where('usuarioUid', '==', session.uid)
     ));
-    const solicitudes = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+    const solicitudes = snap.docs
+      .map(function(d) { return Object.assign({ id: d.id }, d.data()); })
+      .sort(function(a, b) { return (b.fecha?.seconds||0) - (a.fecha?.seconds||0); });
 
     const ESTADO_BADGE = {
       pendiente:  { label: 'Pendiente',  bg: '#FEF3C7', color: '#B45309' },
