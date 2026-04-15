@@ -357,20 +357,30 @@ async function showDashboardCampo(db, session) {
     // Mi material
     if (misItems.length > 0) {
       html += '<div class="bg-white rounded-xl border border-gray-200 overflow-hidden">' +
-        '<div class="px-4 py-3 border-b border-gray-100">' +
+        '<div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">' +
           '<p class="font-semibold text-sm text-gray-900">Mi material</p>' +
+          '<span class="text-xs text-gray-400">' + misItems.length + ' ítem' + (misItems.length !== 1 ? 's' : '') + '</span>' +
         '</div>' +
-        '<div class="divide-y divide-gray-50">' +
-        misItems.slice(0, 5).map(function(e) {
-          return '<div class="flex items-center justify-between px-4 py-2.5">' +
-            '<p class="text-sm text-gray-900 truncate">' + tc(e.item.name) + '</p>' +
-            '<div class="text-right shrink-0 ml-3">' +
-              '<span class="text-base font-bold text-gray-900">' + e.cant + '</span>' +
-              '<span class="text-xs text-gray-400 ml-0.5">' + safeStr(e.item.unit,'') + '</span>' +
+        '<div class="px-3 py-2 space-y-1.5">' +
+        misItems.slice(0, 8).map(function(e) {
+          const sap = safeStr(e.item.sapCode, '');
+          const unit = safeStr(e.item.unit, '');
+          return '<div class="flex items-center gap-3 px-3 py-3 rounded-xl bg-gray-50">' +
+            // Cantidad — destacada a la izquierda
+            '<div class="shrink-0 w-14 text-center">' +
+              '<p class="text-2xl font-black leading-none" style="color:#1B4F8A">' + e.cant + '</p>' +
+              '<p class="text-xs text-gray-400 mt-0.5">' + unit + '</p>' +
+            '</div>' +
+            // Separador vertical
+            '<div class="w-px self-stretch bg-gray-200 shrink-0"></div>' +
+            // Nombre y SAP
+            '<div class="flex-1 min-w-0">' +
+              '<p class="text-sm font-semibold text-gray-900 leading-snug" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">' + tc(e.item.name) + '</p>' +
+              (sap ? '<p class="text-xs text-gray-400 font-mono mt-0.5">SAP ' + sap + '</p>' : '') +
             '</div>' +
           '</div>';
         }).join('') +
-        (misItems.length > 5 ? '<div class="px-4 py-2 text-xs text-gray-400 text-center">+' + (misItems.length - 5) + ' más</div>' : '') +
+        (misItems.length > 8 ? '<p class="text-xs text-gray-400 text-center py-2">+' + (misItems.length - 8) + ' materiales más</p>' : '') +
         '</div>' +
       '</div>';
     }
