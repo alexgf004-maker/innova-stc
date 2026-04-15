@@ -65,7 +65,7 @@
                 autocomplete="username"
                 autocapitalize="none"
                 spellcheck="false"
-                placeholder="ej. juan.perez"
+                placeholder="ej. jespinoza"
                 class="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all"
               />
             </div>
@@ -138,9 +138,9 @@
 
   <!-- Firebase CDN -->
   <script type="module">
-    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+    import { initializeApp }               from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
     import { getAuth, signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-    import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+    import { getFirestore, collection, query, where, getDocs, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
     import { FIREBASE_CONFIG, SEED } from './js/firebase-config.js';
     import { hashPin, derivePassword } from './js/crypto.js';
 
@@ -195,29 +195,31 @@
       setLoading(btnUsername, true);
 
       try {
-        // Consulta /usernames/{username} — colección auxiliar pública mínima.
-      // No expone datos sensibles (pinHash, pinSalt, role, etc.)
-      const usernameDoc = await getDoc(doc(db, 'usernames', username));
+        // Busca solo los campos mínimos necesarios para el login.
+        // La Security Rule permite leer SOLO username, uid e internalEmail
+        // a cualquier usuario autenticado o anónimo en esta consulta.
+        const q    = query(collection(db, 'users'), where('username', '==', username));
+        const snap = await getDocs(q);
 
-      if (!usernameDoc.exists()) {
-        showStep(stepUsername);
-        showError(errorUsername, 'Usuario no encontrado.');
-        return;
-      }
+        if (snap.empty) {
+          showStep(stepUsername);
+          showError(errorUsername, 'Usuario no encontrado.');
+          return;
+        }
 
-      const data = usernameDoc.data();
+        const data = snap.docs[0].data();
 
-      if (!data.active) {
-        showStep(stepUsername);
-        showError(errorUsername, 'Usuario inactivo. Contacta al administrador.');
-        return;
-      }
+        if (!data.active) {
+          showStep(stepUsername);
+          showError(errorUsername, 'Usuario inactivo. Contacta al administrador.');
+          return;
+        }
 
-      currentUser = {
-        uid:           data.uid,
-        internalEmail: data.internalEmail,
-        username:      username,
-      };
+        currentUser = {
+          uid:           data.uid,
+          internalEmail: data.internalEmail,
+          username:      data.username,
+        };
 
         pinLabel.textContent = username;
         showStep(stepPin);
@@ -270,11 +272,12 @@
 
         // Sesión válida — guardar perfil en sessionStorage
         sessionStorage.setItem('innova_session', JSON.stringify({
-          uid:         profile.uid,
-          username:    profile.username,
-          displayName: profile.displayName,
-          role:        profile.role,
-          pinVerified: true,
+          uid:                      profile.uid,
+          username:                 profile.username,
+          displayName:              profile.displayName,
+          role:                     profile.role,
+          usuarioOperativoAsignado: profile.usuarioOperativoAsignado || null,
+          pinVerified:              true,
         }));
 
         window.location.href = 'index.html';
