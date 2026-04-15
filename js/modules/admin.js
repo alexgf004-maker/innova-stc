@@ -54,17 +54,36 @@ async function renderUserList(db) {
   }
 }
 
+const USUARIOS_OPERATIVOS = ['NALVAR', 'RGONZA', 'JPEREZ'];
+
+function usuarioOperativoBadge(asignado) {
+  if (!asignado) return '<span class="text-xs text-gray-400">Sin asignación</span>';
+  return '<span class="text-xs font-bold px-2 py-0.5 rounded-full text-white" style="background:#1B4F8A">' + asignado + '</span>';
+}
+
 function userRow(u) {
+  const showAsignacion = u.role === 'campo';
   return `
     <tr class="hover:bg-gray-50 transition-colors">
       <td class="px-4 py-3">
         <div class="font-medium text-gray-900 text-sm">${u.displayName}</div>
         <div class="text-xs text-gray-400 font-mono">${u.username}</div>
+        ${showAsignacion ? '<div class="mt-1">' + usuarioOperativoBadge(u.usuarioOperativoAsignado) + '</div>' : ''}
       </td>
       <td class="px-4 py-3 hidden sm:table-cell">${roleBadge(u.role)}</td>
       <td class="px-4 py-3">${activeBadge(u.active)}</td>
       <td class="px-4 py-3 text-right">
         <div class="flex items-center justify-end gap-2">
+          ${showAsignacion ? `
+          <button data-action="asignar" data-uid="${u.uid}" data-name="${u.displayName}" data-asignado="${u.usuarioOperativoAsignado || ''}"
+            title="Asignar usuario operativo"
+            class="p-1.5 text-gray-400 hover:text-accent transition-colors rounded">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
+            </svg>
+          </button>` : ''}
           <button data-action="reset-pin" data-uid="${u.uid}" data-name="${u.displayName}"
             title="Resetear PIN"
             class="p-1.5 text-gray-400 hover:text-accent transition-colors rounded">
@@ -130,6 +149,7 @@ function bindAdminEvents(db, auth, session) {
       if (action === 'reset-pin')  await handleResetPin(db, uid, name);
       if (action === 'deactivate') await handleSetActive(db, uid, name, false);
       if (action === 'activate')   await handleSetActive(db, uid, name, true);
+      if (action === 'asignar')    await handleAsignarOperativo(db, uid, name, btn.dataset.asignado);
 
       await renderUserList(db);
     });
@@ -176,18 +196,65 @@ async function handleSetActive(db, uid, name, active) {
 
   try {
     await updateDoc(doc(db, 'users', uid), { active });
-
-    // Sincronizar active en /usernames para que el login lo refleje
-    const userSnap = await getDoc(doc(db, 'users', uid));
-    if (userSnap.exists()) {
-      const username = userSnap.data().username;
-      await updateDoc(doc(db, 'usernames', username), { active });
-    }
     showToast(`${name} ha sido ${active ? 'activado' : 'desactivado'}.`, active ? 'success' : 'info');
   } catch (err) {
     showToast('Error al actualizar el usuario.', 'error');
     console.error(err);
   }
+}
+
+// ─────────────────────────────────────────
+// ASIGNAR USUARIO OPERATIVO
+// ─────────────────────────────────────────
+async function handleAsignarOperativo(db, uid, name, actual) {
+  const overlay = document.createElement('div');
+  overlay.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4';
+  overlay.innerHTML =
+    '<div class="bg-white rounded-2xl shadow-xl w-full max-w-sm">' +
+      '<div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">' +
+        '<h2 class="font-semibold text-gray-900">Asignación operativa</h2>' +
+        '<button id="ao-close" class="text-gray-400 hover:text-gray-700">✕</button>' +
+      '</div>' +
+      '<div class="px-5 py-4 space-y-3">' +
+        '<p class="text-sm text-gray-600">Asignar usuario operativo a <strong>' + name + '</strong></p>' +
+        '<p class="text-xs text-gray-400">El técnico solo tendrá acceso al Kardex cuando tenga una asignación activa.</p>' +
+        '<div class="space-y-2">' +
+          USUARIOS_OPERATIVOS.map(function(u) {
+            const sel = actual === u;
+            return '<button data-op="' + u + '" class="w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 transition-all ' +
+              (sel ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300') + '">' +
+              '<span class="font-semibold text-gray-900">' + u + '</span>' +
+              (sel ? '<span class="text-xs font-bold text-blue-600">✓ Asignado</span>' : '') +
+            '</button>';
+          }).join('') +
+          '<button data-op="" class="w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 transition-all ' +
+            (!actual ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-white hover:border-gray-300') + '">' +
+            '<span class="font-medium text-gray-600">Sin asignación (bloquear acceso)</span>' +
+            (!actual ? '<span class="text-xs font-bold text-red-600">✓ Actual</span>' : '') +
+          '</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(overlay);
+  overlay.querySelector('#ao-close').onclick = () => overlay.remove();
+
+  overlay.querySelectorAll('[data-op]').forEach(function(btn) {
+    btn.addEventListener('click', async function() {
+      const val = btn.dataset.op || null;
+      try {
+        await updateDoc(doc(db, 'users', uid), { usuarioOperativoAsignado: val });
+        showToast(val
+          ? name + ' asignado a ' + val
+          : name + ' sin asignación activa.', 'success');
+        overlay.remove();
+        await renderUserList(db);
+      } catch(e) {
+        showToast('Error al actualizar.', 'error');
+        console.error(e);
+      }
+    });
+  });
 }
 
 // ─────────────────────────────────────────
@@ -311,39 +378,36 @@ async function handleCreateUser(db, auth, overlay, session) {
   try {
     const internalEmail = `${username}@innova-stc.internal`;
 
-    // Crear segunda instancia de Firebase para no perder la sesión del admin
-    const { initializeApp, getApp } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
-    const { getAuth, createUserWithEmailAndPassword, updatePassword } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js');
-
-    let secondApp;
-    try { secondApp = getApp('secondary'); } catch { 
-      secondApp = initializeApp(window.__firebase.app.options, 'secondary');
-    }
-    const secondAuth = getAuth(secondApp);
-
-    const cred = await createUserWithEmailAndPassword(secondAuth, internalEmail, 'TEMP_PASS_placeholder');
+    // 1. Crear en Firebase Auth con contraseña temporal
+    const cred = await createUserWithEmailAndPassword(auth, internalEmail, 'TEMP_PASS_placeholder');
     const uid  = cred.user.uid;
 
+    // 2. Derivar contraseña única real y actualizarla
     const realPass = await derivePassword(uid, SEED);
     await updatePassword(cred.user, realPass);
 
+    // 3. Hashear PIN
     const salt    = generateSalt();
     const pinHash = await hashPin(salt, pin);
 
-    // Guardar perfil completo en /users/{uid}
+    // 4. Guardar perfil en Firestore
     await setDoc(doc(db, 'users', uid), {
-      uid, username, displayName, role, internalEmail,
-      pinHash, pinSalt: salt, active: true,
-      createdAt: serverTimestamp(), createdBy: session.uid,
-    });
-
-    // Guardar entrada mínima en /usernames/{username} para el login
-    await setDoc(doc(db, 'usernames', username), {
-      uid, internalEmail, active: true,
+      uid,
+      username,
+      displayName,
+      role,
+      internalEmail,
+      pinHash,
+      pinSalt:   salt,
+      active:    true,
+      createdAt: serverTimestamp(),
+      createdBy: session.uid,
     });
 
     overlay.remove();
     showToast(`Usuario ${displayName} creado correctamente.`, 'success');
+
+    // Refrescar lista
     await renderUserList(db);
 
   } catch (err) {
