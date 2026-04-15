@@ -645,18 +645,18 @@ async function showFormSalida(db, session) {
     .filter(u => ['campo','coordinadora'].includes(u.role))
     .sort((a,b) => safeStr(a.displayName).localeCompare(safeStr(b.displayName)));
 
-  let sel = [];
-
-  // ── Pantalla completa ──
-  const ov = document.createElement('div');
-  ov.className = 'fixed inset-0 z-50 flex flex-col bg-gray-50';
-  ov.style.cssText = 'max-height:100dvh;';
-  document.body.appendChild(ov);
+  let sel   = [];
+  let step  = 1; // 1 = encabezado, 2 = materiales
+  let hdr   = {
+    responsable: '', contratista: EMPRESAS_CONTRATISTAS[0]||'INNOVA',
+    instalador: '', placaSel: '', placaOtro: '',
+    fechaSol: today(), fechaEnt: today(),
+  };
+  let busq  = '';
 
   function tc(str) {
     return safeStr(str).toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
   }
-
   function getRec() {
     try { return JSON.parse(sessionStorage.getItem('kardex_rec')||'[]'); } catch { return []; }
   }
@@ -665,406 +665,304 @@ async function showFormSalida(db, session) {
     sessionStorage.setItem('kardex_rec', JSON.stringify([id,...p].slice(0,6)));
   }
 
-  // ── Estado del encabezado — persiste entre renders ──
-  let headerState = {
-    responsable: '', contratista: EMPRESAS_CONTRATISTAS[0]||'', instalador: '',
-    placaSel: '', placaOtro: '', fechaSol: today(), fechaEnt: today(),
-    open: true,
-  };
+  // ── Contenedor raíz ──
+  const ov = document.createElement('div');
+  ov.className = 'fixed inset-0 z-50';
+  document.body.appendChild(ov);
 
-  function saveHeaderState() {
-    const r = ov.querySelector('#fs-responsable');
-    const c = ov.querySelector('#fs-contratista');
-    const i = ov.querySelector('#fs-instalador');
-    const p = ov.querySelector('#fs-placa-sel');
-    const po = ov.querySelector('#fs-placa-otro');
-    const fs = ov.querySelector('#fs-fecha-sol');
-    const fe = ov.querySelector('#fs-fecha-ent');
-    const d  = ov.querySelector('#fs-header-details');
-    if (r)  headerState.responsable  = r.value;
-    if (c)  headerState.contratista  = c.value;
-    if (i)  headerState.instalador   = i.value;
-    if (p)  headerState.placaSel     = p.value;
-    if (po) headerState.placaOtro    = po.value;
-    if (fs) headerState.fechaSol     = fs.value;
-    if (fe) headerState.fechaEnt     = fe.value;
-    if (d)  headerState.open         = d.open;
-  }
-
-  function restoreHeaderState() {
-    const r = ov.querySelector('#fs-responsable');
-    const c = ov.querySelector('#fs-contratista');
-    const i = ov.querySelector('#fs-instalador');
-    const p = ov.querySelector('#fs-placa-sel');
-    const po = ov.querySelector('#fs-placa-otro');
-    const fs = ov.querySelector('#fs-fecha-sol');
-    const fe = ov.querySelector('#fs-fecha-ent');
-    const d  = ov.querySelector('#fs-header-details');
-    if (r)  r.value  = headerState.responsable;
-    if (c)  c.value  = headerState.contratista;
-    if (i)  i.value  = headerState.instalador;
-    if (p)  p.value  = headerState.placaSel;
-    if (po) {
-      po.value = headerState.placaOtro;
-      if (headerState.placaSel === '__otro__') po.classList.remove('hidden');
-    }
-    if (fs) fs.value = headerState.fechaSol;
-    if (fe) fe.value = headerState.fechaEnt;
-    if (d)  d.open   = headerState.open;
-  }
-
-  // ── Render principal ──
-  function render() {
-    saveHeaderState();
-    const totalSel = sel.length;
-    const hasResp  = headerState.responsable;
-    const btnOk    = totalSel > 0 && hasResp;
-
+  // ════════════════════════════════════════
+  // PANTALLA 1 — ENCABEZADO
+  // ════════════════════════════════════════
+  function renderStep1() {
     ov.innerHTML = `
-    <!-- TOP BAR -->
-    <div class="flex items-center gap-3 px-4 py-3 shrink-0 border-b border-gray-200 bg-white">
-      <button id="fs-close" class="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-100 text-gray-600 shrink-0">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
-      <div class="min-w-0">
-        <p class="font-semibold text-gray-900 text-base leading-tight">Nueva salida</p>
-        <p class="text-xs text-gray-400">Despacho de materiales</p>
+    <div class="flex flex-col h-full bg-white" style="max-height:100dvh">
+
+      <!-- Barra superior -->
+      <div class="flex items-center gap-3 px-4 py-3 border-b border-gray-100 shrink-0">
+        <button id="s1-close" class="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center shrink-0">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+        <div class="flex-1">
+          <p class="font-semibold text-gray-900">Nueva salida</p>
+          <p class="text-xs text-gray-400">Paso 1 de 2 — Encabezado</p>
+        </div>
+        <!-- Indicador de pasos -->
+        <div class="flex gap-1.5">
+          <div class="w-6 h-1.5 rounded-full" style="background:#1B4F8A"></div>
+          <div class="w-6 h-1.5 rounded-full bg-gray-200"></div>
+        </div>
       </div>
-    </div>
 
-    <!-- SCROLL AREA -->
-    <div id="fs-scroll" class="flex-1 overflow-y-auto">
+      <!-- Campos -->
+      <div class="flex-1 overflow-y-auto px-4 py-5 space-y-4">
 
-      <!-- ① ENCABEZADO (colapsable, tono secundario) -->
-      <details id="fs-header-details" class="bg-white border-b border-gray-200">
-        <summary class="flex items-center justify-between px-4 py-3 cursor-pointer list-none select-none">
-          <div class="flex items-center gap-2">
-            <span class="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0" style="background:#1B4F8A">1</span>
-            <span class="text-sm font-semibold text-gray-700">Encabezado del despacho</span>
+        <!-- Usuario responsable — el más importante, va primero y grande -->
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Usuario responsable *</label>
+          <div class="grid grid-cols-3 gap-2">
+            ${USUARIOS_RESPONSABLES.map(u => `
+            <button data-resp="${u}"
+              class="py-3.5 rounded-2xl border-2 text-sm font-bold transition-all
+                ${hdr.responsable===u
+                  ? 'border-blue-500 text-white'
+                  : 'border-gray-200 text-gray-700 bg-white'}"
+              style="${hdr.responsable===u ? 'background:#1B4F8A' : ''}">
+              ${u}
+            </button>`).join('')}
           </div>
-          <svg id="fs-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-        </summary>
-        <div class="px-4 pb-4 space-y-2.5 border-t border-gray-100">
-          <div class="pt-3">
-            <label class="block text-xs font-medium text-gray-500 mb-1">Usuario responsable *</label>
-            <select id="fs-responsable" class="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
-              <option value="">Seleccionar...</option>
-              ${USUARIOS_RESPONSABLES.map(u=>`<option value="${u}">${u}</option>`).join('')}
+        </div>
+
+        <!-- Instalador responsable -->
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Instalador responsable</label>
+          <select id="s1-instalador"
+            class="w-full border-2 border-gray-200 rounded-2xl px-4 py-3 text-sm bg-white focus:outline-none focus:border-blue-400 font-medium text-gray-800">
+            <option value="">Seleccionar...</option>
+            ${usuarios.map(u=>`<option value="${safeStr(u.displayName)}" ${hdr.instalador===safeStr(u.displayName)?'selected':''}>${safeStr(u.displayName)}</option>`).join('')}
+          </select>
+        </div>
+
+        <!-- Empresa + Placa -->
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Empresa</label>
+            <select id="s1-contratista"
+              class="w-full border-2 border-gray-200 rounded-2xl px-3 py-3 text-sm bg-white focus:outline-none focus:border-blue-400 font-medium text-gray-800">
+              ${EMPRESAS_CONTRATISTAS.map(e=>`<option value="${e}" ${hdr.contratista===e?'selected':''}>${e}</option>`).join('')}
+              <option value="" ${hdr.contratista===''?'selected':''}>Otra</option>
             </select>
           </div>
-          <div class="grid grid-cols-2 gap-2">
-            <div>
-              <label class="block text-xs font-medium text-gray-500 mb-1">Empresa contratista</label>
-              <select id="fs-contratista" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
-                ${EMPRESAS_CONTRATISTAS.map(e=>`<option value="${e}">${e}</option>`).join('')}
-                <option value="">Otra...</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-gray-500 mb-1">Instalador</label>
-              <select id="fs-instalador" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
-                <option value="">Seleccionar...</option>
-                ${usuarios.map(u=>`<option value="${safeStr(u.displayName)}">${safeStr(u.displayName)}</option>`).join('')}
-              </select>
-            </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Placa</label>
+            <select id="s1-placa"
+              class="w-full border-2 border-gray-200 rounded-2xl px-3 py-3 text-sm bg-white focus:outline-none focus:border-blue-400 font-medium text-gray-800">
+              <option value="">Seleccionar...</option>
+              ${PLACAS.map(p=>`<option value="${p}" ${hdr.placaSel===p?'selected':''}>${p}</option>`).join('')}
+              <option value="__otro__" ${hdr.placaSel==='__otro__'?'selected':''}>Otro</option>
+            </select>
+            <input id="s1-placa-otro" type="text" placeholder="Ej. P-123"
+              value="${hdr.placaOtro}"
+              class="${hdr.placaSel==='__otro__' ? '' : 'hidden'} w-full border-2 border-gray-200 rounded-2xl px-3 py-2.5 text-sm mt-2 font-mono focus:outline-none focus:border-blue-400"/>
           </div>
-          <div class="grid grid-cols-2 gap-2">
-            <div>
-              <label class="block text-xs font-medium text-gray-500 mb-1">Placa</label>
-              <select id="fs-placa-sel" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
-                <option value="">Seleccionar...</option>
-                ${PLACAS.map(p=>`<option value="${p}">${p}</option>`).join('')}
-                <option value="__otro__">Otro / temporal</option>
-              </select>
-              <input id="fs-placa-otro" type="text" placeholder="Escribe la placa"
-                class="hidden w-full border border-gray-300 rounded-xl px-3 py-2 text-sm mt-1 font-mono focus:outline-none focus:ring-2 focus:ring-blue-400"/>
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-gray-500 mb-1">F. solicitud</label>
-              <input id="fs-fecha-sol" type="date" value="${today()}"
-                class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"/>
-            </div>
+        </div>
+
+        <!-- Fechas -->
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">F. solicitud</label>
+            <input id="s1-fecha-sol" type="date" value="${hdr.fechaSol}"
+              class="w-full border-2 border-gray-200 rounded-2xl px-3 py-3 text-sm bg-white focus:outline-none focus:border-blue-400"/>
           </div>
           <div>
-            <label class="block text-xs font-medium text-gray-500 mb-1">F. entrega de material</label>
-            <input id="fs-fecha-ent" type="date" value="${today()}"
-              class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"/>
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">F. entrega</label>
+            <input id="s1-fecha-ent" type="date" value="${hdr.fechaEnt}"
+              class="w-full border-2 border-gray-200 rounded-2xl px-3 py-3 text-sm bg-white focus:outline-none focus:border-blue-400"/>
           </div>
         </div>
-      </details>
 
-      <!-- ② CARRITO: MATERIALES SELECCIONADOS -->
-      <div class="px-4 pt-4 pb-2">
-        <div class="flex items-center justify-between mb-3">
-          <div class="flex items-center gap-2">
-            <span class="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0" style="background:#1B4F8A">2</span>
-            <span class="text-sm font-semibold text-gray-700">Materiales seleccionados</span>
-          </div>
-          ${totalSel > 0 ? `<span class="text-xs font-bold px-2.5 py-1 rounded-full text-white" style="background:#1B4F8A">${totalSel}</span>` : ''}
-        </div>
-
-        ${totalSel === 0
-          ? `<div class="border-2 border-dashed border-gray-200 rounded-2xl py-8 text-center">
-              <p class="text-sm text-gray-400">Aún no hay materiales</p>
-              <p class="text-xs text-gray-300 mt-1">Búscalos abajo y tócalos para agregar</p>
-             </div>`
-          : `<div class="space-y-2" id="fs-carrito">
-              ${sel.map((s,idx) => {
-                const restante = s.stock - s.cantidad;
-                const stockStyle = restante <= 0
-                  ? 'color:#C62828'
-                  : restante <= safeNum(items.find(i=>i.id===s.itemId)?.minStock||5)
-                  ? 'color:#E65100' : 'color:#166534';
-                return `
-                <div class="bg-white rounded-2xl border border-gray-200 p-3.5 shadow-sm">
-                  <div class="flex items-start justify-between gap-2 mb-2.5">
-                    <div class="min-w-0">
-                      <p class="font-semibold text-gray-900 text-sm leading-tight">${tc(s.name)}</p>
-                      <p class="text-xs text-gray-400 font-mono mt-0.5">SAP ${s.sapCode||'—'} · AX ${s.axCode||'—'}</p>
-                    </div>
-                    <button data-del="${idx}"
-                      class="w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center shrink-0 text-red-400 hover:bg-red-100">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                    </button>
-                  </div>
-                  <!-- Control cantidad -->
-                  <div class="flex items-center gap-2">
-                    <button data-dec="${idx}"
-                      class="w-10 h-10 rounded-xl border-2 border-gray-200 bg-gray-50 text-xl font-bold text-gray-500 flex items-center justify-center shrink-0 active:bg-gray-200">−</button>
-                    <div class="flex-1 text-center">
-                      <span data-qty-display="${idx}" class="text-2xl font-bold text-gray-900">${s.cantidad}</span>
-                      <span class="text-sm text-gray-400 ml-1">${safeStr(s.unit,'')}</span>
-                    </div>
-                    <button data-inc="${idx}"
-                      class="w-10 h-10 rounded-xl border-2 flex items-center justify-center shrink-0 text-xl font-bold active:opacity-80
-                        ${s.cantidad >= s.stock
-                          ? 'border-gray-200 bg-gray-100 text-gray-300 cursor-not-allowed'
-                          : 'border-blue-200 bg-blue-50 text-blue-600'}"
-                      ${s.cantidad >= s.stock ? 'disabled' : ''}>+</button>
-                  </div>
-                  <p class="text-xs font-medium mt-2" style="${stockStyle}">
-                    Stock restante: ${restante} ${safeStr(s.unit,'')}${restante <= 0 ? ' — sin stock' : ''}
-                  </p>
-                  ${s.requiereSerial ? `
-                  <div class="mt-2.5 pt-2.5 border-t border-gray-100 space-y-2">
-                    <div class="flex gap-1.5">
-                      <button data-modo="${idx}" data-tipo="individual"
-                        class="flex-1 text-xs py-1.5 rounded-lg border font-medium
-                          ${s.modoSerial==='individual' ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500'}">
-                        Individual
-                      </button>
-                      <button data-modo="${idx}" data-tipo="rango"
-                        class="flex-1 text-xs py-1.5 rounded-lg border font-medium
-                          ${s.modoSerial==='rango' ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500'}">
-                        Rango
-                      </button>
-                    </div>
-                    ${s.modoSerial==='individual'
-                      ? `<textarea data-ser="${idx}" rows="2" placeholder="Un serial por línea"
-                           class="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs font-mono bg-white focus:outline-none focus:border-blue-400 resize-none"
-                         >${(s.seriales||[]).join('\n')}</textarea>
-                         <p class="text-xs text-gray-400">${(s.seriales||[]).length} de ${s.cantidad} serial(es)</p>`
-                      : `<div class="grid grid-cols-2 gap-2">
-                           <div>
-                             <p class="text-xs text-gray-500 mb-1">Inicio</p>
-                             <input data-ri="${idx}" type="text" value="${s.serialInicio||''}" placeholder="ABC001"
-                               class="w-full border border-gray-200 rounded-xl px-3 py-1.5 text-xs font-mono bg-white focus:outline-none focus:border-blue-400"/>
-                           </div>
-                           <div>
-                             <p class="text-xs text-gray-500 mb-1">Fin</p>
-                             <input data-rf="${idx}" type="text" value="${s.serialFin||''}" placeholder="ABC010"
-                               class="w-full border border-gray-200 rounded-xl px-3 py-1.5 text-xs font-mono bg-white focus:outline-none focus:border-blue-400"/>
-                           </div>
-                         </div>`
-                    }
-                  </div>` : ''}
-                </div>`;
-              }).join('')}
-             </div>`
-        }
       </div>
 
-      <!-- ③ AGREGAR MATERIAL -->
-      <div class="px-4 pt-2 pb-24">
-        <div class="flex items-center gap-2 mb-3">
-          <span class="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0" style="background:#1B4F8A">3</span>
-          <span class="text-sm font-semibold text-gray-700">Agregar material</span>
-        </div>
-        <!-- Buscador -->
-        <div class="relative mb-3">
-          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-          </svg>
-          <input id="fs-buscar" type="text" placeholder="Buscar por nombre o SAP..."
-            autocomplete="off" value="${ov._q||''}"
-            class="w-full bg-white border border-gray-300 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>
-        </div>
-        <!-- Lista -->
-        <div id="fs-lista-items" class="space-y-1.5"></div>
+      <!-- Botón siguiente -->
+      <div class="px-4 py-4 border-t border-gray-100 shrink-0" style="padding-bottom:max(16px,env(safe-area-inset-bottom))">
+        <div id="s1-err" class="hidden text-sm text-red-600 text-center mb-3"></div>
+        <button id="s1-next"
+          class="w-full font-bold rounded-2xl py-4 text-white flex items-center justify-center gap-2"
+          style="background:#1B4F8A">
+          Continuar — Agregar materiales
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </button>
       </div>
-
-    </div><!-- fin scroll -->
-
-    <!-- ERROR -->
-    <div id="fs-err" class="hidden mx-4 mb-1 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2 shrink-0"></div>
-
-    <!-- BOTÓN STICKY -->
-    <div class="px-4 pb-4 pt-2 bg-gray-50 border-t border-gray-200 shrink-0" style="padding-bottom:max(16px,env(safe-area-inset-bottom))">
-      <button id="fs-submit"
-        class="w-full font-bold rounded-2xl py-4 text-sm transition-all text-white"
-        style="background:${btnOk ? '#1B4F8A' : '#9CA3AF'}"
-        ${btnOk ? '' : 'disabled'}>
-        ${totalSel > 0
-          ? `Registrar salida · ${totalSel} material${totalSel!==1?'es':''}`
-          : 'Registrar salida'}
-      </button>
     </div>`;
 
-    // ── Bind events ──
-    ov.querySelector('#fs-close').onclick = () => ov.remove();
+    // Botones de usuario responsable
+    ov.querySelectorAll('[data-resp]').forEach(b => {
+      b.onclick = () => {
+        hdr.responsable = b.dataset.resp;
+        renderStep1();
+      };
+    });
 
-    // Encabezado - placa otro
-    ov.querySelector('#fs-placa-sel')?.addEventListener('change', e => {
-      const otro = ov.querySelector('#fs-placa-otro');
+    // Placa otro
+    ov.querySelector('#s1-placa').addEventListener('change', e => {
+      hdr.placaSel = e.target.value;
+      const otro = ov.querySelector('#s1-placa-otro');
       if (e.target.value === '__otro__') { otro.classList.remove('hidden'); otro.focus(); }
-      else { otro.classList.add('hidden'); otro.value = ''; }
+      else { otro.classList.add('hidden'); hdr.placaOtro = ''; }
     });
 
-    // Actualizar botón sticky cuando cambia responsable
-    ov.querySelector('#fs-responsable')?.addEventListener('change', e => {
-      headerState.responsable = e.target.value;
-      updateSubmitBtn();
-    });
+    // Cerrar
+    ov.querySelector('#s1-close').onclick = () => ov.remove();
 
-    // Carrito: eliminar
-    ov.querySelectorAll('[data-del]').forEach(b => {
-      b.onclick = () => { sel.splice(parseInt(b.dataset.del),1); render(); };
-    });
+    // Siguiente
+    ov.querySelector('#s1-next').onclick = () => {
+      // Guardar estado
+      hdr.instalador  = ov.querySelector('#s1-instalador').value;
+      hdr.contratista = ov.querySelector('#s1-contratista').value;
+      hdr.placaSel    = ov.querySelector('#s1-placa').value;
+      hdr.placaOtro   = ov.querySelector('#s1-placa-otro')?.value.trim() || '';
+      hdr.fechaSol    = ov.querySelector('#s1-fecha-sol').value;
+      hdr.fechaEnt    = ov.querySelector('#s1-fecha-ent').value;
 
-    // Carrito: decrementar
+      if (!hdr.responsable) {
+        ov.querySelector('#s1-err').textContent = 'Selecciona el usuario responsable.';
+        ov.querySelector('#s1-err').classList.remove('hidden');
+        return;
+      }
+      step = 2;
+      renderStep2();
+    };
+  }
+
+  // ════════════════════════════════════════
+  // PANTALLA 2 — MATERIALES
+  // ════════════════════════════════════════
+  function renderStep2() {
+    const totalSel = sel.length;
+    ov.innerHTML = `
+    <div class="flex flex-col bg-gray-50" style="height:100dvh;max-height:100dvh">
+
+      <!-- Barra superior -->
+      <div class="flex items-center gap-3 px-4 py-3 border-b border-gray-100 bg-white shrink-0">
+        <button id="s2-back" class="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center shrink-0">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+        </button>
+        <div class="flex-1 min-w-0">
+          <p class="font-semibold text-gray-900">Materiales</p>
+          <p class="text-xs text-gray-400 truncate">${hdr.responsable} · ${hdr.instalador||'Sin instalador'}</p>
+        </div>
+        <div class="flex gap-1.5">
+          <div class="w-6 h-1.5 rounded-full bg-gray-200"></div>
+          <div class="w-6 h-1.5 rounded-full" style="background:#1B4F8A"></div>
+        </div>
+      </div>
+
+      <!-- Carrito (visible solo si hay items) -->
+      ${totalSel > 0 ? `
+      <div class="px-4 pt-3 pb-1 shrink-0 bg-white border-b border-gray-100">
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">En el despacho</p>
+          <span class="text-xs font-bold px-2 py-0.5 rounded-full text-white" style="background:#1B4F8A">${totalSel}</span>
+        </div>
+        <div class="space-y-2 pb-1">
+          ${sel.map((s,idx) => {
+            const restante   = s.stock - s.cantidad;
+            const restColor  = restante <= 0 ? '#C62828' : restante <= safeNum(items.find(i=>i.id===s.itemId)?.minStock||5) ? '#E65100' : '#166534';
+            return `
+            <div class="flex items-center gap-3 bg-gray-50 rounded-2xl px-3 py-2.5 border border-gray-200">
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-semibold text-gray-900 truncate leading-tight">${tc(s.name)}</p>
+                <p class="text-xs font-medium mt-0.5" style="color:${restColor}">Restante: ${restante} ${safeStr(s.unit,'')}</p>
+              </div>
+              <!-- Controles cantidad -->
+              <div class="flex items-center gap-1.5 shrink-0">
+                <button data-dec="${idx}"
+                  class="w-8 h-8 rounded-xl border border-gray-300 bg-white text-lg font-bold text-gray-600 flex items-center justify-center active:bg-gray-100">−</button>
+                <span class="w-8 text-center text-base font-bold text-gray-900">${s.cantidad}</span>
+                <button data-inc="${idx}"
+                  class="w-8 h-8 rounded-xl border text-lg font-bold flex items-center justify-center active:opacity-70
+                    ${s.cantidad>=s.stock ? 'border-gray-200 text-gray-300 bg-gray-50' : 'border-blue-300 text-blue-600 bg-blue-50'}"
+                  ${s.cantidad>=s.stock?'disabled':''}>+</button>
+              </div>
+              <button data-del="${idx}"
+                class="w-7 h-7 rounded-xl bg-red-50 flex items-center justify-center shrink-0">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>` : ''}
+
+      <!-- Buscador + lista -->
+      <div class="flex-1 overflow-y-auto px-4 pt-3 pb-2">
+        <div class="relative mb-3">
+          <svg class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input id="s2-buscar" type="text" value="${busq}"
+            placeholder="Buscar por nombre o SAP..."
+            autocomplete="off"
+            class="w-full bg-white border-2 border-gray-200 rounded-2xl pl-10 pr-4 py-3 text-sm focus:outline-none focus:border-blue-400 font-medium"/>
+        </div>
+        <div id="s2-lista" class="space-y-1.5 pb-2"></div>
+      </div>
+
+      <!-- Error -->
+      <div id="s2-err" class="hidden mx-4 mb-1 text-sm text-red-600 text-center shrink-0"></div>
+
+      <!-- Botón registrar sticky -->
+      <div class="px-4 py-3 bg-white border-t border-gray-200 shrink-0"
+        style="padding-bottom:max(16px,env(safe-area-inset-bottom))">
+        <button id="s2-submit"
+          class="w-full font-bold rounded-2xl py-4 text-sm text-white transition-all"
+          style="background:${totalSel>0 ? '#1B4F8A' : '#D1D5DB'}"
+          ${totalSel===0 ? 'disabled' : ''}>
+          ${totalSel>0
+            ? `Registrar salida · ${totalSel} material${totalSel!==1?'es':''}`
+            : 'Agrega materiales para continuar'}
+        </button>
+      </div>
+    </div>`;
+
+    // Volver
+    ov.querySelector('#s2-back').onclick = () => { step=1; renderStep1(); };
+
+    // Carrito: dec / inc / del
     ov.querySelectorAll('[data-dec]').forEach(b => {
-      b.onclick = () => {
-        const idx = parseInt(b.dataset.dec);
-        if (sel[idx].cantidad > 1) {
-          sel[idx].cantidad--;
-          // Update display without full re-render
-          const disp = ov.querySelector(`[data-qty-display="${idx}"]`);
-          if (disp) {
-            disp.textContent = sel[idx].cantidad;
-            // Re-render for stock restante update
-            render();
-          }
-        }
-      };
+      b.onclick = () => { if (sel[+b.dataset.dec].cantidad > 1) { sel[+b.dataset.dec].cantidad--; renderStep2(); } };
     });
-
-    // Carrito: incrementar
     ov.querySelectorAll('[data-inc]').forEach(b => {
-      b.onclick = () => {
-        const idx = parseInt(b.dataset.inc);
-        if (sel[idx].cantidad < sel[idx].stock) {
-          sel[idx].cantidad++;
-          render();
-        }
-      };
+      b.onclick = () => { if (sel[+b.dataset.inc].cantidad < sel[+b.dataset.inc].stock) { sel[+b.dataset.inc].cantidad++; renderStep2(); } };
     });
-
-    // Carrito: modo serial
-    ov.querySelectorAll('[data-modo]').forEach(b => {
-      b.onclick = () => {
-        const idx = parseInt(b.dataset.modo);
-        sel[idx].modoSerial = b.dataset.tipo;
-        sel[idx].seriales=[]; sel[idx].serialInicio=''; sel[idx].serialFin='';
-        render();
-      };
-    });
-
-    // Carrito: seriales individuales
-    ov.querySelectorAll('[data-ser]').forEach(ta => {
-      ta.oninput = () => {
-        const idx = parseInt(ta.dataset.ser);
-        sel[idx].seriales = ta.value.split('\n').map(s=>s.trim()).filter(Boolean);
-        const p = ta.nextElementSibling;
-        if (p) p.textContent = `${sel[idx].seriales.length} de ${sel[idx].cantidad} serial(es)`;
-      };
-    });
-    ov.querySelectorAll('[data-ri]').forEach(inp => {
-      inp.oninput = () => { sel[parseInt(inp.dataset.ri)].serialInicio = inp.value.trim(); };
-    });
-    ov.querySelectorAll('[data-rf]').forEach(inp => {
-      inp.oninput = () => { sel[parseInt(inp.dataset.rf)].serialFin = inp.value.trim(); };
+    ov.querySelectorAll('[data-del]').forEach(b => {
+      b.onclick = () => { sel.splice(+b.dataset.del,1); renderStep2(); };
     });
 
     // Buscador
-    ov.querySelector('#fs-buscar')?.addEventListener('input', e => {
-      ov._q = e.target.value;
-      renderItems(e.target.value);
-    });
+    ov.querySelector('#s2-buscar').addEventListener('input', e => { busq = e.target.value; renderLista(); });
 
     // Submit
-    ov.querySelector('#fs-submit')?.addEventListener('click', handleSubmit);
+    ov.querySelector('#s2-submit')?.addEventListener('click', handleSubmit);
 
-    // Restaurar estado del encabezado
-    restoreHeaderState();
-    // Renderizar items
-    renderItems(ov._q || '');
-    // Sync botón
-    updateSubmitBtn();
+    renderLista();
   }
 
-  // ── Actualiza solo el botón sticky sin re-renderizar ──
-  function updateSubmitBtn() {
-    const btn      = ov.querySelector('#fs-submit');
-    const responsable = ov.querySelector('#fs-responsable')?.value || '';
-    const btnOk    = sel.length > 0 && !!responsable;
-    if (!btn) return;
-    btn.disabled             = !btnOk;
-    btn.style.background     = btnOk ? '#1B4F8A' : '#9CA3AF';
-    btn.textContent = sel.length > 0
-      ? `Registrar salida · ${sel.length} material${sel.length!==1?'es':''}`
-      : 'Registrar salida';
-  }
-
-  // ── Render lista de items disponibles ──
-  function renderItems(q) {
-    const el = ov.querySelector('#fs-lista-items');
+  // ── Lista de materiales disponibles ──
+  function renderLista() {
+    const el = ov.querySelector('#s2-lista');
     if (!el) return;
-
     const selIds = new Set(sel.map(s=>s.itemId));
-    const query  = (q||'').trim().toLowerCase();
+    const q = busq.trim().toLowerCase();
 
-    let lista = query
+    let lista = q
       ? items.filter(i =>
-          safeStr(i.name).toLowerCase().includes(query) ||
-          safeStr(i.sapCode,'').includes(query) ||
-          safeStr(i.axCode,'').includes(query))
+          safeStr(i.name).toLowerCase().includes(q) ||
+          safeStr(i.sapCode,'').includes(q) ||
+          safeStr(i.axCode,'').includes(q))
       : (() => {
           const rec   = getRec().map(id=>items.find(i=>i.id===id)).filter(Boolean);
           const resto = items.filter(i=>!getRec().includes(i.id));
           return [...rec, ...resto];
         })();
 
-    if (lista.length === 0) {
-      el.innerHTML = '<p class="text-sm text-gray-400 text-center py-6">Sin resultados</p>';
+    if (!lista.length) {
+      el.innerHTML = '<p class="text-sm text-gray-400 text-center py-8">Sin resultados</p>';
       return;
     }
 
     el.innerHTML = lista.map(item => {
-      const agregado = selIds.has(item.id);
-      const stockColor = safeNum(item.stock) <= safeNum(item.minStock||5) ? '#E65100' : '#6B7280';
+      const agregado   = selIds.has(item.id);
+      const stockColor = safeNum(item.stock) <= safeNum(item.minStock||5) ? '#E65100' : '#374151';
       return `
-        <button data-item="${item.id}" ${agregado ? 'disabled' : ''}
-          class="w-full text-left rounded-xl px-4 py-3 border transition-colors
+        <button data-item="${item.id}" ${agregado?'disabled':''}
+          class="w-full flex items-center justify-between gap-3 text-left px-4 py-3.5 rounded-2xl border-2 transition-all
             ${agregado
-              ? 'border-gray-100 bg-gray-50 opacity-60 cursor-not-allowed'
-              : 'border-gray-200 bg-white active:bg-blue-50 active:border-blue-300'}">
-          <div class="flex items-center justify-between gap-3">
-            <p class="text-sm font-medium text-gray-900 leading-tight truncate">${tc(item.name)}</p>
-            ${agregado
-              ? `<span class="text-xs font-semibold px-2 py-0.5 rounded-full shrink-0" style="background:#DCFCE7;color:#166534">✓</span>`
-              : `<span class="text-xs font-semibold shrink-0" style="color:${stockColor}">${item.stock} ${safeStr(item.unit,'')}</span>`
-            }
-          </div>
+              ? 'border-green-200 bg-green-50 cursor-not-allowed'
+              : 'border-gray-200 bg-white active:border-blue-400 active:bg-blue-50'}">
+          <p class="text-sm font-semibold truncate ${agregado ? 'text-green-700' : 'text-gray-900'}">${tc(item.name)}</p>
+          ${agregado
+            ? `<span class="text-xs font-bold text-green-600 shrink-0">✓ Agregado</span>`
+            : `<span class="text-sm font-bold shrink-0" style="color:${stockColor}">${item.stock}<span class="text-xs font-normal text-gray-400 ml-0.5">${safeStr(item.unit,'')}</span></span>`
+          }
         </button>`;
     }).join('');
 
@@ -1077,147 +975,117 @@ async function showFormSalida(db, session) {
     });
   }
 
-  // ── Modal cantidad — minimalista ──
+  // ── Modal cantidad ──
   function showCantidadModal(item) {
     const modal = document.createElement('div');
-    modal.className = 'fixed inset-0 bg-black/40 flex items-end z-50';
+    modal.className = 'fixed inset-0 bg-black/50 flex items-end z-50';
     modal.innerHTML = `
-      <div class="bg-white w-full rounded-t-3xl px-5 pt-5 pb-8 space-y-5" style="padding-bottom:max(32px,env(safe-area-inset-bottom))">
-        <div class="flex items-start justify-between gap-2">
-          <div class="min-w-0">
-            <p class="font-bold text-gray-900 text-base leading-tight">${tc(item.name)}</p>
-            <p class="text-xs text-gray-400 mt-0.5">${item.stock} ${safeStr(item.unit,'')} disponibles</p>
-          </div>
-          <button id="mc-x" class="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-100 text-gray-500 shrink-0">✕</button>
+      <div class="bg-white w-full rounded-t-3xl px-5 pt-5 space-y-5"
+        style="padding-bottom:max(32px,env(safe-area-inset-bottom))">
+        <div class="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-1"></div>
+        <div>
+          <p class="font-bold text-gray-900 text-lg leading-tight">${tc(item.name)}</p>
+          <p class="text-sm text-gray-400 mt-0.5">${item.stock} ${safeStr(item.unit,'')} disponibles</p>
         </div>
-        <!-- +/- grande -->
         <div class="flex items-center justify-between gap-4">
           <button id="mc-dec"
-            class="w-16 h-16 rounded-2xl border-2 border-gray-200 bg-gray-50 text-3xl font-bold text-gray-500 flex items-center justify-center">−</button>
+            class="w-16 h-16 rounded-2xl border-2 border-gray-200 bg-gray-50 text-3xl font-bold text-gray-400 flex items-center justify-center active:bg-gray-200">−</button>
           <div class="flex-1 text-center">
             <input id="mc-cant" type="number" min="1" max="${item.stock}" value="1"
-              class="w-full text-center text-4xl font-black text-gray-900 bg-transparent border-none focus:outline-none py-1"/>
-            <p class="text-xs text-gray-400">${safeStr(item.unit,'')}</p>
+              class="w-full text-center text-5xl font-black text-gray-900 bg-transparent border-none focus:outline-none leading-none py-2"/>
+            <p class="text-sm text-gray-400 -mt-1">${safeStr(item.unit,'')}</p>
           </div>
           <button id="mc-inc"
-            class="w-16 h-16 rounded-2xl border-2 border-blue-300 bg-blue-50 text-3xl font-bold text-blue-600 flex items-center justify-center">+</button>
+            class="w-16 h-16 rounded-2xl border-2 border-blue-300 bg-blue-50 text-3xl font-bold text-blue-600 flex items-center justify-center active:bg-blue-100">+</button>
         </div>
-        <div id="mc-err" class="hidden text-xs text-red-600 bg-red-50 rounded-xl px-3 py-2 text-center"></div>
+        <div id="mc-err" class="hidden text-sm text-red-500 text-center"></div>
         <button id="mc-add"
-          class="w-full text-white font-bold rounded-2xl py-4 text-base" style="background:#1B4F8A">
+          class="w-full text-white font-bold rounded-2xl py-4 text-base active:opacity-90" style="background:#1B4F8A">
           Agregar al despacho
         </button>
       </div>`;
 
     document.body.appendChild(modal);
     const cantEl = modal.querySelector('#mc-cant');
-    setTimeout(() => { cantEl.focus(); cantEl.select(); }, 100);
+    setTimeout(() => { cantEl.focus(); cantEl.select(); }, 80);
 
     modal.addEventListener('click', e => { if (e.target===modal) modal.remove(); });
-    modal.querySelector('#mc-x').onclick = () => modal.remove();
-
-    modal.querySelector('#mc-dec').onclick = () => {
-      const v = safeNum(cantEl.value);
-      if (v > 1) cantEl.value = v - 1;
-    };
-    modal.querySelector('#mc-inc').onclick = () => {
-      const v = safeNum(cantEl.value);
-      if (v < item.stock) cantEl.value = v + 1;
-    };
+    modal.querySelector('#mc-dec').onclick = () => { const v=safeNum(cantEl.value); if(v>1) cantEl.value=v-1; };
+    modal.querySelector('#mc-inc').onclick = () => { const v=safeNum(cantEl.value); if(v<item.stock) cantEl.value=v+1; };
 
     const doAdd = () => {
       const cant  = safeNum(cantEl.value);
       const errEl = modal.querySelector('#mc-err');
-      errEl.classList.add('hidden');
-      if (cant <= 0)         { errEl.textContent = 'Ingresa una cantidad mayor a 0.'; errEl.classList.remove('hidden'); return; }
-      if (cant > item.stock) { errEl.textContent = `Máximo: ${item.stock} ${safeStr(item.unit,'')}`; errEl.classList.remove('hidden'); return; }
-
+      if (cant<=0)        { errEl.textContent='Ingresa una cantidad mayor a 0.'; errEl.classList.remove('hidden'); return; }
+      if (cant>item.stock){ errEl.textContent=`Máximo: ${item.stock} ${safeStr(item.unit,'')}`; errEl.classList.remove('hidden'); return; }
       sel.push({
-        itemId: item.id, name: item.name, unit: item.unit,
-        sapCode: item.sapCode, axCode: item.axCode,
-        stock: item.stock, cantidad: cant,
-        requiereSerial: item.requiereSerial,
-        modoSerial: 'individual', seriales: [], serialInicio: '', serialFin: '',
+        itemId:item.id, name:item.name, unit:item.unit,
+        sapCode:item.sapCode, axCode:item.axCode, stock:item.stock,
+        cantidad:cant, requiereSerial:item.requiereSerial,
+        modoSerial:'individual', seriales:[], serialInicio:'', serialFin:'',
       });
       addRec(item.id);
       modal.remove();
-      render();
-      // Scroll al carrito
-      setTimeout(() => {
-        ov.querySelector('#fs-scroll')?.scrollTo({ top: 0, behavior: 'smooth' });
-      }, 50);
+      renderStep2();
     };
 
     modal.querySelector('#mc-add').addEventListener('click', doAdd);
-    cantEl.addEventListener('keydown', e => { if (e.key==='Enter') doAdd(); });
+    cantEl.addEventListener('keydown', e => { if(e.key==='Enter') doAdd(); });
   }
 
   // ── Submit ──
   async function handleSubmit() {
-    saveHeaderState();
-    const responsable    = headerState.responsable;
-    const contratista    = headerState.contratista;
-    const instalador     = headerState.instalador;
-    const placa          = headerState.placaSel==='__otro__' ? headerState.placaOtro : headerState.placaSel;
-    const fechaSolicitud = headerState.fechaSol;
-    const fechaEntrega   = headerState.fechaEnt;
-    const errEl          = ov.querySelector('#fs-err');
-    const btn            = ov.querySelector('#fs-submit');
-
-    errEl.classList.add('hidden');
-    if (!responsable)  { errEl.textContent = 'Selecciona el usuario responsable.'; errEl.classList.remove('hidden'); return; }
-    if (sel.length===0){ errEl.textContent = 'Agrega al menos un material.';       errEl.classList.remove('hidden'); return; }
-
+    const errEl = ov.querySelector('#s2-err');
+    const btn   = ov.querySelector('#s2-submit');
+    if (!sel.length) return;
+    errEl?.classList.add('hidden');
     btn.disabled = true;
     btn.textContent = 'Registrando...';
-
+    const placa = hdr.placaSel==='__otro__' ? hdr.placaOtro : hdr.placaSel;
     try {
       const ref = await addDoc(collection(db, 'kardex/movimientos/salidas'), {
-        usuarioResponsableUid: responsable,
-        usuarioResponsable:    responsable,
-        empresaContratista:    contratista,
-        instaladorResponsable: instalador,
+        usuarioResponsableUid: hdr.responsable,
+        usuarioResponsable:    hdr.responsable,
+        empresaContratista:    hdr.contratista,
+        instaladorResponsable: hdr.instalador,
         placaVehiculo:         placa,
-        fechaSolicitud, fechaEntrega,
+        fechaSolicitud: hdr.fechaSol,
+        fechaEntrega:   hdr.fechaEnt,
         entregadoPor:    session.displayName,
         entregadoPorUid: session.uid,
-        items: sel.map(s => ({
-          itemId: s.itemId, sapCode: s.sapCode, axCode: s.axCode,
-          nombre: s.name, unit: s.unit, cantidad: s.cantidad,
-          requiereSerial: s.requiereSerial,
-          modoSerial:    s.requiereSerial ? s.modoSerial : null,
-          seriales:      s.requiereSerial && s.modoSerial==='individual' ? s.seriales : [],
-          serialInicio:  s.requiereSerial && s.modoSerial==='rango' ? s.serialInicio : '',
-          serialFin:     s.requiereSerial && s.modoSerial==='rango' ? s.serialFin    : '',
+        items: sel.map(s=>({
+          itemId:s.itemId, sapCode:s.sapCode, axCode:s.axCode,
+          nombre:s.name, unit:s.unit, cantidad:s.cantidad,
+          requiereSerial:s.requiereSerial,
+          modoSerial:   s.requiereSerial ? s.modoSerial    : null,
+          seriales:     s.requiereSerial && s.modoSerial==='individual' ? s.seriales : [],
+          serialInicio: s.requiereSerial && s.modoSerial==='rango' ? s.serialInicio : '',
+          serialFin:    s.requiereSerial && s.modoSerial==='rango' ? s.serialFin    : '',
         })),
         fecha: serverTimestamp(),
       });
-
       for (const s of sel) {
-        await updateDoc(doc(db, 'kardex/inventario/items', s.itemId), { stock: increment(-s.cantidad) });
+        await updateDoc(doc(db,'kardex/inventario/items',s.itemId),{stock:increment(-s.cantidad)});
       }
-
       ov.remove();
-      showToast('Salida registrada correctamente.', 'success');
+      showToast('Salida registrada correctamente.','success');
       showMemo({
-        id: ref.id,
-        usuarioResponsable: responsable, empresaContratista: contratista,
-        instaladorResponsable: instalador, entregadoPor: session.displayName,
-        placaVehiculo: placa, fechaSolicitud, fechaEntrega,
-        items: sel,
+        id:ref.id, usuarioResponsable:hdr.responsable,
+        empresaContratista:hdr.contratista, instaladorResponsable:hdr.instalador,
+        entregadoPor:session.displayName, placaVehiculo:placa,
+        fechaSolicitud:hdr.fechaSol, fechaEntrega:hdr.fechaEnt, items:sel,
       });
       await showDashboard(db, session);
     } catch(e) {
-      errEl.textContent = 'Error al registrar. Intenta de nuevo.';
-      errEl.classList.remove('hidden');
-      btn.disabled = false;
-      btn.textContent = `Registrar salida · ${sel.length} material${sel.length!==1?'es':''}`;
+      if(errEl){ errEl.textContent='Error al registrar. Intenta de nuevo.'; errEl.classList.remove('hidden'); }
+      btn.disabled=false;
+      btn.textContent=`Registrar salida · ${sel.length} material${sel.length!==1?'es':''}`;
       console.error(e);
     }
   }
 
   // Init
-  render();
+  renderStep1();
 }
 
 // ─────────────────────────────────────────
