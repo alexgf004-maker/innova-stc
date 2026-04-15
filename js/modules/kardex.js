@@ -1573,7 +1573,70 @@ function showMemo(s) {
     setTimeout(() => URL.revokeObjectURL(url), 3000);
   });
 
-  ov.querySelector('#fm-print').onclick = () => imprimirDespacho(memo);
+  ov.querySelector('#fm-print').onclick = async () => {
+    const btn = ov.querySelector('#fm-print');
+    btn.disabled = true;
+    btn.textContent = 'Generando PDF...';
+    try {
+      await generarYAbrirPDF(memo);
+    } catch(e) {
+      showToast(e.message || 'Error al generar el PDF.', 'error');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '🖨️ Generar PDF';
+    }
+  };
+}
+
+// ─────────────────────────────────────────
+// DESCARGAR JSON PARA SCRIPT PYTHON
+// ─────────────────────────────────────────
+function descargarMemoJSON(memo) {
+  // Construir objeto JSON compatible con generar_memo.py
+  const datos = {
+    usuarioResponsable:    memo.USUARIO_RESPONSABLE    || '',
+    empresaContratista:    memo.EMPRESA_CONTRATISTA    || '',
+    instaladorResponsable: memo.INSTALADOR_RESPONSABLE || '',
+    entregadoPor:          memo.ENTREGADO_POR          || '',
+    placaVehiculo:         memo.PLACA_VEHICULO         || '',
+    fechaSolicitud:        memo.FECHA_SOLICITUD        || '',
+    fechaEntrega:          memo.FECHA_ENTREGA          || '',
+    items: (memo.MATERIALES || []).map(function(i) {
+      return {
+        sapCode:  i.RESERVA  || '',
+        axCode:   i.STOCK    || '',
+        nombre:   i.NOMBRE   || '',
+        cantidad: i.CANTIDAD || '',
+        unit:     i.UNIDAD   || '',
+      };
+    }),
+    seriales: (memo.SERIALES || []).map(function(i) {
+      return {
+        sapCode:      i.sapCode   || i.RESERVA || '',
+        axCode:       i.axCode    || i.STOCK   || '',
+        nombre:       i.nombre    || i.NOMBRE  || '',
+        cantidad:     i.cantidad  || '',
+        modoSerial:   i.modoSerial || 'individual',
+        seriales:     i.seriales   || [],
+        serialInicio: i.serialInicio || '',
+        serialFin:    i.serialFin    || '',
+      };
+    }),
+  };
+
+  const json    = JSON.stringify(datos, null, 2);
+  const blob    = new Blob([json], { type: 'application/json' });
+  const url     = URL.createObjectURL(blob);
+  const a       = document.createElement('a');
+  const fecha   = (datos.fechaEntrega || new Date().toISOString().slice(0,10)).replace(/-/g,'');
+  const usuario = (datos.usuarioResponsable || 'despacho').replace(/\s/g,'_');
+  a.href        = url;
+  a.download    = 'despacho_' + usuario + '_' + fecha + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function() { URL.revokeObjectURL(url); }, 5000);
+  showToast('JSON descargado. Cópialo al escritorio y corre el script.', 'success');
 }
 
 // ─────────────────────────────────────────
@@ -2115,7 +2178,7 @@ function fmtDate(ts) {
 // ─────────────────────────────────────────
 
 // URL del microservicio — actualiza esto cuando lo despliegues en Render
-const CONVERTER_URL = 'https://innova-converter.onrender.com/convert';
+const CONVERTER_URL = 'https://innova-converter-558391780384.us-central1.run.app/convert';
 
 async function generarYAbrirPDF(memo) {
   // ── Paso 1: generar el docx llenado en el navegador ──
@@ -3312,4 +3375,3 @@ async function showFormSalidaConPreset(db, session, selInicial, hdrPreset) {
 
   if (step === 2) renderStep2(); else renderStep1();
 }
-
