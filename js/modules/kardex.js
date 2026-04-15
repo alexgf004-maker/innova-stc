@@ -59,6 +59,23 @@ export async function initKardex(session) {
   const container = document.getElementById('kardex-root');
   if (!container) return;
   const db = window.__firebase.db;
+
+  // Campo sin asignación operativa — bloquear acceso
+  if (session.role === 'campo' && !session.usuarioOperativoAsignado) {
+    container.innerHTML =
+      '<div class="flex flex-col items-center justify-center min-h-64 px-6 text-center space-y-4">' +
+        '<div class="w-16 h-16 rounded-2xl flex items-center justify-center" style="background:#FEF2F2">' +
+          '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#C62828" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>' +
+        '</div>' +
+        '<div>' +
+          '<p class="font-bold text-gray-900 text-lg">Sin asignación activa</p>' +
+          '<p class="text-sm text-gray-500 mt-1">No tienes un usuario operativo asignado.</p>' +
+          '<p class="text-sm text-gray-500">Contacta a administración para continuar.</p>' +
+        '</div>' +
+      '</div>';
+    return;
+  }
+
   renderShell(container, session);
   await showDashboard(db, session);
   bindNav(db, session);
@@ -2428,9 +2445,10 @@ async function showSolicitarMaterial(db, session) {
 
       try {
         await addDoc(collection(db, 'solicitudes_material'), {
-          usuarioUid:    session.uid,
-          usuarioNombre: session.displayName,
-          usuarioRole:   session.role,
+          usuarioUid:              session.uid,
+          usuarioNombre:           session.displayName,
+          usuarioRole:             session.role,
+          usuarioOperativo:        session.usuarioOperativoAsignado || null,
           materiales: sel.map(function(s) {
             return { itemId:s.itemId, nombre:s.name, unit:s.unit, cantidad:s.cantidad };
           }),
