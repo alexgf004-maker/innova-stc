@@ -665,10 +665,59 @@ async function showFormSalida(db, session) {
     sessionStorage.setItem('kardex_rec', JSON.stringify([id,...p].slice(0,6)));
   }
 
+  // ── Estado del encabezado — persiste entre renders ──
+  let headerState = {
+    responsable: '', contratista: EMPRESAS_CONTRATISTAS[0]||'', instalador: '',
+    placaSel: '', placaOtro: '', fechaSol: today(), fechaEnt: today(),
+    open: true,
+  };
+
+  function saveHeaderState() {
+    const r = ov.querySelector('#fs-responsable');
+    const c = ov.querySelector('#fs-contratista');
+    const i = ov.querySelector('#fs-instalador');
+    const p = ov.querySelector('#fs-placa-sel');
+    const po = ov.querySelector('#fs-placa-otro');
+    const fs = ov.querySelector('#fs-fecha-sol');
+    const fe = ov.querySelector('#fs-fecha-ent');
+    const d  = ov.querySelector('#fs-header-details');
+    if (r)  headerState.responsable  = r.value;
+    if (c)  headerState.contratista  = c.value;
+    if (i)  headerState.instalador   = i.value;
+    if (p)  headerState.placaSel     = p.value;
+    if (po) headerState.placaOtro    = po.value;
+    if (fs) headerState.fechaSol     = fs.value;
+    if (fe) headerState.fechaEnt     = fe.value;
+    if (d)  headerState.open         = d.open;
+  }
+
+  function restoreHeaderState() {
+    const r = ov.querySelector('#fs-responsable');
+    const c = ov.querySelector('#fs-contratista');
+    const i = ov.querySelector('#fs-instalador');
+    const p = ov.querySelector('#fs-placa-sel');
+    const po = ov.querySelector('#fs-placa-otro');
+    const fs = ov.querySelector('#fs-fecha-sol');
+    const fe = ov.querySelector('#fs-fecha-ent');
+    const d  = ov.querySelector('#fs-header-details');
+    if (r)  r.value  = headerState.responsable;
+    if (c)  c.value  = headerState.contratista;
+    if (i)  i.value  = headerState.instalador;
+    if (p)  p.value  = headerState.placaSel;
+    if (po) {
+      po.value = headerState.placaOtro;
+      if (headerState.placaSel === '__otro__') po.classList.remove('hidden');
+    }
+    if (fs) fs.value = headerState.fechaSol;
+    if (fe) fe.value = headerState.fechaEnt;
+    if (d)  d.open   = headerState.open;
+  }
+
   // ── Render principal ──
   function render() {
+    saveHeaderState();
     const totalSel = sel.length;
-    const hasResp  = ov.querySelector('#fs-responsable')?.value || '';
+    const hasResp  = headerState.responsable;
     const btnOk    = totalSel > 0 && hasResp;
 
     ov.innerHTML = `
@@ -881,8 +930,11 @@ async function showFormSalida(db, session) {
       else { otro.classList.add('hidden'); otro.value = ''; }
     });
 
-    // Actualizar botón cuando cambia responsable
-    ov.querySelector('#fs-responsable')?.addEventListener('change', () => render());
+    // Actualizar botón sticky cuando cambia responsable
+    ov.querySelector('#fs-responsable')?.addEventListener('change', e => {
+      headerState.responsable = e.target.value;
+      updateSubmitBtn();
+    });
 
     // Carrito: eliminar
     ov.querySelectorAll('[data-del]').forEach(b => {
@@ -952,8 +1004,25 @@ async function showFormSalida(db, session) {
     // Submit
     ov.querySelector('#fs-submit')?.addEventListener('click', handleSubmit);
 
+    // Restaurar estado del encabezado
+    restoreHeaderState();
     // Renderizar items
     renderItems(ov._q || '');
+    // Sync botón
+    updateSubmitBtn();
+  }
+
+  // ── Actualiza solo el botón sticky sin re-renderizar ──
+  function updateSubmitBtn() {
+    const btn      = ov.querySelector('#fs-submit');
+    const responsable = ov.querySelector('#fs-responsable')?.value || '';
+    const btnOk    = sel.length > 0 && !!responsable;
+    if (!btn) return;
+    btn.disabled             = !btnOk;
+    btn.style.background     = btnOk ? '#1B4F8A' : '#9CA3AF';
+    btn.textContent = sel.length > 0
+      ? `Registrar salida · ${sel.length} material${sel.length!==1?'es':''}`
+      : 'Registrar salida';
   }
 
   // ── Render lista de items disponibles ──
@@ -1085,13 +1154,13 @@ async function showFormSalida(db, session) {
 
   // ── Submit ──
   async function handleSubmit() {
-    const responsable    = ov.querySelector('#fs-responsable').value;
-    const contratista    = ov.querySelector('#fs-contratista').value.trim();
-    const instalador     = ov.querySelector('#fs-instalador').value.trim();
-    const placaSel       = ov.querySelector('#fs-placa-sel').value;
-    const placa          = placaSel==='__otro__' ? ov.querySelector('#fs-placa-otro').value.trim() : placaSel;
-    const fechaSolicitud = ov.querySelector('#fs-fecha-sol').value;
-    const fechaEntrega   = ov.querySelector('#fs-fecha-ent').value;
+    saveHeaderState();
+    const responsable    = headerState.responsable;
+    const contratista    = headerState.contratista;
+    const instalador     = headerState.instalador;
+    const placa          = headerState.placaSel==='__otro__' ? headerState.placaOtro : headerState.placaSel;
+    const fechaSolicitud = headerState.fechaSol;
+    const fechaEntrega   = headerState.fechaEnt;
     const errEl          = ov.querySelector('#fs-err');
     const btn            = ov.querySelector('#fs-submit');
 
