@@ -53,6 +53,19 @@ const EMPRESAS_CONTRATISTAS = [
 ];
 
 // ─────────────────────────────────────────
+// BADGE USUARIO OPERATIVO
+// Aparece en todas las vistas de campo
+// ─────────────────────────────────────────
+function badgeUsuarioOperativo(session) {
+  const u = session.usuarioOperativoAsignado;
+  if (!u) return '';
+  return '<div class="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold text-white" style="background:#1B4F8A">' +
+    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>' +
+    'Trabajando con: ' + u +
+  '</div>';
+}
+
+// ─────────────────────────────────────────
 // INIT
 // ─────────────────────────────────────────
 export async function initKardex(session) {
@@ -166,6 +179,14 @@ function normalizeItem(raw) {
 // ─────────────────────────────────────────
 async function showDashboard(db, session) {
   setTab('dashboard');
+  if (session.role === 'campo') {
+    await showDashboardCampo(db, session);
+    return;
+  }
+  await showDashboardAdmin(db, session);
+}
+
+async function showDashboardAdmin(db, session) {
   const content = document.getElementById('kardex-content');
   content.innerHTML = loading();
   try {
@@ -244,10 +265,154 @@ async function showDashboard(db, session) {
 }
 
 function statCard(val, label, color) {
-  return `<div class="bg-white rounded-xl border border-gray-200 p-4 text-center">
-    <p class="text-3xl font-bold" style="color:${color}">${val}</p>
-    <p class="text-xs text-gray-500 mt-1">${label}</p>
-  </div>`;
+  return '<div class="bg-white rounded-xl border border-gray-200 p-4 text-center">' +
+    '<p class="text-3xl font-bold" style="color:' + color + '">' + val + '</p>' +
+    '<p class="text-xs text-gray-500 mt-1">' + label + '</p>' +
+  '</div>';
+}
+
+// ─────────────────────────────────────────
+// DASHBOARD CAMPO
+// Muestra: usuario operativo, su stock, solicitudes recientes
+// ─────────────────────────────────────────
+async function showDashboardCampo(db, session) {
+  const content = document.getElementById('kardex-content');
+  content.innerHTML = loading();
+  const usuario = session.usuarioOperativoAsignado;
+
+  try {
+    // Stock del usuario operativo desde movimientos
+    const snapSalidas = await getDocs(query(
+      collection(db, 'kardex/movimientos/salidas'), orderBy('fecha', 'desc')
+    ));
+    const snapItems = await getDocs(collection(db, 'kardex/inventario/items'));
+
+    const itemMap = {};
+    snapItems.docs.forEach(function(d) {
+      const item = normalizeItem({ id: d.id, ...d.data() });
+      if (esValido(item)) itemMap[d.id] = item;
+    });
+
+    const stockU = {};
+    snapSalidas.docs.forEach(function(d) {
+      const s = d.data();
+      if ((s.usuarioResponsable || s.tecnicoNombre) !== usuario) return;
+      (s.items || []).forEach(function(i) {
+        const cant = safeNum(i.cantidad);
+        if (!i.itemId || cant <= 0) return;
+        stockU[i.itemId] = (stockU[i.itemId] || 0) + cant;
+      });
+    });
+
+    const misItems = Object.entries(stockU)
+      .map(function(e) { return { id: e[0], cant: e[1], item: itemMap[e[0]] }; })
+      .filter(function(e) { return e.cant > 0 && e.item; })
+      .sort(function(a, b) { return safeStr(a.item.name).localeCompare(safeStr(b.item.name)); });
+
+    // Solicitudes recientes del usuario
+    const snapSol = await getDocs(query(
+      collection(db, 'solicitudes_material'),
+      where('usuarioUid', '==', session.uid),
+      orderBy('fecha', 'desc')
+    ));
+    const solRecientes = snapSol.docs.slice(0, 3).map(function(d) {
+      return Object.assign({ id: d.id }, d.data());
+    });
+    const solPendientes = snapSol.docs.filter(function(d) {
+      return d.data().estado === 'pendiente';
+    }).length;
+
+    const ESTADO_BADGE = {
+      pendiente: { label: 'Pendiente', bg: '#FEF3C7', color: '#B45309' },
+      aprobado:  { label: 'Aprobado',  bg: '#DCFCE7', color: '#166534' },
+      rechazado: { label: 'Rechazado', bg: '#FEE2E2', color: '#C62828' },
+    };
+
+    function tc(str) {
+      return safeStr(str).toLowerCase().replace(/\w/g, function(c) { return c.toUpperCase(); });
+    }
+
+    // Render
+    let html = '<div class="space-y-4">';
+
+    // Badge usuario operativo — prominente
+    html += '<div class="rounded-2xl p-4 text-white" style="background:#1B4F8A">' +
+      '<p class="text-xs font-medium opacity-80 uppercase tracking-wider">Trabajando con</p>' +
+      '<p class="text-2xl font-black mt-1">' + usuario + '</p>' +
+      '<p class="text-xs opacity-70 mt-0.5">' + misItems.length + ' material' + (misItems.length !== 1 ? 'es' : '') + ' asignados</p>' +
+    '</div>';
+
+    // Acción rápida
+    html += '<button id="db-solicitar" class="w-full flex items-center justify-between px-4 py-3.5 bg-white rounded-xl border-2 border-blue-200 text-left active:bg-blue-50">' +
+      '<div>' +
+        '<p class="font-semibold text-gray-900">Solicitar material</p>' +
+        '<p class="text-xs text-gray-400 mt-0.5">Pide materiales de bodega</p>' +
+      '</div>' +
+      '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1B4F8A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>' +
+    '</button>';
+
+    // Mi material
+    if (misItems.length > 0) {
+      html += '<div class="bg-white rounded-xl border border-gray-200 overflow-hidden">' +
+        '<div class="px-4 py-3 border-b border-gray-100">' +
+          '<p class="font-semibold text-sm text-gray-900">Mi material</p>' +
+        '</div>' +
+        '<div class="divide-y divide-gray-50">' +
+        misItems.slice(0, 5).map(function(e) {
+          return '<div class="flex items-center justify-between px-4 py-2.5">' +
+            '<p class="text-sm text-gray-900 truncate">' + tc(e.item.name) + '</p>' +
+            '<div class="text-right shrink-0 ml-3">' +
+              '<span class="text-base font-bold text-gray-900">' + e.cant + '</span>' +
+              '<span class="text-xs text-gray-400 ml-0.5">' + safeStr(e.item.unit,'') + '</span>' +
+            '</div>' +
+          '</div>';
+        }).join('') +
+        (misItems.length > 5 ? '<div class="px-4 py-2 text-xs text-gray-400 text-center">+' + (misItems.length - 5) + ' más</div>' : '') +
+        '</div>' +
+      '</div>';
+    }
+
+    // Solicitudes recientes
+    if (solRecientes.length > 0) {
+      html += '<div class="bg-white rounded-xl border border-gray-200 overflow-hidden">' +
+        '<div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">' +
+          '<p class="font-semibold text-sm text-gray-900">Mis solicitudes</p>' +
+          (solPendientes > 0 ? '<span class="text-xs font-bold px-2 py-0.5 rounded-full text-white" style="background:#B45309">' + solPendientes + ' pendiente' + (solPendientes !== 1 ? 's' : '') + '</span>' : '') +
+        '</div>' +
+        '<div class="divide-y divide-gray-50">' +
+        solRecientes.map(function(s) {
+          const badge = ESTADO_BADGE[s.estado] || ESTADO_BADGE.pendiente;
+          return '<div class="px-4 py-3 flex items-center justify-between gap-2">' +
+            '<div class="min-w-0">' +
+              '<p class="text-xs text-gray-400">' + fmtDate(s.fecha) + '</p>' +
+              '<p class="text-xs text-gray-600 truncate mt-0.5">' + (s.materiales || []).length + ' material(es)</p>' +
+            '</div>' +
+            '<span class="text-xs font-semibold px-2 py-0.5 rounded-full shrink-0" style="background:' + badge.bg + ';color:' + badge.color + '">' + badge.label + '</span>' +
+          '</div>';
+        }).join('') +
+        '</div>' +
+      '</div>';
+    }
+
+    html += '</div>';
+    content.innerHTML = html;
+
+    content.querySelector('#db-solicitar')?.addEventListener('click', function() {
+      showSolicitarMaterial(db, session);
+      setTab('solicitar');
+    });
+
+    // Rebind tabs
+    document.querySelectorAll('.ktab').forEach(function(b) {
+      b.addEventListener('click', async function() {
+        const t = b.dataset.tab;
+        if (t === 'dashboard')   await showDashboard(db, session);
+        if (t === 'solicitar')   await showSolicitarMaterial(db, session);
+        if (t === 'mis-pedidos') await showMisSolicitudes(db, session);
+      });
+    });
+
+  } catch(e) { content.innerHTML = errHtml(); console.error(e); }
 }
 
 // ─────────────────────────────────────────
@@ -1643,10 +1808,28 @@ ${serialHtml}
 <script>window.onload=()=>window.print();</script>
 </body></html>`;
 
-  const w = window.open('','_blank');
-  if (!w) { showToast('Permite las ventanas emergentes para imprimir.','error'); return; }
-  w.document.write(html);
-  w.document.close();
+  // Usar iframe oculto para evitar bloqueo de popups en móvil
+  let iframe = document.getElementById('__print_frame');
+  if (iframe) iframe.remove();
+  iframe = document.createElement('iframe');
+  iframe.id = '__print_frame';
+  iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:210mm;height:297mm;border:none;';
+  document.body.appendChild(iframe);
+
+  const iDoc = iframe.contentDocument || iframe.contentWindow.document;
+  iDoc.open();
+  iDoc.write(html.replace('<script>window.onload=()=>window.print();</script>', ''));
+  iDoc.close();
+
+  setTimeout(function() {
+    try {
+      iframe.contentWindow.print();
+    } catch(e) {
+      // Fallback: abrir en nueva pestaña
+      const w = window.open('','_blank');
+      if (w) { w.document.write(html); w.document.close(); }
+    }
+  }, 400);
 }
 
 // ─────────────────────────────────────────
@@ -2538,6 +2721,7 @@ async function showMisSolicitudes(db, session) {
 
 // ─────────────────────────────────────────
 // GESTIÓN DE SOLICITUDES (vista admin/coordinadora)
+// Flujo: revisar → ajustar → aprobar → despacho prellenado
 // ─────────────────────────────────────────
 async function showSolicitudes(db, session) {
   setTab('solicitudes');
@@ -2550,45 +2734,48 @@ async function showSolicitudes(db, session) {
       orderBy('fecha', 'desc')
     ));
     const solicitudes = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+    const pendientes  = solicitudes.filter(function(s) { return s.estado === 'pendiente'; });
 
     const ESTADO_BADGE = {
-      pendiente: { label: 'Pendiente', bg: '#FEF3C7', color: '#B45309' },
-      aprobado:  { label: 'Aprobado',  bg: '#DCFCE7', color: '#166534' },
-      rechazado: { label: 'Rechazado', bg: '#FEE2E2', color: '#C62828' },
+      pendiente:           { label: 'Pendiente',            bg: '#FEF3C7', color: '#B45309' },
+      aprobado:            { label: 'Aprobado',             bg: '#DCFCE7', color: '#166534' },
+      rechazado:           { label: 'Rechazado',            bg: '#FEE2E2', color: '#C62828' },
+      listo_para_despacho: { label: 'Listo para despacho',  bg: '#EFF6FF', color: '#1D4ED8' },
     };
 
-    const pendientes = solicitudes.filter(function(s) { return s.estado === 'pendiente'; });
-
     function tc(str) {
-      return safeStr(str).toLowerCase().replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+      return safeStr(str).toLowerCase().replace(/\w/g, function(c) { return c.toUpperCase(); });
     }
 
-    function renderSolicitudes() {
-      const pendientesBadge = pendientes.length > 0
-        ? ' <span class="ml-1 text-xs font-bold px-1.5 py-0.5 rounded-full text-white" style="background:#C62828">' + pendientes.length + '</span>'
-        : '';
-
-      const rows = solicitudes.map(function(s) {
+    function buildRows() {
+      return solicitudes.map(function(s) {
         const badge = ESTADO_BADGE[s.estado] || ESTADO_BADGE.pendiente;
-        const mats  = (s.materiales || []).map(function(m) {
-          return '<div class="flex items-center justify-between py-1">' +
+        const mats = (s.materiales || []).map(function(m) {
+          return '<div class="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">' +
             '<p class="text-sm text-gray-800">' + tc(m.nombre) + '</p>' +
             '<p class="text-sm font-bold text-gray-900">' + m.cantidad + ' <span class="text-xs font-normal text-gray-400">' + safeStr(m.unit,'') + '</span></p>' +
           '</div>';
         }).join('');
 
-        const acciones = s.estado === 'pendiente'
-          ? '<div class="flex gap-2 mt-3">' +
-              '<button data-rechazar="' + s.id + '" class="flex-1 border border-red-200 text-red-600 font-medium rounded-xl py-2.5 text-sm bg-red-50 active:bg-red-100">Rechazar</button>' +
-              '<button data-aprobar="' + s.id + '" class="flex-1 text-white font-semibold rounded-xl py-2.5 text-sm active:opacity-90" style="background:#166534">✓ Aprobar</button>' +
-            '</div>'
-          : '';
+        let acciones = '';
+        if (s.estado === 'pendiente') {
+          acciones =
+            '<div class="flex gap-2 mt-3">' +
+              '<button data-rechazar="' + s.id + '" class="flex-1 border border-red-200 text-red-600 font-medium rounded-xl py-2.5 text-sm bg-red-50">Rechazar</button>' +
+              '<button data-revisar="' + s.id + '" class="flex-1 text-white font-semibold rounded-xl py-2.5 text-sm" style="background:#1B4F8A">Revisar y aprobar →</button>' +
+            '</div>';
+        } else if (s.estado === 'listo_para_despacho') {
+          acciones =
+            '<div class="mt-3">' +
+              '<button data-despachar="' + s.id + '" class="w-full text-white font-semibold rounded-xl py-3 text-sm" style="background:#166534">📦 Completar despacho</button>' +
+            '</div>';
+        }
 
         return '<div class="px-4 py-4 border-b border-gray-100 last:border-0">' +
           '<div class="flex items-center justify-between mb-2">' +
             '<div>' +
               '<p class="font-bold text-gray-900">' + safeStr(s.usuarioNombre) + '</p>' +
-              '<p class="text-xs text-gray-400">' + fmtDate(s.fecha) + '</p>' +
+              '<p class="text-xs text-gray-400">' + fmtDate(s.fecha) + (s.usuarioOperativo ? ' · ' + s.usuarioOperativo : '') + '</p>' +
             '</div>' +
             '<span class="text-xs font-semibold px-2 py-1 rounded-full" style="background:' + badge.bg + ';color:' + badge.color + '">' + badge.label + '</span>' +
           '</div>' +
@@ -2597,43 +2784,30 @@ async function showSolicitudes(db, session) {
           acciones +
         '</div>';
       }).join('');
+    }
+
+    function render() {
+      const pendientesBadge = pendientes.length > 0
+        ? ' <span class="ml-1 text-xs font-bold px-1.5 py-0.5 rounded-full text-white" style="background:#C62828">' + pendientes.length + '</span>'
+        : '';
 
       content.innerHTML =
         '<div class="space-y-3">' +
           '<div class="bg-white rounded-xl border border-gray-200 overflow-hidden">' +
-            '<div class="px-4 py-3 border-b border-gray-100 flex items-center">' +
+            '<div class="px-4 py-3 border-b border-gray-100">' +
               '<p class="font-semibold text-sm text-gray-900">Solicitudes de material' + pendientesBadge + '</p>' +
             '</div>' +
             (solicitudes.length === 0
               ? '<p class="text-sm text-gray-400 text-center py-10">Sin solicitudes aún</p>'
-              : rows
+              : buildRows()
             ) +
           '</div>' +
         '</div>';
 
-      // Aprobar
-      content.querySelectorAll('[data-aprobar]').forEach(function(btn) {
-        btn.addEventListener('click', async function() {
-          btn.disabled = true;
-          btn.textContent = 'Aprobando...';
-          try {
-            await updateDoc(doc(db, 'solicitudes_material', btn.dataset.aprobar), {
-              estado: 'aprobado',
-              aprobadoPor: session.uid,
-              aprobadoPorNombre: session.displayName,
-              fechaAprobacion: serverTimestamp(),
-            });
-            showToast('Solicitud aprobada.', 'success');
-            await showSolicitudes(db, session);
-          } catch(e) { showToast('Error al aprobar.', 'error'); btn.disabled = false; btn.textContent = '✓ Aprobar'; }
-        });
-      });
-
       // Rechazar
       content.querySelectorAll('[data-rechazar]').forEach(function(btn) {
         btn.addEventListener('click', async function() {
-          btn.disabled = true;
-          btn.textContent = 'Rechazando...';
+          btn.disabled = true; btn.textContent = 'Rechazando...';
           try {
             await updateDoc(doc(db, 'solicitudes_material', btn.dataset.rechazar), {
               estado: 'rechazado',
@@ -2646,9 +2820,473 @@ async function showSolicitudes(db, session) {
           } catch(e) { showToast('Error.', 'error'); btn.disabled = false; btn.textContent = 'Rechazar'; }
         });
       });
+
+      // Revisar — abre modal para ajustar y aprobar
+      content.querySelectorAll('[data-revisar]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          const sol = solicitudes.find(function(s) { return s.id === btn.dataset.revisar; });
+          if (sol) showModalRevisar(db, session, sol);
+        });
+      });
+
+      // Completar despacho — abre formulario prellenado
+      content.querySelectorAll('[data-despachar]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          const sol = solicitudes.find(function(s) { return s.id === btn.dataset.despachar; });
+          if (sol) abrirDespachoDesdeSolicitud(db, session, sol);
+        });
+      });
     }
 
-    renderSolicitudes();
+    render();
 
   } catch(e) { content.innerHTML = errHtml(); console.error(e); }
+}
+
+// ─────────────────────────────────────────
+// MODAL REVISAR SOLICITUD
+// Permite ajustar cantidades antes de aprobar
+// ─────────────────────────────────────────
+function showModalRevisar(db, session, sol) {
+  // Copia editable de materiales
+  let mats = (sol.materiales || []).map(function(m) {
+    return Object.assign({}, m);
+  });
+
+  function tc(str) {
+    return safeStr(str).toLowerCase().replace(/\w/g, function(c) { return c.toUpperCase(); });
+  }
+
+  const modal = document.createElement('div');
+  modal.className = 'fixed inset-0 bg-black/50 flex items-end z-50';
+  document.body.appendChild(modal);
+
+  function renderModal() {
+    modal.innerHTML =
+      '<div class="bg-white w-full rounded-t-3xl" style="max-height:90dvh;overflow-y:auto">' +
+        '<div class="px-5 pt-5 pb-2">' +
+          '<div class="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-4"></div>' +
+          '<div class="flex items-center justify-between mb-1">' +
+            '<h2 class="font-bold text-gray-900 text-lg">Revisar solicitud</h2>' +
+            '<button id="mr-close" class="text-gray-400 text-2xl leading-none">✕</button>' +
+          '</div>' +
+          '<p class="text-sm text-gray-500 mb-4">' + safeStr(sol.usuarioNombre) + (sol.usuarioOperativo ? ' · ' + sol.usuarioOperativo : '') + '</p>' +
+
+          // Materiales editables
+          '<p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Materiales solicitados</p>' +
+          '<div class="space-y-2 mb-4">' +
+          mats.map(function(m, idx) {
+            return '<div class="flex items-center gap-3 bg-gray-50 rounded-xl px-3 py-2.5">' +
+              '<div class="flex-1 min-w-0">' +
+                '<p class="text-sm font-semibold text-gray-900 truncate">' + tc(m.nombre) + '</p>' +
+                '<p class="text-xs text-gray-400">' + safeStr(m.unit,'') + '</p>' +
+              '</div>' +
+              '<div class="flex items-center gap-1.5 shrink-0">' +
+                '<button data-mdec="' + idx + '" class="w-8 h-8 rounded-lg border border-gray-300 bg-white text-lg font-bold text-gray-600 flex items-center justify-center">−</button>' +
+                '<span class="w-10 text-center text-base font-bold text-gray-900">' + m.cantidad + '</span>' +
+                '<button data-minc="' + idx + '" class="w-8 h-8 rounded-lg border border-blue-300 bg-blue-50 text-lg font-bold text-blue-600 flex items-center justify-center">+</button>' +
+              '</div>' +
+              '<button data-mrem="' + idx + '" class="w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center shrink-0 text-red-400 text-sm">✕</button>' +
+            '</div>';
+          }).join('') +
+          '</div>' +
+
+          // Botones
+          '<div class="flex gap-3 pb-6">' +
+            '<button id="mr-rechazar" class="flex-1 border border-red-200 text-red-600 font-medium rounded-2xl py-3 text-sm bg-red-50">Rechazar</button>' +
+            '<button id="mr-aprobar" class="flex-1 text-white font-bold rounded-2xl py-3 text-sm" style="background:#166534">✓ Aprobar</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    modal.querySelector('#mr-close').onclick = function() { modal.remove(); };
+
+    modal.querySelectorAll('[data-mdec]').forEach(function(b) {
+      b.onclick = function() {
+        const idx = parseInt(b.dataset.mdec);
+        if (mats[idx].cantidad > 1) { mats[idx].cantidad--; renderModal(); }
+      };
+    });
+    modal.querySelectorAll('[data-minc]').forEach(function(b) {
+      b.onclick = function() { mats[parseInt(b.dataset.minc)].cantidad++; renderModal(); };
+    });
+    modal.querySelectorAll('[data-mrem]').forEach(function(b) {
+      b.onclick = function() { mats.splice(parseInt(b.dataset.mrem), 1); renderModal(); };
+    });
+
+    modal.querySelector('#mr-rechazar').addEventListener('click', async function() {
+      const btn = modal.querySelector('#mr-rechazar');
+      btn.disabled = true; btn.textContent = 'Rechazando...';
+      try {
+        await updateDoc(doc(db, 'solicitudes_material', sol.id), {
+          estado: 'rechazado',
+          rechazadoPor: session.uid,
+          rechazadoPorNombre: session.displayName,
+          fechaRespuesta: serverTimestamp(),
+        });
+        modal.remove();
+        showToast('Solicitud rechazada.', 'success');
+        await showSolicitudes(db, session);
+      } catch(e) { showToast('Error.', 'error'); btn.disabled = false; btn.textContent = 'Rechazar'; }
+    });
+
+    modal.querySelector('#mr-aprobar').addEventListener('click', async function() {
+      if (mats.length === 0) { showToast('Agrega al menos un material.', 'error'); return; }
+      const btn = modal.querySelector('#mr-aprobar');
+      btn.disabled = true; btn.textContent = 'Aprobando...';
+      try {
+        // Marcar como listo para despacho con materiales ajustados
+        await updateDoc(doc(db, 'solicitudes_material', sol.id), {
+          estado: 'listo_para_despacho',
+          materialesAprobados: mats,
+          aprobadoPor: session.uid,
+          aprobadoPorNombre: session.displayName,
+          fechaAprobacion: serverTimestamp(),
+        });
+        modal.remove();
+        showToast('Solicitud aprobada. Completa el despacho.', 'success');
+        await showSolicitudes(db, session);
+      } catch(e) { showToast('Error al aprobar.', 'error'); btn.disabled = false; btn.textContent = '✓ Aprobar'; }
+    });
+  }
+
+  renderModal();
+  modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+}
+
+// ─────────────────────────────────────────
+// ABRIR DESPACHO DESDE SOLICITUD
+// Prellenar formulario con materiales aprobados
+// ─────────────────────────────────────────
+async function abrirDespachoDesdeSolicitud(db, session, sol) {
+  // Cargar inventario para verificar stock
+  const snapI = await getDocs(collection(db, 'kardex/inventario/items'));
+  const itemsMap = {};
+  snapI.docs.forEach(function(d) {
+    const item = normalizeItem({ id: d.id, ...d.data() });
+    if (esValido(item)) itemsMap[d.id] = item;
+  });
+
+  // Materiales aprobados de la solicitud
+  const matsAprobados = sol.materialesAprobados || sol.materiales || [];
+
+  // Buscar items del inventario por nombre (match por nombre normalizado)
+  const sel = matsAprobados.map(function(m) {
+    // Intentar encontrar el item en inventario
+    const found = Object.values(itemsMap).find(function(i) {
+      return safeStr(i.name).toLowerCase() === safeStr(m.nombre).toLowerCase() ||
+             i.id === m.itemId;
+    });
+    if (!found) return null;
+    return {
+      itemId: found.id, name: found.name, unit: found.unit,
+      sapCode: found.sapCode, axCode: found.axCode,
+      stock: found.stock, cantidad: safeNum(m.cantidad),
+      requiereSerial: found.requiereSerial,
+      modoSerial: 'individual', seriales: [], serialInicio: '', serialFin: '',
+    };
+  }).filter(Boolean);
+
+  // Pre-rellenar usuario responsable con el usuario operativo de la solicitud
+  const hdrPreset = {
+    responsable: sol.usuarioOperativo || '',
+    contratista: EMPRESAS_CONTRATISTAS[0] || 'INNOVA',
+    instalador: '',
+    placaSel: '', placaOtro: '',
+    fechaSol: today(), fechaEnt: today(),
+    _solicitudId: sol.id, // referencia para marcar como despachada
+  };
+
+  // Llamar al formulario de salida con datos prellenados
+  showFormSalidaConPreset(db, session, sel, hdrPreset);
+}
+
+// ─────────────────────────────────────────
+// FORMULARIO DE SALIDA CON PRESET
+// Igual que showFormSalida pero con datos precargados
+// ─────────────────────────────────────────
+async function showFormSalidaConPreset(db, session, selInicial, hdrPreset) {
+  const [snapI, snapU] = await Promise.all([
+    getDocs(collection(db, 'kardex/inventario/items')),
+    getDocs(query(collection(db, 'users'), where('active','==',true))),
+  ]);
+
+  const items = snapI.docs
+    .map(d => normalizeItem({ id: d.id, ...d.data() }))
+    .filter(i => esValido(i) && safeNum(i.stock) > 0)
+    .sort((a,b) => safeStr(a.name).localeCompare(safeStr(b.name)));
+
+  const usuarios = snapU.docs
+    .map(d => d.data())
+    .filter(u => ['campo','coordinadora'].includes(u.role))
+    .sort((a,b) => safeStr(a.displayName).localeCompare(safeStr(b.displayName)));
+
+  let sel = selInicial || [];
+  let step = 1;
+  let hdr = hdrPreset || {
+    responsable: '', contratista: EMPRESAS_CONTRATISTAS[0]||'INNOVA',
+    instalador: '', placaSel: '', placaOtro: '',
+    fechaSol: today(), fechaEnt: today(),
+  };
+  let busq = '';
+
+  const solicitudId = hdr._solicitudId || null;
+
+  // Reusar exactamente el mismo código de showFormSalida
+  // pero pasando sel y hdr precargados
+  const ov = document.createElement('div');
+  ov.className = 'fixed inset-0 z-50';
+  document.body.appendChild(ov);
+
+  function tc(str) {
+    return safeStr(str).toLowerCase().replace(/\w/g, c => c.toUpperCase());
+  }
+  function getRec() {
+    try { return JSON.parse(sessionStorage.getItem('kardex_rec')||'[]'); } catch { return []; }
+  }
+  function addRec(id) {
+    const p = getRec().filter(x=>x!==id);
+    sessionStorage.setItem('kardex_rec', JSON.stringify([id,...p].slice(0,6)));
+  }
+
+  // Ir directo al step 2 si ya hay materiales prellenados
+  if (sel.length > 0) step = 2;
+
+  function renderStep1() {
+    ov.innerHTML = '<div class="flex flex-col h-full bg-white" style="max-height:100dvh">' +
+      '<div class="flex items-center gap-3 px-4 py-3 border-b border-gray-100 shrink-0">' +
+        '<button id="s1-close" class="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center shrink-0"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' +
+        '<div class="flex-1"><p class="font-semibold text-gray-900">Despacho de solicitud</p><p class="text-xs text-gray-400">Paso 1 de 2 — Encabezado</p></div>' +
+        '<div class="flex gap-1.5"><div class="w-6 h-1.5 rounded-full" style="background:#1B4F8A"></div><div class="w-6 h-1.5 rounded-full bg-gray-200"></div></div>' +
+      '</div>' +
+      '<div class="flex-1 overflow-y-auto px-4 py-5 space-y-4">' +
+        '<div>' +
+          '<label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Usuario responsable *</label>' +
+          '<div class="grid grid-cols-3 gap-2">' +
+          USUARIOS_RESPONSABLES.map(u =>
+            '<button data-resp="' + u + '" class="py-3.5 rounded-2xl border-2 text-sm font-bold transition-all ' + (hdr.responsable===u ? 'text-white border-transparent' : 'border-gray-200 text-gray-700 bg-white') + '" style="' + (hdr.responsable===u ? 'background:#1B4F8A' : '') + '">' + u + '</button>'
+          ).join('') +
+          '</div>' +
+        '</div>' +
+        '<div><label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Instalador responsable</label>' +
+        '<select id="s1-instalador" class="w-full border-2 border-gray-200 rounded-2xl px-4 py-3 text-sm bg-white focus:outline-none focus:border-blue-400 font-medium text-gray-800">' +
+          '<option value="">Seleccionar...</option>' +
+          usuarios.map(u => '<option value="' + safeStr(u.displayName) + '" ' + (hdr.instalador===safeStr(u.displayName)?'selected':'') + '>' + safeStr(u.displayName) + '</option>').join('') +
+        '</select></div>' +
+        '<div class="grid grid-cols-2 gap-3">' +
+          '<div><label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Empresa</label>' +
+          '<select id="s1-contratista" class="w-full border-2 border-gray-200 rounded-2xl px-3 py-3 text-sm bg-white focus:outline-none focus:border-blue-400">' +
+            EMPRESAS_CONTRATISTAS.map(e => '<option value="' + e + '" ' + (hdr.contratista===e?'selected':'') + '>' + e + '</option>').join('') +
+            '<option value="" ' + (hdr.contratista===''?'selected':'') + '>Otra</option>' +
+          '</select></div>' +
+          '<div><label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Placa</label>' +
+          '<select id="s1-placa" class="w-full border-2 border-gray-200 rounded-2xl px-3 py-3 text-sm bg-white focus:outline-none focus:border-blue-400">' +
+            '<option value="">Seleccionar...</option>' +
+            PLACAS.map(p => '<option value="' + p + '" ' + (hdr.placaSel===p?'selected':'') + '>' + p + '</option>').join('') +
+            '<option value="__otro__" ' + (hdr.placaSel==='__otro__'?'selected':'') + '>Otro</option>' +
+          '</select>' +
+          '<input id="s1-placa-otro" type="text" value="' + hdr.placaOtro + '" placeholder="Ej. P-123" class="' + (hdr.placaSel==='__otro__' ? '' : 'hidden') + ' w-full border-2 border-gray-200 rounded-2xl px-3 py-2.5 text-sm mt-2 font-mono focus:outline-none focus:border-blue-400"/>' +
+          '</div>' +
+        '</div>' +
+        '<div class="grid grid-cols-2 gap-3">' +
+          '<div><label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">F. solicitud</label><input id="s1-fecha-sol" type="date" value="' + hdr.fechaSol + '" class="w-full border-2 border-gray-200 rounded-2xl px-3 py-3 text-sm bg-white focus:outline-none focus:border-blue-400"/></div>' +
+          '<div><label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">F. entrega</label><input id="s1-fecha-ent" type="date" value="' + hdr.fechaEnt + '" class="w-full border-2 border-gray-200 rounded-2xl px-3 py-3 text-sm bg-white focus:outline-none focus:border-blue-400"/></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="px-4 py-4 border-t border-gray-100 shrink-0" style="padding-bottom:max(16px,env(safe-area-inset-bottom))">' +
+        '<div id="s1-err" class="hidden text-sm text-red-600 text-center mb-3"></div>' +
+        '<button id="s1-next" class="w-full font-bold rounded-2xl py-4 text-white flex items-center justify-center gap-2" style="background:#1B4F8A">Continuar — Materiales <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>' +
+      '</div>' +
+    '</div>';
+
+    ov.querySelectorAll('[data-resp]').forEach(b => { b.onclick = () => { hdr.responsable = b.dataset.resp; renderStep1(); }; });
+    ov.querySelector('#s1-placa').addEventListener('change', e => {
+      hdr.placaSel = e.target.value;
+      const otro = ov.querySelector('#s1-placa-otro');
+      if (e.target.value === '__otro__') { otro.classList.remove('hidden'); otro.focus(); }
+      else { otro.classList.add('hidden'); hdr.placaOtro = ''; }
+    });
+    ov.querySelector('#s1-close').onclick = () => ov.remove();
+    ov.querySelector('#s1-next').onclick = () => {
+      hdr.instalador  = ov.querySelector('#s1-instalador').value;
+      hdr.contratista = ov.querySelector('#s1-contratista').value;
+      hdr.placaSel    = ov.querySelector('#s1-placa').value;
+      hdr.placaOtro   = ov.querySelector('#s1-placa-otro')?.value.trim() || '';
+      hdr.fechaSol    = ov.querySelector('#s1-fecha-sol').value;
+      hdr.fechaEnt    = ov.querySelector('#s1-fecha-ent').value;
+      if (!hdr.responsable) {
+        ov.querySelector('#s1-err').textContent = 'Selecciona el usuario responsable.';
+        ov.querySelector('#s1-err').classList.remove('hidden');
+        return;
+      }
+      step = 2; renderStep2();
+    };
+  }
+
+  function renderStep2() {
+    const totalSel = sel.length;
+    const placa = hdr.placaSel === '__otro__' ? hdr.placaOtro : hdr.placaSel;
+
+    ov.innerHTML = '<div class="flex flex-col bg-gray-50" style="height:100dvh;max-height:100dvh">' +
+      '<div class="flex items-center gap-3 px-4 py-3 border-b border-gray-100 bg-white shrink-0">' +
+        '<button id="s2-back" class="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center shrink-0"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></button>' +
+        '<div class="flex-1 min-w-0"><p class="font-semibold text-gray-900">Materiales</p><p class="text-xs text-gray-400 truncate">' + hdr.responsable + (hdr.instalador ? ' · ' + hdr.instalador : '') + (placa ? ' · ' + placa : '') + '</p></div>' +
+        '<div class="flex gap-1.5"><div class="w-6 h-1.5 rounded-full bg-gray-200"></div><div class="w-6 h-1.5 rounded-full" style="background:#1B4F8A"></div></div>' +
+      '</div>' +
+      (totalSel > 0 ?
+        '<div class="px-4 pt-3 pb-1 shrink-0 bg-white border-b border-gray-100">' +
+          '<div class="flex items-center justify-between mb-2"><p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">En el despacho</p><span class="text-xs font-bold px-2 py-0.5 rounded-full text-white" style="background:#1B4F8A">' + totalSel + '</span></div>' +
+          '<div class="space-y-2 pb-1">' +
+          sel.map(function(s, idx) {
+            const restante  = s.stock - s.cantidad;
+            const restColor = restante <= 0 ? '#C62828' : '#166534';
+            return '<div class="flex items-center gap-3 bg-gray-50 rounded-2xl px-3 py-2.5 border border-gray-200">' +
+              '<div class="flex-1 min-w-0"><p class="text-sm font-semibold text-gray-900 truncate leading-tight">' + tc(s.name) + '</p><p class="text-xs font-medium mt-0.5" style="color:' + restColor + '">Restante: ' + restante + ' ' + safeStr(s.unit,'') + '</p></div>' +
+              '<div class="flex items-center gap-1.5 shrink-0">' +
+                '<button data-dec="' + idx + '" class="w-8 h-8 rounded-xl border border-gray-300 bg-white text-lg font-bold text-gray-600 flex items-center justify-center">−</button>' +
+                '<span class="w-8 text-center text-base font-bold text-gray-900">' + s.cantidad + '</span>' +
+                '<button data-inc="' + idx + '" class="w-8 h-8 rounded-xl border text-lg font-bold flex items-center justify-center ' + (s.cantidad>=s.stock ? 'border-gray-200 text-gray-300 bg-gray-50' : 'border-blue-300 text-blue-600 bg-blue-50') + '" ' + (s.cantidad>=s.stock?'disabled':'') + '>+</button>' +
+              '</div>' +
+              '<button data-del="' + idx + '" class="w-7 h-7 rounded-xl bg-red-50 flex items-center justify-center shrink-0"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' +
+            '</div>';
+          }).join('') +
+          '</div>' +
+        '</div>'
+      : '') +
+      '<div class="flex-1 overflow-y-auto px-4 pt-3 pb-2">' +
+        '<div class="relative mb-3"><svg class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' +
+        '<input id="s2-buscar" type="text" value="' + busq + '" placeholder="Buscar material..." autocomplete="off" class="w-full bg-white border-2 border-gray-200 rounded-2xl pl-10 pr-4 py-3 text-sm focus:outline-none focus:border-blue-400"/></div>' +
+        '<div id="s2-lista" class="space-y-1.5 pb-2"></div>' +
+      '</div>' +
+      '<div id="s2-err" class="hidden mx-4 mb-1 text-sm text-red-600 text-center shrink-0"></div>' +
+      '<div class="px-4 py-3 bg-white border-t border-gray-200 shrink-0" style="padding-bottom:max(16px,env(safe-area-inset-bottom))">' +
+        '<button id="s2-submit" class="w-full font-bold rounded-2xl py-4 text-sm text-white transition-all" style="background:' + (totalSel>0 ? '#1B4F8A' : '#D1D5DB') + '" ' + (totalSel===0?'disabled':'') + '>' +
+          (totalSel>0 ? 'Registrar salida · ' + totalSel + ' material' + (totalSel!==1?'es':'') : 'Agrega materiales para continuar') +
+        '</button>' +
+      '</div>' +
+    '</div>';
+
+    ov.querySelector('#s2-back').onclick = () => { step=1; renderStep1(); };
+    ov.querySelectorAll('[data-dec]').forEach(b => { b.onclick = () => { if(sel[+b.dataset.dec].cantidad>1){sel[+b.dataset.dec].cantidad--;renderStep2();}};});
+    ov.querySelectorAll('[data-inc]').forEach(b => { b.onclick = () => { if(sel[+b.dataset.inc].cantidad<sel[+b.dataset.inc].stock){sel[+b.dataset.inc].cantidad++;renderStep2();}};});
+    ov.querySelectorAll('[data-del]').forEach(b => { b.onclick = () => { sel.splice(+b.dataset.del,1);renderStep2();};});
+    ov.querySelector('#s2-buscar').addEventListener('input', e => { busq=e.target.value; renderLista2(); });
+    ov.querySelector('#s2-submit')?.addEventListener('click', handleSubmit);
+    renderLista2();
+  }
+
+  function renderLista2() {
+    const el = ov.querySelector('#s2-lista');
+    if (!el) return;
+    const selIds = new Set(sel.map(s=>s.itemId));
+    const q = busq.trim().toLowerCase();
+    const lista = q ? items.filter(i => safeStr(i.name).toLowerCase().includes(q) || safeStr(i.sapCode,'').includes(q)) : items;
+    if (!lista.length) { el.innerHTML = '<p class="text-sm text-gray-400 text-center py-8">Sin resultados</p>'; return; }
+    el.innerHTML = lista.map(item => {
+      const agregado = selIds.has(item.id);
+      return '<button data-item="' + item.id + '" ' + (agregado?'disabled':'') + ' class="w-full flex items-center justify-between gap-3 text-left px-4 py-3.5 rounded-2xl border-2 ' + (agregado ? 'border-green-200 bg-green-50 cursor-not-allowed' : 'border-gray-200 bg-white active:border-blue-400 active:bg-blue-50') + '">' +
+        '<p class="text-sm font-semibold truncate ' + (agregado?'text-green-700':'text-gray-900') + '">' + tc(item.name) + '</p>' +
+        (agregado ? '<span class="text-xs font-bold text-green-600 shrink-0">✓</span>' : '<span class="text-sm font-bold shrink-0" style="color:#374151">' + item.stock + ' <span class="text-xs font-normal text-gray-400">' + safeStr(item.unit,'') + '</span></span>') +
+      '</button>';
+    }).join('');
+    el.querySelectorAll('[data-item]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const item = items.find(i=>i.id===btn.dataset.item);
+        if (!item || sel.some(s=>s.itemId===item.id)) return;
+        showModalCant(item);
+      });
+    });
+  }
+
+  function showModalCant(item) {
+    const m = document.createElement('div');
+    m.className = 'fixed inset-0 bg-black/50 flex items-end z-50';
+    m.innerHTML = '<div class="bg-white w-full rounded-t-3xl px-5 pt-5 pb-8 space-y-4" style="padding-bottom:max(32px,env(safe-area-inset-bottom))">' +
+      '<div class="w-10 h-1 bg-gray-200 rounded-full mx-auto"></div>' +
+      '<div><p class="font-bold text-gray-900 text-lg">' + tc(item.name) + '</p><p class="text-sm text-gray-400">' + item.stock + ' ' + safeStr(item.unit,'') + ' disponibles</p></div>' +
+      '<div class="flex items-center justify-between gap-4">' +
+        '<button id="mc2-dec" class="w-16 h-16 rounded-2xl border-2 border-gray-200 bg-gray-50 text-3xl font-bold text-gray-400 flex items-center justify-center">−</button>' +
+        '<div class="flex-1 text-center"><input id="mc2-cant" type="number" min="1" max="' + item.stock + '" value="1" class="w-full text-center text-5xl font-black text-gray-900 bg-transparent border-none focus:outline-none"/><p class="text-sm text-gray-400">' + safeStr(item.unit,'') + '</p></div>' +
+        '<button id="mc2-inc" class="w-16 h-16 rounded-2xl border-2 border-blue-300 bg-blue-50 text-3xl font-bold text-blue-600 flex items-center justify-center">+</button>' +
+      '</div>' +
+      '<div id="mc2-err" class="hidden text-sm text-red-500 text-center"></div>' +
+      '<button id="mc2-add" class="w-full text-white font-bold rounded-2xl py-4" style="background:#1B4F8A">Agregar al despacho</button>' +
+    '</div>';
+    document.body.appendChild(m);
+    const cantEl = m.querySelector('#mc2-cant');
+    setTimeout(() => { cantEl.focus(); cantEl.select(); }, 80);
+    m.addEventListener('click', e => { if(e.target===m) m.remove(); });
+    m.querySelector('#mc2-dec').onclick = () => { const v=safeNum(cantEl.value); if(v>1) cantEl.value=v-1; };
+    m.querySelector('#mc2-inc').onclick = () => { const v=safeNum(cantEl.value); if(v<item.stock) cantEl.value=v+1; };
+    const doAdd = () => {
+      const cant=safeNum(cantEl.value);
+      const err=m.querySelector('#mc2-err');
+      if(cant<=0){err.textContent='Ingresa una cantidad mayor a 0.';err.classList.remove('hidden');return;}
+      if(cant>item.stock){err.textContent='Máximo: '+item.stock;err.classList.remove('hidden');return;}
+      sel.push({itemId:item.id,name:item.name,unit:item.unit,sapCode:item.sapCode,axCode:item.axCode,stock:item.stock,cantidad:cant,requiereSerial:item.requiereSerial,modoSerial:'individual',seriales:[],serialInicio:'',serialFin:''});
+      addRec(item.id); m.remove(); renderStep2();
+    };
+    m.querySelector('#mc2-add').addEventListener('click', doAdd);
+    cantEl.addEventListener('keydown', e => { if(e.key==='Enter') doAdd(); });
+  }
+
+  async function handleSubmit() {
+    const errEl = ov.querySelector('#s2-err');
+    const btn   = ov.querySelector('#s2-submit');
+    if (!sel.length) return;
+    errEl?.classList.add('hidden');
+    btn.disabled = true; btn.textContent = 'Registrando...';
+    const placa = hdr.placaSel==='__otro__' ? hdr.placaOtro : hdr.placaSel;
+    try {
+      const ref = await addDoc(collection(db, 'kardex/movimientos/salidas'), {
+        usuarioResponsableUid: hdr.responsable,
+        usuarioResponsable:    hdr.responsable,
+        empresaContratista:    hdr.contratista,
+        instaladorResponsable: hdr.instalador,
+        placaVehiculo:         placa,
+        fechaSolicitud: hdr.fechaSol,
+        fechaEntrega:   hdr.fechaEnt,
+        entregadoPor:    session.displayName,
+        entregadoPorUid: session.uid,
+        solicitudId:     solicitudId,
+        items: sel.map(s => ({
+          itemId:s.itemId, sapCode:s.sapCode, axCode:s.axCode,
+          nombre:s.name, unit:s.unit, cantidad:s.cantidad,
+          requiereSerial:s.requiereSerial,
+          modoSerial:s.requiereSerial?s.modoSerial:null,
+          seriales:s.requiereSerial&&s.modoSerial==='individual'?s.seriales:[],
+          serialInicio:s.requiereSerial&&s.modoSerial==='rango'?s.serialInicio:'',
+          serialFin:s.requiereSerial&&s.modoSerial==='rango'?s.serialFin:'',
+        })),
+        fecha: serverTimestamp(),
+      });
+      for (const s of sel) {
+        await updateDoc(doc(db,'kardex/inventario/items',s.itemId),{stock:increment(-s.cantidad)});
+      }
+      // Marcar solicitud como despachada si viene de una
+      if (solicitudId) {
+        await updateDoc(doc(db,'solicitudes_material',solicitudId),{
+          estado: 'aprobado',
+          salidaId: ref.id,
+          fechaDespacho: serverTimestamp(),
+        });
+      }
+      ov.remove();
+      showToast('Salida registrada correctamente.','success');
+      showMemo({
+        id:ref.id, usuarioResponsable:hdr.responsable,
+        empresaContratista:hdr.contratista, instaladorResponsable:hdr.instalador,
+        entregadoPor:session.displayName, placaVehiculo:placa,
+        fechaSolicitud:hdr.fechaSol, fechaEntrega:hdr.fechaEnt, items:sel,
+      });
+      await showDashboard(db, session);
+    } catch(e) {
+      if(errEl){errEl.textContent='Error al registrar. Intenta de nuevo.';errEl.classList.remove('hidden');}
+      btn.disabled=false;
+      btn.textContent='Registrar salida · '+sel.length+' material'+(sel.length!==1?'es':'');
+      console.error(e);
+    }
+  }
+
+  if (step === 2) renderStep2(); else renderStep1();
 }
