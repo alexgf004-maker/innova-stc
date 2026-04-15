@@ -2172,154 +2172,57 @@ function fmtDate(ts) {
 
 // ─────────────────────────────────────────
 // GENERAR PDF VÍA INNOVA-CONVERTER
-// 1. Llena el Word con los datos del despacho
-// 2. Envía el docx al microservicio en Render
-// 3. Recibe el PDF y lo abre para imprimir
+// Manda JSON → servidor llena Word → convierte PDF → abre
 // ─────────────────────────────────────────
-
-// URL del microservicio — actualiza esto cuando lo despliegues en Render
-const CONVERTER_URL = 'https://innova-converter-558391780384.us-central1.run.app/convert';
+const CONVERTER_URL = 'https://innova-converter-558391780384.us-central1.run.app/generar-pdf';
 
 async function generarYAbrirPDF(memo) {
-  // ── Paso 1: generar el docx llenado en el navegador ──
-  if (!window.JSZip) {
-    await new Promise((res, rej) => {
-      const s = document.createElement('script');
-      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
-      s.onload = res; s.onerror = rej;
-      document.head.appendChild(s);
-    });
-  }
-
-  const templateUrl = new URL('Entrega_de_materiales_OTC_2026.docx', window.location.href).href;
-  const resp = await fetch(templateUrl);
-  if (!resp.ok) throw new Error('No se encontró la plantilla Word en el repositorio.');
-  const arrayBuffer = await resp.arrayBuffer();
-
-  const zip    = await JSZip.loadAsync(arrayBuffer);
-  const xmlStr = await zip.file('word/document.xml').async('string');
-  const parser = new DOMParser();
-  const xmlDoc = parser.parseFromString(xmlStr, 'application/xml');
-  const tables = xmlDoc.querySelectorAll('tbl');
-  const ns     = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-
-  function appendTextToCell(cell, value) {
-    const paras = cell.querySelectorAll('p');
-    const para  = paras[paras.length - 1] || paras[0];
-    if (!para) return;
-    const run = xmlDoc.createElementNS(ns, 'w:r');
-    const t   = xmlDoc.createElementNS(ns, 'w:t');
-    t.setAttribute('xml:space', 'preserve');
-    t.textContent = ' ' + value;
-    run.appendChild(t);
-    para.appendChild(run);
-  }
-
-  function setCellText(cell, value) {
-    cell.querySelectorAll('r').forEach(r => {
-      r.querySelectorAll('t').forEach(t => { t.textContent = ''; });
-    });
-    const para = cell.querySelector('p');
-    if (!para) return;
-    const run = xmlDoc.createElementNS(ns, 'w:r');
-    const t   = xmlDoc.createElementNS(ns, 'w:t');
-    t.setAttribute('xml:space', 'preserve');
-    t.textContent = String(value);
-    run.appendChild(t);
-    para.appendChild(run);
-  }
-
-  // Encabezado (Tabla 0)
-  const HEADER_MAP_DOCX = {
-    USUARIO_RESPONSABLE:    [3, 1],
-    EMPRESA_CONTRATISTA:    [4, 0],
-    INSTALADOR_RESPONSABLE: [4, 1],
-    ENTREGADO_POR:          [5, 0],
-    PLACA_VEHICULO:         [6, 1],
-    FECHA_SOLICITUD:        [7, 0],
-    FECHA_ENTREGA:          [7, 1],
+  // Construir payload JSON con los datos del despacho
+  const payload = {
+    usuarioResponsable:    memo.USUARIO_RESPONSABLE    || '',
+    empresaContratista:    memo.EMPRESA_CONTRATISTA    || '',
+    instaladorResponsable: memo.INSTALADOR_RESPONSABLE || '',
+    entregadoPor:          memo.ENTREGADO_POR          || '',
+    placaVehiculo:         memo.PLACA_VEHICULO         || '',
+    fechaSolicitud:        memo.FECHA_SOLICITUD        || '',
+    fechaEntrega:          memo.FECHA_ENTREGA          || '',
+    items: (memo.MATERIALES || []).map(function(i) {
+      return {
+        sapCode:  String(i.RESERVA  || ''),
+        cantidad: String(i.CANTIDAD || ''),
+      };
+    }),
   };
-  const t0rows = tables[0].querySelectorAll('tr');
-  for (const [campo, [fila, col]] of Object.entries(HEADER_MAP_DOCX)) {
-    const valor = memo[campo];
-    if (!valor || valor === '—') continue;
-    const row   = t0rows[fila];
-    if (!row) continue;
-    const cells = row.querySelectorAll('tc');
-    const cell  = cells[col];
-    if (cell) appendTextToCell(cell, valor);
-  }
 
-  // Cantidades (Tabla 1)
-  const SAP_ROW_MAP = {
-    "221477":2,"213719":3,"328541":4,"352453":5,"352460":6,
-    "352461":7,"352462":8,"353112":9,"354045":10,"354549":11,
-    "200129":12,"355518":13,"338362":14,"219359":15,
-    "328560":17,"243940":18,"337775":19,"337776":20,"337777":21,
-    "210525":22,"212720":23,"214221":24,"301560":25,"245979":26,
-    "355070":27,"244569":28,"353992":29,"211373":30,"211375":31,
-    "353121":32,"355064":33,"338357":34,"353099":35,"353110":36,
-    "353088":37,"200468":39,"200472":40,"200469":41,"200473":42,
-    "213410":43,"214726":44,"214727":45,"352463":46,
-    "219527":48,"221062":49,"200367":50,"282485":51,"350560":52,
-    "212896":53,"350564":54,"221472":56,"200413":57,"211829":58,
-    "213340":59,"222315":60,"353730":61,"338363":62,"338361":63,"338360":64,
-  };
-  const t1rows = tables[1].querySelectorAll('tr');
-  for (const item of memo.MATERIALES) {
-    const sap    = String(item.RESERVA).trim();
-    const rowIdx = SAP_ROW_MAP[sap];
-    if (rowIdx === undefined || !item.CANTIDAD) continue;
-    const row   = t1rows[rowIdx];
-    if (!row) continue;
-    const cells = row.querySelectorAll('tc');
-    if (cells[3]) setCellText(cells[3], String(item.CANTIDAD));
-  }
-
-  const serializer = new XMLSerializer();
-  zip.file('word/document.xml', serializer.serializeToString(xmlDoc));
-  const docxBlob = await zip.generateAsync({
-    type: 'blob',
-    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-  });
-
-  // ── Paso 2: convertir a PDF via Render ──
-  const docxBase64 = await new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload  = () => resolve(reader.result.split(',')[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(docxBlob);
-  });
-
-  const convResp = await fetch(CONVERTER_URL, {
-    method: 'POST',
+  const resp = await fetch(CONVERTER_URL, {
+    method:  'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ docx_base64: docxBase64 }),
+    body:    JSON.stringify(payload),
   });
 
-  if (!convResp.ok) {
-    const err = await convResp.json().catch(() => ({}));
-    throw new Error(err.error || `Error del servidor: ${convResp.status}`);
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.error || 'Error del servidor: ' + resp.status);
   }
 
-  const { pdf_base64 } = await convResp.json();
+  const { pdf_base64 } = await resp.json();
   if (!pdf_base64) throw new Error('El servidor no devolvió el PDF.');
 
-  // ── Paso 3: abrir PDF para imprimir ──
-  const pdfBytes  = Uint8Array.from(atob(pdf_base64), c => c.charCodeAt(0));
-  const pdfBlob   = new Blob([pdfBytes], { type: 'application/pdf' });
-  const pdfUrl    = URL.createObjectURL(pdfBlob);
-  const w         = window.open(pdfUrl, '_blank');
+  // Abrir PDF para imprimir
+  const pdfBytes = Uint8Array.from(atob(pdf_base64), function(c) { return c.charCodeAt(0); });
+  const pdfBlob  = new Blob([pdfBytes], { type: 'application/pdf' });
+  const pdfUrl   = URL.createObjectURL(pdfBlob);
+
+  const w = window.open(pdfUrl, '_blank');
   if (!w) {
-    // Fallback: descarga directa si el navegador bloquea el popup
     const a    = document.createElement('a');
     a.href     = pdfUrl;
-    a.download = `despacho-${memo.FECHA_ENTREGA || 'sin-fecha'}.pdf`;
+    a.download = 'despacho-' + (payload.fechaEntrega || 'sin-fecha') + '.pdf';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
   }
-  setTimeout(() => URL.revokeObjectURL(pdfUrl), 10000);
+  setTimeout(function() { URL.revokeObjectURL(pdfUrl); }, 10000);
 }
 
 // ─────────────────────────────────────────
