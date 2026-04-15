@@ -282,9 +282,7 @@ async function showDashboardCampo(db, session) {
 
   try {
     // Stock del usuario operativo desde movimientos
-    const snapSalidas = await getDocs(query(
-      collection(db, 'kardex/movimientos/salidas'), orderBy('fecha', 'desc')
-    ));
+    const snapSalidas = await getDocs(collection(db, 'kardex/movimientos/salidas'));
     const snapItems = await getDocs(collection(db, 'kardex/inventario/items'));
 
     const itemMap = {};
