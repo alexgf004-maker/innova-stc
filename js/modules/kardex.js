@@ -2084,11 +2084,11 @@ function imprimirDespacho(memo) {
   const serialMap = {};
   for (const it of (memo.MATERIALES || [])) {
     const sap = String(it.RESERVA || '').trim();
-    if (it.SERIALES && it.SERIALES.length > 0) {
-      serialMap[sap] = { tipo:'individual', seriales: it.SERIALES };
-    } else if (it.SERIAL_INICIO) {
-      const ini    = String(it.SERIAL_INICIO).trim();
-      const fin    = String(it.SERIAL_FIN || '').trim();
+    if (it._seriales && it._seriales.length > 0) {
+      serialMap[sap] = { tipo:'individual', seriales: it._seriales };
+    } else if (it._serialInicio) {
+      const ini    = String(it._serialInicio).trim();
+      const fin    = String(it._serialFin || '').trim();
       const nIni   = parseInt(ini.replace(/[^0-9]/g,''), 10);
       const nFin   = parseInt(fin.replace(/[^0-9]/g,''), 10);
       const prefix = ini.replace(/[0-9]+$/, '');
