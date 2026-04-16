@@ -1846,6 +1846,235 @@ async function showFormSalida(db, session) {
 // ─────────────────────────────────────────
 // HISTORIAL
 // ─────────────────────────────────────────
+// ─────────────────────────────────────────
+// DEVOLUCIÓN DIRECTA (admin/coordinadora)
+// ─────────────────────────────────────────
+async function showFormDevolucion(db, session, salida) {
+  // Build items list with serial support
+  const items = (salida.items || []);
+  let selDev = {}; // itemId -> { cantidad, seriales[], serialInicio, serialFin, modoSerial }
+  items.forEach(function(i) { selDev[i.itemId] = { cantidad:0, seriales:[], serialInicio:'', serialFin:'', modoSerial:'individual', requiereSerial:!!i.requiereSerial, nombre:i.nombre||i.name, unit:i.unit||i.unidad, sapCode:i.sapCode, cantidadOriginal:i.cantidad }; });
+
+  function buildItemsHTML() {
+    return items.map(function(it) {
+      const sd = selDev[it.itemId];
+      const esSello = it.sapCode === '354549';
+      const esSer   = !!it.requiereSerial;
+      return '<div class="border border-gray-200 rounded-xl p-3 space-y-2" id="dev-item-' + it.itemId + '">' +
+        '<div class="flex items-center justify-between gap-2">' +
+          '<p class="text-sm font-medium text-gray-900 flex-1 leading-tight">' + safeStr(it.nombre||it.name) + '</p>' +
+          '<label class="flex items-center gap-1.5 shrink-0">' +
+            '<input type="checkbox" class="dev-chk w-4 h-4 rounded" style="accent-color:#1B4F8A" data-iid="' + it.itemId + '" ' + (sd.cantidad > 0 ? 'checked' : '') + '/>' +
+            '<span class="text-xs text-gray-500">Devolver</span>' +
+          '</label>' +
+        '</div>' +
+        '<div class="dev-campos-' + it.itemId + (sd.cantidad > 0 ? '' : ' hidden') + '">' +
+          (!esSer ?
+            '<div>' +
+              '<label class="text-xs text-gray-500">Cantidad a devolver (máx ' + it.cantidad + ')</label>' +
+              '<input type="number" min="1" max="' + it.cantidad + '" value="' + (sd.cantidad||1) + '" class="dev-cant w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-center font-semibold mt-1 focus:outline-none focus:ring-2 focus:ring-blue-400" data-iid="' + it.itemId + '"/>' +
+            '</div>'
+          :
+            '<div class="space-y-2">' +
+              (!esSello ?
+                '<div class="flex gap-2">' +
+                  '<button class="dev-modo-ind flex-1 py-1.5 rounded-lg text-xs font-semibold border-2 ' + (sd.modoSerial==='individual' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500') + '" data-iid="' + it.itemId + '">Individual</button>' +
+                  '<button class="dev-modo-rng flex-1 py-1.5 rounded-lg text-xs font-semibold border-2 ' + (sd.modoSerial==='rango' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500') + '" data-iid="' + it.itemId + '">Rango</button>' +
+                '</div>'
+              : '') +
+              (sd.modoSerial === 'rango' ?
+                '<div class="flex gap-2">' +
+                  '<div class="flex-1"><p class="text-xs text-gray-400 mb-1">Serial inicio</p><input type="text" class="dev-ini w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-400" data-iid="' + it.itemId + '" value="' + (sd.serialInicio||'') + '"/></div>' +
+                  '<div class="flex-1"><p class="text-xs text-gray-400 mb-1">Serial fin</p><input type="text" class="dev-fin w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-400" data-iid="' + it.itemId + '" value="' + (sd.serialFin||'') + '"/></div>' +
+                '</div>'
+              :
+                '<div><p class="text-xs text-gray-400 mb-1">Seriales (uno por línea)</p><textarea class="dev-sers w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none" rows="3" data-iid="' + it.itemId + '">' + (sd.seriales||[]).join('\n') + '</textarea></div>'
+              ) +
+              '<div class="bg-blue-50 rounded-lg px-3 py-2 text-center">' +
+                '<p class="text-xs text-blue-500">Cantidad calculada</p>' +
+                '<p class="dev-cant-display text-lg font-black text-blue-700" data-iid="' + it.itemId + '">—</p>' +
+              '</div>' +
+            '</div>'
+          ) +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  const ov = mkOverlay(
+    '<div class="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">' +
+      '<div>' +
+        '<h2 class="font-semibold text-gray-900">Registrar devolución</h2>' +
+        '<p class="text-xs text-gray-400 mt-0.5">' + safeStr(salida.usuarioResponsable) + ' · ' + fmtDate(salida.fecha) + '</p>' +
+      '</div>' +
+      '<button id="dv-close" class="text-gray-400 hover:text-gray-700">✕</button>' +
+    '</div>' +
+    '<div class="flex-1 overflow-y-auto px-5 py-4 space-y-3">' +
+      '<div id="dv-items">' + buildItemsHTML() + '</div>' +
+      '<div>' +
+        '<label class="text-xs text-gray-500 font-medium">Motivo (opcional)</label>' +
+        '<textarea id="dv-motivo" rows="2" placeholder="Ej. Material sobrante, equipo defectuoso..." class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"></textarea>' +
+      '</div>' +
+      '<div id="dv-err" class="hidden text-sm text-red-500 bg-red-50 rounded-xl px-3 py-2"></div>' +
+    '</div>' +
+    '<div class="px-5 py-4 border-t border-gray-100 flex gap-3 shrink-0">' +
+      '<button id="dv-cancel" class="flex-1 border border-gray-200 text-gray-600 font-medium rounded-xl py-3 text-sm">Cancelar</button>' +
+      '<button id="dv-submit" class="flex-1 text-white font-medium rounded-xl py-3 text-sm" style="background:#B45309">Registrar devolución</button>' +
+    '</div>'
+  );
+
+  ov.querySelector('#dv-close').onclick = ov.querySelector('#dv-cancel').onclick = () => ov.remove();
+
+  function calcCant(iid) {
+    const sd = selDev[iid];
+    if (!sd.requiereSerial) return sd.cantidad;
+    if (sd.modoSerial === 'rango') {
+      const nI = parseInt((sd.serialInicio||'').replace(/[^0-9]/g,''), 10);
+      const nF = parseInt((sd.serialFin||'').replace(/[^0-9]/g,''), 10);
+      return (!isNaN(nI) && !isNaN(nF) && nF >= nI) ? (nF - nI + 1) : 0;
+    }
+    return (sd.seriales||[]).length;
+  }
+
+  function updateDisplay(iid) {
+    const disp = ov.querySelector('.dev-cant-display[data-iid="' + iid + '"]');
+    if (disp) disp.textContent = calcCant(iid) || '—';
+  }
+
+  function wireItem(iid) {
+    const sd = selDev[iid];
+    // Checkbox toggle
+    const chk = ov.querySelector('.dev-chk[data-iid="' + iid + '"]');
+    const campos = ov.querySelector('.dev-campos-' + iid);
+    if (chk) chk.addEventListener('change', function() {
+      if (this.checked) { campos.classList.remove('hidden'); if (!sd.requiereSerial) sd.cantidad = 1; }
+      else { campos.classList.add('hidden'); sd.cantidad = 0; }
+    });
+    // Cantidad (no serializable)
+    const cantEl = ov.querySelector('.dev-cant[data-iid="' + iid + '"]');
+    if (cantEl) cantEl.addEventListener('input', function() { sd.cantidad = safeNum(this.value); });
+    // Modo buttons
+    const indBtn = ov.querySelector('.dev-modo-ind[data-iid="' + iid + '"]');
+    const rngBtn = ov.querySelector('.dev-modo-rng[data-iid="' + iid + '"]');
+    if (indBtn) indBtn.addEventListener('click', function() {
+      sd.modoSerial = 'individual';
+      ov.querySelector('#dv-items').innerHTML = buildItemsHTML();
+      items.forEach(function(i){ wireItem(i.itemId); });
+    });
+    if (rngBtn) rngBtn.addEventListener('click', function() {
+      sd.modoSerial = 'rango';
+      ov.querySelector('#dv-items').innerHTML = buildItemsHTML();
+      items.forEach(function(i){ wireItem(i.itemId); });
+    });
+    // Serial inputs
+    const iniEl = ov.querySelector('.dev-ini[data-iid="' + iid + '"]');
+    const finEl = ov.querySelector('.dev-fin[data-iid="' + iid + '"]');
+    const sersEl= ov.querySelector('.dev-sers[data-iid="' + iid + '"]');
+    if (iniEl) iniEl.addEventListener('input', function() { sd.serialInicio = this.value.trim(); updateDisplay(iid); });
+    if (finEl) finEl.addEventListener('input', function() { sd.serialFin = this.value.trim(); updateDisplay(iid); });
+    if (sersEl) sersEl.addEventListener('input', function() {
+      sd.seriales = this.value.trim().split('\n').map(function(s){return s.trim();}).filter(Boolean);
+      updateDisplay(iid);
+    });
+  }
+
+  items.forEach(function(i){ wireItem(i.itemId); });
+
+  ov.querySelector('#dv-submit').onclick = async function() {
+    const errEl = ov.querySelector('#dv-err');
+    const btn   = ov.querySelector('#dv-submit');
+    const motivo = ov.querySelector('#dv-motivo').value.trim();
+    errEl.classList.add('hidden');
+
+    // Collect items to return
+    const devItems = [];
+    for (const it of items) {
+      const sd = selDev[it.itemId];
+      const chk = ov.querySelector('.dev-chk[data-iid="' + it.itemId + '"]');
+      if (!chk || !chk.checked) continue;
+
+      let cant = 0, seriales = [], serialInicio = '', serialFin = '';
+      if (sd.requiereSerial) {
+        if (sd.modoSerial === 'rango') {
+          serialInicio = sd.serialInicio;
+          serialFin    = sd.serialFin;
+          const nI = parseInt(serialInicio.replace(/[^0-9]/g,''), 10);
+          const nF = parseInt(serialFin.replace(/[^0-9]/g,''), 10);
+          cant = (!isNaN(nI) && !isNaN(nF) && nF >= nI) ? (nF - nI + 1) : 0;
+          if (!serialInicio || !serialFin || cant <= 0) { errEl.textContent = 'Ingresa rango válido para ' + safeStr(it.nombre||it.name); errEl.classList.remove('hidden'); return; }
+        } else {
+          seriales = sd.seriales || [];
+          cant = seriales.length;
+          if (!cant) { errEl.textContent = 'Ingresa seriales para ' + safeStr(it.nombre||it.name); errEl.classList.remove('hidden'); return; }
+        }
+        if (cant > it.cantidad) { errEl.textContent = 'No puedes devolver más de ' + it.cantidad + ' de ' + safeStr(it.nombre||it.name); errEl.classList.remove('hidden'); return; }
+      } else {
+        cant = sd.cantidad;
+        if (!cant || cant <= 0) { errEl.textContent = 'Ingresa cantidad válida para ' + safeStr(it.nombre||it.name); errEl.classList.remove('hidden'); return; }
+        if (cant > it.cantidad) { errEl.textContent = 'No puedes devolver más de ' + it.cantidad + ' de ' + safeStr(it.nombre||it.name); errEl.classList.remove('hidden'); return; }
+      }
+
+      devItems.push({ itemId:it.itemId, nombre:it.nombre||it.name, unit:it.unit||it.unidad, sapCode:it.sapCode, cantidad:cant, requiereSerial:!!it.requiereSerial, modoSerial:sd.modoSerial, seriales, serialInicio, serialFin });
+    }
+
+    if (!devItems.length) { errEl.textContent = 'Selecciona al menos un material a devolver.'; errEl.classList.remove('hidden'); return; }
+
+    btn.disabled = true; btn.textContent = 'Registrando...';
+    try {
+      // 1. Update stock
+      for (const di of devItems) {
+        await updateDoc(doc(db, 'kardex/inventario/items', di.itemId), { stock: increment(di.cantidad) });
+      }
+
+      // 2. Reactivate serials
+      for (const di of devItems) {
+        if (!di.requiereSerial) continue;
+        let lista = di.seriales;
+        if (di.modoSerial === 'rango') {
+          const nI = parseInt(di.serialInicio.replace(/[^0-9]/g,''), 10);
+          const nF = parseInt(di.serialFin.replace(/[^0-9]/g,''), 10);
+          const prefix = di.serialInicio.replace(/[0-9]+$/, '');
+          const digits = di.serialInicio.replace(/[^0-9]/g,'').length;
+          lista = [];
+          for (let n = nI; n <= nF; n++) lista.push(prefix + String(n).padStart(digits, '0'));
+        }
+        if (!lista.length) continue;
+        const snap = await getDocs(query(
+          collection(db, 'kardex/seriales/items'),
+          where('itemId', '==', di.itemId),
+          where('estado', '==', 'despachado')
+        ));
+        const serSet = new Set(lista);
+        const updates = snap.docs
+          .filter(function(d){ return serSet.has(d.data().serial); })
+          .map(function(d){ return updateDoc(d.ref, { estado:'disponible', salidaId:null, fechaSalida:null, usuarioDespacho:null }); });
+        await Promise.all(updates);
+      }
+
+      // 3. Register movement
+      await addDoc(collection(db, 'kardex/movimientos/ajustes'), {
+        tipo: 'devolucion',
+        salidaOrigen: salida.id,
+        usuarioResponsable: safeStr(salida.usuarioResponsable),
+        items: devItems,
+        motivo: motivo || 'Sin motivo',
+        registradoPor: session.uid,
+        registradoPorNombre: session.displayName,
+        fecha: serverTimestamp(),
+      });
+
+      ov.remove();
+      showToast('Devolución registrada correctamente.', 'success');
+      await showHistorial(db, session);
+    } catch(e) {
+      errEl.textContent = 'Error al registrar. Intenta de nuevo.';
+      errEl.classList.remove('hidden');
+      btn.disabled = false; btn.textContent = 'Registrar devolución';
+      console.error(e);
+    }
+  };
+}
+
 async function showHistorial(db, session) {
   setTab('historial');
   const content = document.getElementById('kardex-content');
@@ -1871,7 +2100,10 @@ async function showHistorial(db, session) {
                   <p class="text-xs text-gray-400">${fmtDate(s.fecha)} · ${safeStr(s.entregadoPor || s.registradoPorNombre)}</p>
                   ${s.empresaContratista ? `<p class="text-xs text-gray-400">${s.empresaContratista}</p>` : ''}
                 </div>
-                <button data-smemo="${s.id}" class="text-xs font-medium px-2 py-1 rounded-lg shrink-0" style="color:#1B4F8A;background:#EFF6FF">Memo</button>
+                <div class="flex gap-1.5 shrink-0">
+                  <button data-smemo="${s.id}" class="text-xs font-medium px-2 py-1 rounded-lg" style="color:#1B4F8A;background:#EFF6FF">Memo</button>
+                  <button data-sdev="${s.id}" class="text-xs font-medium px-2 py-1 rounded-lg" style="color:#B45309;background:#FEF3C7">Devolver</button>
+                </div>
               </div>
               <div class="flex flex-wrap gap-1 mt-2">
                 ${(s.items||[]).map(i =>
@@ -1889,6 +2121,12 @@ async function showHistorial(db, session) {
       b.onclick = () => {
         const s = salidaMap[b.dataset.smemo];
         if (s) showMemo({ ...s, fecha: s.fecha?.toDate?.() || new Date() });
+      };
+    });
+    content.querySelectorAll('[data-sdev]').forEach(b => {
+      b.onclick = () => {
+        const s = salidaMap[b.dataset.sdev];
+        if (s) showFormDevolucion(db, session, s);
       };
     });
   } catch(e) { content.innerHTML = errHtml(); console.error(e); }
