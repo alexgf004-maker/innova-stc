@@ -2289,16 +2289,16 @@ function imprimirDespacho(memo) {
         rows += '<tr><td class="nb">' + i + '</td><td' + cls + '>' + val + '</td></tr>';
       }
     }
-    // Calculate row height to fill the block exactly
-    // Block heights: 30-row=166.4mm, sello=59.7mm, 5-row=36.1mm, 3-row=36.1mm
-    // Header ~9.5mm, sello subheader ~3.5mm
-    var hdrH  = 9.5;
+    // Inject exact row height so rows fill the block regardless of iframe rendering
+    // Heights measured from Word: 30-row blocks=166.4mm, sello=59.7mm, 5-row=36.1mm, 3-row=36.1mm
+    // Header occupies ~9.5mm (2 lines cod + nombre), sello subheader ~3.5mm
     var totalH = b.filas >= 30 ? 166.4 : b.tipo === 'sello' ? 59.7 : 36.1;
-    var subH  = b.tipo === 'sello' ? 3.5 : 0;
-    var rowH  = ((totalH - hdrH - subH) / b.filas).toFixed(2);
-    var rowStyle = ' style="height:' + rowH + 'mm;"';
-    rows = rows.replace(/<tr>/g, '<tr' + rowStyle + '>');
-    return '<div class="tb-body"><table>' + rows + '</table></div>';
+    var hdrH   = 9.5;
+    var subH   = b.tipo === 'sello' ? 3.5 : 0;
+    var rowH   = ((totalH - hdrH - subH) / b.filas).toFixed(3);
+    // Inject height and line-height on every <tr>
+    rows = rows.replace(/<tr>/g, '<tr style="height:' + rowH + 'mm;max-height:' + rowH + 'mm;">');
+    return '<div class="tb-body"><table style="width:100%;border-collapse:collapse;table-layout:fixed;">' + rows + '</table></div>';
   }
 
   const p2 =
