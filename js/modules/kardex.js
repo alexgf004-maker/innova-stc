@@ -1204,100 +1204,126 @@ async function showFormSalida(db, session) {
 
   // ── Modal cantidad + seriales ──
   function showCantidadModal(item) {
-    const esSello   = item.sapCode === '354549';
-    const esSer     = !!item.requiereSerial;
-    // Estado interno del modal
-    let modo = esSello ? 'rango' : 'individual';
-
-    function buildModalHTML(cantVal) {
-      const serSection = !esSer ? '' : `
-        <div class="border-t border-gray-100 pt-4 space-y-3">
-          <p class="text-sm font-semibold text-gray-700">Seriales / Sellos</p>
-
-          ${!esSello ? `
-          <!-- Selector modo solo para medidores -->
-          <div class="flex gap-2">
-            <button id="mc-modo-ind"
-              class="flex-1 py-2 rounded-xl text-sm font-semibold border-2 transition-all
-                ${modo==='individual' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-500'}">
-              Individual
-            </button>
-            <button id="mc-modo-rng"
-              class="flex-1 py-2 rounded-xl text-sm font-semibold border-2 transition-all
-                ${modo==='rango' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-500'}">
-              Rango
-            </button>
-          </div>` : ''}
-
-          ${modo === 'rango' ? `
-          <!-- Rango -->
-          <div class="flex gap-2">
-            <div class="flex-1">
-              <p class="text-xs text-gray-400 mb-1">Serial inicio</p>
-              <input id="mc-ini" type="text" placeholder="Ej: 12345001"
-                class="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-400"/>
-            </div>
-            <div class="flex-1">
-              <p class="text-xs text-gray-400 mb-1">Serial fin</p>
-              <input id="mc-fin" type="text" placeholder="Ej: 12345030"
-                class="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-400"/>
-            </div>
-          </div>` : `
-          <!-- Individual -->
-          <div>
-            <p class="text-xs text-gray-400 mb-1">Seriales (uno por línea)</p>
-            <textarea id="mc-sers" rows="4" placeholder="12345001&#10;12345002&#10;12345003"
-              class="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-blue-400 resize-none"></textarea>
-          </div>`}
-        </div>`;
-
-      return `
-      <div class="bg-white w-full rounded-t-3xl px-5 pt-5"
-        style="padding-bottom:max(32px,env(safe-area-inset-bottom));max-height:90dvh;overflow-y:auto">
-        <div class="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-4"></div>
-        <div class="mb-4">
-          <p class="font-bold text-gray-900 text-lg leading-tight">${tc(item.name)}</p>
-          <p class="text-sm text-gray-400 mt-0.5">${item.stock} ${safeStr(item.unit,'')} en bodega</p>
-        </div>
-        ${buildStockWarning(item, hdr)}
-        <div class="flex items-center justify-between gap-4 mb-4">
-          <button id="mc-dec"
-            class="w-16 h-16 rounded-2xl border-2 border-gray-200 bg-gray-50 text-3xl font-bold text-gray-400 flex items-center justify-center active:bg-gray-200">−</button>
-          <div class="flex-1 text-center">
-            <input id="mc-cant" type="number" min="1" max="${item.stock}" value="${cantVal}"
-              class="w-full text-center text-5xl font-black text-gray-900 bg-transparent border-none focus:outline-none leading-none py-2"/>
-            <p class="text-sm text-gray-400 -mt-1">${safeStr(item.unit,'')}</p>
-          </div>
-          <button id="mc-inc"
-            class="w-16 h-16 rounded-2xl border-2 border-blue-300 bg-blue-50 text-3xl font-bold text-blue-600 flex items-center justify-center active:bg-blue-100">+</button>
-        </div>
-        ${serSection}
-        <div id="mc-err" class="hidden text-sm text-red-500 text-center mt-3"></div>
-        <button id="mc-add"
-          class="w-full text-white font-bold rounded-2xl py-4 text-base active:opacity-90 mt-4" style="background:#1B4F8A">
-          Agregar al despacho
-        </button>
-      </div>`;
-    }
+    const esSello = item.sapCode === '354549';
+    const esSer   = !!item.requiereSerial;
+    let modo      = esSello ? 'rango' : 'individual';
+    let cantVal   = 1;
 
     const modal = document.createElement('div');
     modal.className = 'fixed inset-0 bg-black/50 flex items-end z-50';
+    document.body.appendChild(modal);
+    modal.addEventListener('click', function(e) { if (e.target===modal) modal.remove(); });
 
-    function render(cantVal) {
-      modal.innerHTML = buildModalHTML(cantVal || 1);
+    function render() {
+      const sheet = document.createElement('div');
+      sheet.className = 'bg-white w-full rounded-t-3xl px-5 pt-5';
+      sheet.style.cssText = 'padding-bottom:max(32px,env(safe-area-inset-bottom));max-height:90dvh;overflow-y:auto';
+
+      // Drag handle
+      const handle = document.createElement('div');
+      handle.className = 'w-10 h-1 bg-gray-200 rounded-full mx-auto mb-4';
+      sheet.appendChild(handle);
+
+      // Título
+      const title = document.createElement('div');
+      title.className = 'mb-4';
+      title.innerHTML = '<p class="font-bold text-gray-900 text-lg leading-tight">' + tc(item.name) + '</p>' +
+        '<p class="text-sm text-gray-400 mt-0.5">' + item.stock + ' ' + safeStr(item.unit,'') + ' en bodega</p>';
+      sheet.appendChild(title);
+
+      // Stock warning
+      const warn = document.createElement('div');
+      warn.innerHTML = buildStockWarning(item, hdr);
+      if (warn.innerHTML) sheet.appendChild(warn);
+
+      // Cantidad
+      const cantRow = document.createElement('div');
+      cantRow.className = 'flex items-center justify-between gap-4 mb-4';
+      cantRow.innerHTML =
+        '<button id="mc-dec" class="w-16 h-16 rounded-2xl border-2 border-gray-200 bg-gray-50 text-3xl font-bold text-gray-400 flex items-center justify-center active:bg-gray-200">−</button>' +
+        '<div class="flex-1 text-center">' +
+          '<input id="mc-cant" type="number" min="1" max="' + item.stock + '" value="' + cantVal + '" class="w-full text-center text-5xl font-black text-gray-900 bg-transparent border-none focus:outline-none leading-none py-2"/>' +
+          '<p class="text-sm text-gray-400 -mt-1">' + safeStr(item.unit,'') + '</p>' +
+        '</div>' +
+        '<button id="mc-inc" class="w-16 h-16 rounded-2xl border-2 border-blue-300 bg-blue-50 text-3xl font-bold text-blue-600 flex items-center justify-center active:bg-blue-100">+</button>';
+      sheet.appendChild(cantRow);
+
+      // Seriales
+      if (esSer) {
+        const serDiv = document.createElement('div');
+        serDiv.className = 'border-t border-gray-100 pt-4 space-y-3';
+
+        const serTitle = document.createElement('p');
+        serTitle.className = 'text-sm font-semibold text-gray-700';
+        serTitle.textContent = 'Seriales / Sellos';
+        serDiv.appendChild(serTitle);
+
+        // Selector modo (solo medidores)
+        if (!esSello) {
+          const modoRow = document.createElement('div');
+          modoRow.className = 'flex gap-2';
+          modoRow.innerHTML =
+            '<button id="mc-modo-ind" class="flex-1 py-2 rounded-xl text-sm font-semibold border-2 transition-all ' +
+              (modo==='individual' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-500') + '">Individual</button>' +
+            '<button id="mc-modo-rng" class="flex-1 py-2 rounded-xl text-sm font-semibold border-2 transition-all ' +
+              (modo==='rango' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-500') + '">Rango</button>';
+          serDiv.appendChild(modoRow);
+        }
+
+        // Campos según modo
+        if (modo === 'rango') {
+          const rangoRow = document.createElement('div');
+          rangoRow.className = 'flex gap-2';
+          rangoRow.innerHTML =
+            '<div class="flex-1"><p class="text-xs text-gray-400 mb-1">Serial inicio</p>' +
+              '<input id="mc-ini" type="text" placeholder="Ej: 12345001" class="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-400"/></div>' +
+            '<div class="flex-1"><p class="text-xs text-gray-400 mb-1">Serial fin</p>' +
+              '<input id="mc-fin" type="text" placeholder="Ej: 12345030" class="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-400"/></div>';
+          serDiv.appendChild(rangoRow);
+        } else {
+          const indDiv = document.createElement('div');
+          indDiv.innerHTML =
+            '<p class="text-xs text-gray-400 mb-1">Seriales (uno por línea)</p>' +
+            '<textarea id="mc-sers" rows="4" placeholder="12345001
+12345002
+12345003" class="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-blue-400 resize-none"></textarea>';
+          serDiv.appendChild(indDiv);
+        }
+        sheet.appendChild(serDiv);
+      }
+
+      // Error
+      const errEl = document.createElement('div');
+      errEl.id = 'mc-err';
+      errEl.className = 'hidden text-sm text-red-500 text-center mt-3';
+      sheet.appendChild(errEl);
+
+      // Botón agregar
+      const addBtn = document.createElement('button');
+      addBtn.id = 'mc-add';
+      addBtn.className = 'w-full text-white font-bold rounded-2xl py-4 text-base active:opacity-90 mt-4';
+      addBtn.style.background = '#1B4F8A';
+      addBtn.textContent = 'Agregar al despacho';
+      sheet.appendChild(addBtn);
+
+      // Limpiar y montar
+      modal.innerHTML = '';
+      modal.appendChild(sheet);
+
       const cantEl = modal.querySelector('#mc-cant');
+      setTimeout(function() { cantEl.focus(); cantEl.select(); }, 80);
 
-      modal.addEventListener('click', e => { if (e.target===modal) modal.remove(); });
-      modal.querySelector('#mc-dec').onclick = () => { const v=safeNum(cantEl.value); if(v>1) { cantEl.value=v-1; } };
-      modal.querySelector('#mc-inc').onclick = () => { const v=safeNum(cantEl.value); if(v<item.stock) { cantEl.value=v+1; } };
+      modal.querySelector('#mc-dec').onclick = function() { cantVal = Math.max(1, safeNum(cantEl.value)-1); cantEl.value = cantVal; };
+      modal.querySelector('#mc-inc').onclick = function() { cantVal = Math.min(item.stock, safeNum(cantEl.value)+1); cantEl.value = cantVal; };
+      cantEl.oninput = function() { cantVal = safeNum(cantEl.value); };
 
-      // Botones modo (solo medidores)
-      modal.querySelector('#mc-modo-ind')?.addEventListener('click', () => { modo='individual'; render(safeNum(cantEl.value)); });
-      modal.querySelector('#mc-modo-rng')?.addEventListener('click', () => { modo='rango'; render(safeNum(cantEl.value)); });
+      if (!esSello) {
+        modal.querySelector('#mc-modo-ind')?.addEventListener('click', function() { cantVal=safeNum(cantEl.value); modo='individual'; render(); });
+        modal.querySelector('#mc-modo-rng')?.addEventListener('click', function() { cantVal=safeNum(cantEl.value); modo='rango'; render(); });
+      }
 
-      const doAdd = () => {
-        const cant  = safeNum(cantEl.value);
-        const errEl = modal.querySelector('#mc-err');
+      addBtn.addEventListener('click', function() {
+        const cant = safeNum(cantEl.value);
         if (cant<=0)         { errEl.textContent='Ingresa una cantidad mayor a 0.'; errEl.classList.remove('hidden'); return; }
         if (cant>item.stock) { errEl.textContent='Máximo: '+item.stock+' '+safeStr(item.unit,''); errEl.classList.remove('hidden'); return; }
 
@@ -1308,8 +1334,7 @@ async function showFormSalida(db, session) {
             serialFin    = (modal.querySelector('#mc-fin')?.value || '').trim();
           } else {
             const raw = (modal.querySelector('#mc-sers')?.value || '').trim();
-            seriales = raw ? raw.split('
-').map(s=>s.trim()).filter(Boolean) : [];
+            seriales = raw ? raw.split('\n').map(function(s){return s.trim();}).filter(Boolean) : [];
           }
         }
 
@@ -1318,20 +1343,17 @@ async function showFormSalida(db, session) {
           sapCode:item.sapCode, axCode:item.axCode, stock:item.stock,
           cantidad:cant, requiereSerial:esSer,
           modoSerial: esSer ? modo : 'individual',
-          seriales, serialInicio, serialFin,
+          seriales:seriales, serialInicio:serialInicio, serialFin:serialFin,
         });
         addRec(item.id);
         modal.remove();
         renderStep2();
-      };
+      });
 
-      modal.querySelector('#mc-add').addEventListener('click', doAdd);
-      cantEl.addEventListener('keydown', e => { if(e.key==='Enter') doAdd(); });
-      setTimeout(() => { cantEl.focus(); cantEl.select(); }, 80);
+      cantEl.addEventListener('keydown', function(e) { if(e.key==='Enter') addBtn.click(); });
     }
 
-    document.body.appendChild(modal);
-    render(1);
+    render();
   }
 
   // ── Submit ──
