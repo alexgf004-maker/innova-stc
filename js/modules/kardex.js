@@ -1359,38 +1359,63 @@ async function showFormSalida(db, session) {
     document.body.appendChild(modal);
     modal.addEventListener('click', function(e) { if (e.target===modal) modal.remove(); });
 
+    function calcCantFromSerial() {
+      if (modo === 'rango') {
+        const ini  = (modal.querySelector('#mc-ini')?.value || '').trim();
+        const fin  = (modal.querySelector('#mc-fin')?.value || '').trim();
+        const nIni = parseInt(ini.replace(/[^0-9]/g,''), 10);
+        const nFin = parseInt(fin.replace(/[^0-9]/g,''), 10);
+        return (!isNaN(nIni) && !isNaN(nFin) && nFin >= nIni) ? (nFin - nIni + 1) : 0;
+      } else {
+        const raw = (modal.querySelector('#mc-sers')?.value || '').trim();
+        return raw ? raw.split('\n').map(function(s){return s.trim();}).filter(Boolean).length : 0;
+      }
+    }
+
+    function updateCantDisplay() {
+      const disp = modal.querySelector('#mc-cant-display');
+      if (disp) disp.textContent = calcCantFromSerial() || '—';
+    }
+
     function render() {
       const sheet = document.createElement('div');
       sheet.className = 'bg-white w-full rounded-t-3xl px-5 pt-5';
       sheet.style.cssText = 'padding-bottom:max(32px,env(safe-area-inset-bottom));max-height:90dvh;overflow-y:auto';
 
-      // Drag handle
       const handle = document.createElement('div');
       handle.className = 'w-10 h-1 bg-gray-200 rounded-full mx-auto mb-4';
       sheet.appendChild(handle);
 
-      // Título
       const title = document.createElement('div');
       title.className = 'mb-4';
       title.innerHTML = '<p class="font-bold text-gray-900 text-lg leading-tight">' + tc(item.name) + '</p>' +
         '<p class="text-sm text-gray-400 mt-0.5">' + item.stock + ' ' + safeStr(item.unit,'') + ' en bodega</p>';
       sheet.appendChild(title);
 
-      // Stock warning
       const warn = document.createElement('div');
       warn.innerHTML = buildStockWarning(item, hdr);
       if (warn.innerHTML) sheet.appendChild(warn);
 
-      // Cantidad
+      // Cantidad — editable solo si no es serializable
       const cantRow = document.createElement('div');
-      cantRow.className = 'flex items-center justify-between gap-4 mb-4';
-      cantRow.innerHTML =
-        '<button id="mc-dec" class="w-16 h-16 rounded-2xl border-2 border-gray-200 bg-gray-50 text-3xl font-bold text-gray-400 flex items-center justify-center active:bg-gray-200">−</button>' +
-        '<div class="flex-1 text-center">' +
-          '<input id="mc-cant" type="number" min="1" max="' + item.stock + '" value="' + cantVal + '" class="w-full text-center text-5xl font-black text-gray-900 bg-transparent border-none focus:outline-none leading-none py-2"/>' +
-          '<p class="text-sm text-gray-400 -mt-1">' + safeStr(item.unit,'') + '</p>' +
-        '</div>' +
-        '<button id="mc-inc" class="w-16 h-16 rounded-2xl border-2 border-blue-300 bg-blue-50 text-3xl font-bold text-blue-600 flex items-center justify-center active:bg-blue-100">+</button>';
+      cantRow.className = 'mb-4';
+      if (esSer) {
+        cantRow.innerHTML =
+          '<div class="bg-blue-50 border border-blue-100 rounded-xl p-3 text-center">' +
+            '<p class="text-xs text-blue-500 mb-0.5">Cantidad calculada del serial</p>' +
+            '<p id="mc-cant-display" class="text-3xl font-black text-blue-700">—</p>' +
+            '<input id="mc-cant" type="hidden" value="0"/>' +
+          '</div>';
+      } else {
+        cantRow.className = 'flex items-center justify-between gap-4 mb-4';
+        cantRow.innerHTML =
+          '<button id="mc-dec" class="w-16 h-16 rounded-2xl border-2 border-gray-200 bg-gray-50 text-3xl font-bold text-gray-400 flex items-center justify-center active:bg-gray-200">−</button>' +
+          '<div class="flex-1 text-center">' +
+            '<input id="mc-cant" type="number" min="1" max="' + item.stock + '" value="' + cantVal + '" class="w-full text-center text-5xl font-black text-gray-900 bg-transparent border-none focus:outline-none leading-none py-2"/>' +
+            '<p class="text-sm text-gray-400 -mt-1">' + safeStr(item.unit,'') + '</p>' +
+          '</div>' +
+          '<button id="mc-inc" class="w-16 h-16 rounded-2xl border-2 border-blue-300 bg-blue-50 text-3xl font-bold text-blue-600 flex items-center justify-center active:bg-blue-100">+</button>';
+      }
       sheet.appendChild(cantRow);
 
       // Seriales
@@ -1403,7 +1428,6 @@ async function showFormSalida(db, session) {
         serTitle.textContent = 'Seriales / Sellos';
         serDiv.appendChild(serTitle);
 
-        // Selector modo (solo medidores)
         if (!esSello) {
           const modoRow = document.createElement('div');
           modoRow.className = 'flex gap-2';
@@ -1415,7 +1439,6 @@ async function showFormSalida(db, session) {
           serDiv.appendChild(modoRow);
         }
 
-        // Campos según modo
         if (modo === 'rango') {
           const rangoRow = document.createElement('div');
           rangoRow.className = 'flex gap-2';
@@ -1435,13 +1458,11 @@ async function showFormSalida(db, session) {
         sheet.appendChild(serDiv);
       }
 
-      // Error
       const errEl = document.createElement('div');
       errEl.id = 'mc-err';
       errEl.className = 'hidden text-sm text-red-500 text-center mt-3';
       sheet.appendChild(errEl);
 
-      // Botón agregar
       const addBtn = document.createElement('button');
       addBtn.id = 'mc-add';
       addBtn.className = 'w-full text-white font-bold rounded-2xl py-4 text-base active:opacity-90 mt-4';
@@ -1449,36 +1470,53 @@ async function showFormSalida(db, session) {
       addBtn.textContent = 'Agregar al despacho';
       sheet.appendChild(addBtn);
 
-      // Limpiar y montar
       modal.innerHTML = '';
       modal.appendChild(sheet);
 
-      const cantEl = modal.querySelector('#mc-cant');
-      setTimeout(function() { cantEl.focus(); cantEl.select(); }, 80);
-
-      modal.querySelector('#mc-dec').onclick = function() { cantVal = Math.max(1, safeNum(cantEl.value)-1); cantEl.value = cantVal; };
-      modal.querySelector('#mc-inc').onclick = function() { cantVal = Math.min(item.stock, safeNum(cantEl.value)+1); cantEl.value = cantVal; };
-      cantEl.oninput = function() { cantVal = safeNum(cantEl.value); };
+      if (!esSer) {
+        const cantEl = modal.querySelector('#mc-cant');
+        setTimeout(function() { cantEl.focus(); cantEl.select(); }, 80);
+        modal.querySelector('#mc-dec').onclick = function() { cantVal = Math.max(1, safeNum(cantEl.value)-1); cantEl.value = cantVal; };
+        modal.querySelector('#mc-inc').onclick = function() { cantVal = Math.min(item.stock, safeNum(cantEl.value)+1); cantEl.value = cantVal; };
+        cantEl.oninput = function() { cantVal = safeNum(cantEl.value); };
+      } else {
+        // Auto-calcular cantidad desde serial
+        setTimeout(function() {
+          modal.querySelector('#mc-ini')?.addEventListener('input', updateCantDisplay);
+          modal.querySelector('#mc-fin')?.addEventListener('input', updateCantDisplay);
+          modal.querySelector('#mc-sers')?.addEventListener('input', updateCantDisplay);
+        }, 50);
+      }
 
       if (!esSello) {
-        modal.querySelector('#mc-modo-ind')?.addEventListener('click', function() { cantVal=safeNum(cantEl.value); modo='individual'; render(); });
-        modal.querySelector('#mc-modo-rng')?.addEventListener('click', function() { cantVal=safeNum(cantEl.value); modo='rango'; render(); });
+        modal.querySelector('#mc-modo-ind')?.addEventListener('click', function() { modo='individual'; render(); });
+        modal.querySelector('#mc-modo-rng')?.addEventListener('click', function() { modo='rango'; render(); });
       }
 
       addBtn.addEventListener('click', function() {
-        const cant = safeNum(cantEl.value);
-        if (cant<=0)         { errEl.textContent='Ingresa una cantidad mayor a 0.'; errEl.classList.remove('hidden'); return; }
-        if (cant>item.stock) { errEl.textContent='Máximo: '+item.stock+' '+safeStr(item.unit,''); errEl.classList.remove('hidden'); return; }
-
+        let cant = 0;
         let seriales=[], serialInicio='', serialFin='';
+
         if (esSer) {
           if (modo === 'rango') {
             serialInicio = (modal.querySelector('#mc-ini')?.value || '').trim();
             serialFin    = (modal.querySelector('#mc-fin')?.value || '').trim();
+            if (!serialInicio || !serialFin) { errEl.textContent='Ingresa serial inicio y fin.'; errEl.classList.remove('hidden'); return; }
+            const nIni = parseInt(serialInicio.replace(/[^0-9]/g,''), 10);
+            const nFin = parseInt(serialFin.replace(/[^0-9]/g,''), 10);
+            cant = (!isNaN(nIni) && !isNaN(nFin) && nFin >= nIni) ? (nFin - nIni + 1) : 0;
+            if (cant <= 0) { errEl.textContent='Rango inválido.'; errEl.classList.remove('hidden'); return; }
           } else {
             const raw = (modal.querySelector('#mc-sers')?.value || '').trim();
             seriales = raw ? raw.split('\n').map(function(s){return s.trim();}).filter(Boolean) : [];
+            if (!seriales.length) { errEl.textContent='Ingresa al menos un serial.'; errEl.classList.remove('hidden'); return; }
+            cant = seriales.length;
           }
+          if (cant > item.stock) { errEl.textContent='Supera el stock disponible ('+item.stock+').'; errEl.classList.remove('hidden'); return; }
+        } else {
+          cant = safeNum(modal.querySelector('#mc-cant')?.value);
+          if (cant <= 0)         { errEl.textContent='Ingresa una cantidad mayor a 0.'; errEl.classList.remove('hidden'); return; }
+          if (cant > item.stock) { errEl.textContent='Máximo: '+item.stock+' '+safeStr(item.unit,''); errEl.classList.remove('hidden'); return; }
         }
 
         sel.push({
@@ -1493,7 +1531,9 @@ async function showFormSalida(db, session) {
         renderStep2();
       });
 
-      cantEl.addEventListener('keydown', function(e) { if(e.key==='Enter') addBtn.click(); });
+      if (!esSer) {
+        modal.querySelector('#mc-cant')?.addEventListener('keydown', function(e) { if(e.key==='Enter') addBtn.click(); });
+      }
     }
 
     render();
