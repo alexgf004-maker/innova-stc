@@ -2139,7 +2139,7 @@ function imprimirDespacho(memo) {
     .cc{text-align:center;border-right:0.3pt solid #999;}
     .ci{text-align:center;border-right:0.3pt solid #999;}
     .cf{text-align:center;}
-    .filled{color:#1B4F8A;font-weight:bold;}
+    .filled{color:#000;font-weight:bold;}
     @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
   `;
 
