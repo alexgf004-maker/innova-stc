@@ -1953,12 +1953,29 @@ function imprimirDespacho(memo) {
     cantMap[String(it.RESERVA).trim()] = it.CANTIDAD;
   }
 
-  // Mapa de seriales por SAP (desde los items del despacho)
+  // Mapa de seriales por SAP — rangos se expanden a lista individual
   const serialMap = {};
   for (const it of (memo.MATERIALES || [])) {
     const sap = String(it.RESERVA || '').trim();
-    if (it.SERIALES && it.SERIALES.length > 0) serialMap[sap] = { tipo:'individual', seriales: it.SERIALES };
-    else if (it.SERIAL_INICIO) serialMap[sap] = { tipo:'rango', inicio: it.SERIAL_INICIO, fin: it.SERIAL_FIN };
+    if (it.SERIALES && it.SERIALES.length > 0) {
+      serialMap[sap] = { tipo:'individual', seriales: it.SERIALES };
+    } else if (it.SERIAL_INICIO) {
+      const ini    = String(it.SERIAL_INICIO).trim();
+      const fin    = String(it.SERIAL_FIN || '').trim();
+      const nIni   = parseInt(ini.replace(/[^0-9]/g,''), 10);
+      const nFin   = parseInt(fin.replace(/[^0-9]/g,''), 10);
+      const prefix = ini.replace(/[0-9]+$/, '');
+      if (!isNaN(nIni) && !isNaN(nFin) && nFin >= nIni && (nFin - nIni) <= 500) {
+        const expanded = [];
+        const digits   = String(nFin).length;
+        for (let n = nIni; n <= nFin; n++) {
+          expanded.push(prefix + String(n).padStart(digits, '0'));
+        }
+        serialMap[sap] = { tipo:'individual', seriales: expanded };
+      } else {
+        serialMap[sap] = { tipo:'rango', inicio: ini, fin: fin };
+      }
+    }
   }
 
   // ── CSS compartido ──
