@@ -942,30 +942,29 @@ function showFormEntrada(db, session, item) {
         fecha: serverTimestamp(), registradoPor: session.uid, registradoPorNombre: session.displayName,
       });
 
-      // Registrar seriales individuales en colección de trazabilidad
+      // Registrar un documento por serial para trazabilidad completa
       if (esSer) {
-        const batch = [];
+        let listaSeriales = [];
         if (modoSer === 'individual') {
-          for (const ser of seriales) {
-            batch.push(addDoc(collection(db, 'kardex/seriales/items'), {
-              sapCode: item.sapCode, axCode: item.axCode,
-              itemId: item.id, itemNombre: safeStr(item?.name),
-              serial: ser, estado: 'disponible',
-              fechaEntrada: serverTimestamp(),
-              registradoPor: session.uid,
-            }));
-          }
+          listaSeriales = seriales;
         } else {
-          batch.push(addDoc(collection(db, 'kardex/seriales/items'), {
+          const nIni   = parseInt(serialInicio.replace(/[^0-9]/g,''), 10);
+          const nFin   = parseInt(serialFin.replace(/[^0-9]/g,''), 10);
+          const prefix = serialInicio.replace(/[0-9]+$/, '');
+          const digits = String(nFin).length;
+          for (let n = nIni; n <= nFin; n++) {
+            listaSeriales.push(prefix + String(n).padStart(digits, '0'));
+          }
+        }
+        const batch = listaSeriales.map(function(ser) {
+          return addDoc(collection(db, 'kardex/seriales/items'), {
             sapCode: item.sapCode, axCode: item.axCode,
             itemId: item.id, itemNombre: safeStr(item?.name),
-            serial: serialInicio + ' → ' + serialFin,
-            serialInicio, serialFin, cantidad: cant,
-            estado: 'disponible', modoSerial: 'rango',
+            serial: ser, estado: 'disponible',
             fechaEntrada: serverTimestamp(),
             registradoPor: session.uid,
-          }));
-        }
+          });
+        });
         await Promise.all(batch);
       }
 
@@ -1353,11 +1352,70 @@ async function showFormSalida(db, session) {
     const esSer   = !!item.requiereSerial;
     let modo      = esSello ? 'rango' : 'individual';
     let cantVal   = 1;
+    let serialesDisponibles = []; // cargados de Firestore
 
     const modal = document.createElement('div');
     modal.className = 'fixed inset-0 bg-black/50 flex items-end z-50';
     document.body.appendChild(modal);
     modal.addEventListener('click', function(e) { if (e.target===modal) modal.remove(); });
+
+    // Cargar seriales disponibles de Firestore si es serializable
+    if (esSer) {
+      getDocs(query(
+        collection(db, 'kardex/seriales/items'),
+        where('itemId', '==', item.id),
+        where('estado', '==', 'disponible')
+      )).then(function(snap) {
+        serialesDisponibles = snap.docs.map(function(d) { return d.data().serial; }).sort();
+        // Actualizar lista si ya está renderizada
+        const lista = modal.querySelector('#mc-ser-lista');
+        if (lista) renderSerialLista(lista, [], serialesDisponibles);
+      }).catch(function(e) { console.error('Error cargando seriales:', e); });
+    }
+
+    function getSerialSeleccionados() {
+      if (modo === 'rango') {
+        const ini    = (modal.querySelector('#mc-ini')?.value || '').trim();
+        const fin    = (modal.querySelector('#mc-fin')?.value || '').trim();
+        const nIni   = parseInt(ini.replace(/[^0-9]/g,''), 10);
+        const nFin   = parseInt(fin.replace(/[^0-9]/g,''), 10);
+        const prefix = ini.replace(/[0-9]+$/, '');
+        const digits = ini.replace(/[^0-9]/g,'').length;
+        if (isNaN(nIni) || isNaN(nFin) || nFin < nIni) return [];
+        const result = [];
+        for (let n = nIni; n <= nFin; n++) result.push(prefix + String(n).padStart(digits, '0'));
+        return result;
+      } else {
+        const raw = (modal.querySelector('#mc-sers')?.value || '').trim();
+        return raw ? raw.split('\n').map(function(s){return s.trim();}).filter(Boolean) : [];
+      }
+    }
+
+    function renderSerialLista(el, seleccionados, disponibles) {
+      if (!disponibles.length) {
+        el.innerHTML = '<p class="text-xs text-gray-400 text-center py-3">Sin seriales en bodega</p>';
+        return;
+      }
+      const selSet  = new Set(seleccionados);
+      const dispSet = new Set(disponibles);
+      el.innerHTML = disponibles.map(function(s) {
+        const enSel   = selSet.has(s);
+        const bg      = enSel ? 'bg-green-50 border-green-300 text-green-700' : 'bg-gray-50 border-gray-200 text-gray-600';
+        return '<span class="inline-block border rounded px-1.5 py-0.5 text-xs font-mono m-0.5 ' + bg + '">' + s + '</span>';
+      }).join('') +
+      (seleccionados.filter(function(s){ return !dispSet.has(s); }).length ?
+        '<p class="text-xs text-red-500 mt-2">⚠ Algunos seriales no están disponibles en bodega</p>' : '');
+    }
+
+    function updateLista() {
+      const lista = modal.querySelector('#mc-ser-lista');
+      if (!lista) return;
+      renderSerialLista(lista, getSerialSeleccionados(), serialesDisponibles);
+      // También actualizar cantidad display
+      const cant = getSerialSeleccionados().length;
+      const disp = modal.querySelector('#mc-cant-display');
+      if (disp) disp.textContent = cant || '—';
+    }
 
     function calcCantFromSerial() {
       if (modo === 'rango') {
@@ -1455,6 +1513,20 @@ async function showFormSalida(db, session) {
             '<textarea id="mc-sers" rows="4" placeholder="12345001&#10;12345002&#10;12345003" class="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-blue-400 resize-none"></textarea>';
           serDiv.appendChild(indDiv);
         }
+        // Lista de seriales disponibles
+        const listaDiv = document.createElement('div');
+        listaDiv.className = 'mt-3';
+        const listaTitle = document.createElement('p');
+        listaTitle.className = 'text-xs text-gray-500 font-medium mb-1';
+        listaTitle.textContent = 'Disponibles en bodega:';
+        const listaEl = document.createElement('div');
+        listaEl.id = 'mc-ser-lista';
+        listaEl.className = 'max-h-24 overflow-y-auto';
+        listaEl.innerHTML = '<p class="text-xs text-gray-400">Cargando...</p>';
+        listaDiv.appendChild(listaTitle);
+        listaDiv.appendChild(listaEl);
+        serDiv.appendChild(listaDiv);
+
         sheet.appendChild(serDiv);
       }
 
@@ -1473,6 +1545,12 @@ async function showFormSalida(db, session) {
       modal.innerHTML = '';
       modal.appendChild(sheet);
 
+      // Renderizar lista inicial si ya cargó
+      if (esSer && serialesDisponibles.length) {
+        const lista = modal.querySelector('#mc-ser-lista');
+        if (lista) renderSerialLista(lista, [], serialesDisponibles);
+      }
+
       if (!esSer) {
         const cantEl = modal.querySelector('#mc-cant');
         setTimeout(function() { cantEl.focus(); cantEl.select(); }, 80);
@@ -1480,11 +1558,11 @@ async function showFormSalida(db, session) {
         modal.querySelector('#mc-inc').onclick = function() { cantVal = Math.min(item.stock, safeNum(cantEl.value)+1); cantEl.value = cantVal; };
         cantEl.oninput = function() { cantVal = safeNum(cantEl.value); };
       } else {
-        // Auto-calcular cantidad desde serial
+        // Auto-calcular cantidad y actualizar lista desde serial
         setTimeout(function() {
-          modal.querySelector('#mc-ini')?.addEventListener('input', updateCantDisplay);
-          modal.querySelector('#mc-fin')?.addEventListener('input', updateCantDisplay);
-          modal.querySelector('#mc-sers')?.addEventListener('input', updateCantDisplay);
+          modal.querySelector('#mc-ini')?.addEventListener('input', updateLista);
+          modal.querySelector('#mc-fin')?.addEventListener('input', updateLista);
+          modal.querySelector('#mc-sers')?.addEventListener('input', updateLista);
         }, 50);
       }
 
@@ -1513,6 +1591,15 @@ async function showFormSalida(db, session) {
             cant = seriales.length;
           }
           if (cant > item.stock) { errEl.textContent='Supera el stock disponible ('+item.stock+').'; errEl.classList.remove('hidden'); return; }
+          // Validar que todos los seriales existen en bodega
+          if (serialesDisponibles.length > 0) {
+            const dispSet = new Set(serialesDisponibles);
+            const noDisp  = getSerialSeleccionados().filter(function(s){ return !dispSet.has(s); });
+            if (noDisp.length) {
+              errEl.textContent = 'Seriales no disponibles: ' + noDisp.slice(0,3).join(', ') + (noDisp.length>3?' y '+(noDisp.length-3)+' más':'');
+              errEl.classList.remove('hidden'); return;
+            }
+          }
         } else {
           cant = safeNum(modal.querySelector('#mc-cant')?.value);
           if (cant <= 0)         { errEl.textContent='Ingresa una cantidad mayor a 0.'; errEl.classList.remove('hidden'); return; }
