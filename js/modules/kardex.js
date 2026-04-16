@@ -2162,17 +2162,15 @@ function imprimirDespacho(memo) {
     .page2{page-break-before:always;}
     .titulo-p2{font-size:7pt;font-weight:bold;margin-bottom:2mm;}
     .pg2{position:relative;width:196.9mm;height:260mm;}
-    .tb{position:absolute;border:0.5pt solid #000;overflow:hidden;}
-    .tb-hdr{background:#F7C6AC;font-weight:bold;border-bottom:0.5pt solid #000;}
+    .tb{position:absolute;border:0.5pt solid #000;overflow:hidden;display:flex;flex-direction:column;}
+    .tb-hdr{background:#F7C6AC;font-weight:bold;border-bottom:0.5pt solid #000;flex-shrink:0;}
     .tb-hdr table{width:100%;border-collapse:collapse;table-layout:fixed;}
-    .tb-hdr .cod{font-size:5pt;line-height:1.4;padding:0.5mm 0.8mm;border-right:0.5pt solid #000;vertical-align:middle;text-align:center;width:15mm;min-width:15mm;max-width:15mm;}
+    .tb-hdr .cod{font-size:5pt;padding:0.5mm 0.8mm;border-right:0.5pt solid #000;vertical-align:middle;text-align:center;width:15mm;min-width:15mm;max-width:15mm;}
     .tb-hdr .nom{font-size:5.5pt;padding:0.5mm 0.8mm;vertical-align:middle;text-align:center;}
-    .tb-body table{width:100%;border-collapse:collapse;table-layout:fixed;}
-    .tb-body td{border:0.3pt solid #ccc;padding:0.2mm 0.5mm;font-size:5pt;height:5.25mm;line-height:5.25mm;}
-    .tb-sello td{height:4.67mm;line-height:4.67mm;}
-    .tb-small td{height:5.42mm;line-height:5.42mm;}
-    .tb-tiny td{height:9mm;line-height:9mm;}
-    .nb{width:15mm;min-width:15mm;max-width:15mm;text-align:center;padding-right:1mm;color:#555;border-right:0.4pt solid #999;}
+    .tb-body{flex:1;min-height:0;overflow:hidden;}
+    .tb-body table{width:100%;height:100%;border-collapse:collapse;table-layout:fixed;}
+    .tb-body td{border:0.3pt solid #ccc;padding:0 0.5mm;font-size:5pt;}
+    .nb{width:15mm;min-width:15mm;max-width:15mm;text-align:center;color:#555;border-right:0.4pt solid #999;}
     .hc{background:#f5f5f5;font-weight:bold;text-align:center;font-size:4.5pt;border-bottom:0.4pt solid #999;}
     .cc{text-align:center;border-right:0.3pt solid #999;}
     .ci{text-align:center;border-right:0.3pt solid #999;}
@@ -2289,16 +2287,8 @@ function imprimirDespacho(memo) {
         rows += '<tr><td class="nb">' + i + '</td><td' + cls + '>' + val + '</td></tr>';
       }
     }
-    // Inject exact row height so rows fill the block regardless of iframe rendering
-    // Heights measured from Word: 30-row blocks=166.4mm, sello=59.7mm, 5-row=36.1mm, 3-row=36.1mm
-    // Header occupies ~9.5mm (2 lines cod + nombre), sello subheader ~3.5mm
-    var totalH = b.filas >= 30 ? 166.4 : b.tipo === 'sello' ? 59.7 : 36.1;
-    var hdrH   = 9.5;
-    var subH   = b.tipo === 'sello' ? 3.5 : 0;
-    var rowH   = ((totalH - hdrH - subH) / b.filas).toFixed(3);
-    // Inject height and line-height on every <tr>
-    rows = rows.replace(/<tr>/g, '<tr style="height:' + rowH + 'mm;max-height:' + rowH + 'mm;">');
-    return '<div class="tb-body"><table style="width:100%;border-collapse:collapse;table-layout:fixed;">' + rows + '</table></div>';
+    // table height:100% + flex:1 on tb-body fills rows automatically
+    return '<div class="tb-body"><table>' + rows + '</table></div>';
   }
 
   const p2 =
