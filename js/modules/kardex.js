@@ -2168,7 +2168,10 @@ function imprimirDespacho(memo) {
     .tb-hdr .cod{font-size:5pt;line-height:1.4;padding:0.5mm 0.8mm;border-right:0.5pt solid #000;vertical-align:middle;text-align:center;width:15mm;min-width:15mm;max-width:15mm;}
     .tb-hdr .nom{font-size:5.5pt;padding:0.5mm 0.8mm;vertical-align:middle;text-align:center;}
     .tb-body table{width:100%;border-collapse:collapse;table-layout:fixed;}
-    .tb-body td{border:0.3pt solid #ccc;padding:0.2mm 0.5mm;font-size:5pt;height:3.5mm;line-height:3.5mm;}
+    .tb-body td{border:0.3pt solid #ccc;padding:0.2mm 0.5mm;font-size:5pt;height:5.25mm;line-height:5.25mm;}
+    .tb-sello td{height:4.67mm;line-height:4.67mm;}
+    .tb-small td{height:5.42mm;line-height:5.42mm;}
+    .tb-tiny td{height:9mm;line-height:9mm;}
     .nb{width:15mm;min-width:15mm;max-width:15mm;text-align:center;padding-right:1mm;color:#555;border-right:0.4pt solid #999;}
     .hc{background:#f5f5f5;font-weight:bold;text-align:center;font-size:4.5pt;border-bottom:0.4pt solid #999;}
     .cc{text-align:center;border-right:0.3pt solid #999;}
@@ -2286,7 +2289,8 @@ function imprimirDespacho(memo) {
         rows += '<tr><td class="nb">' + i + '</td><td' + cls + '>' + val + '</td></tr>';
       }
     }
-    return '<div class="tb-body"><table>' + rows + '</table></div>';
+    const tblClass = b.filas >= 30 ? '' : b.tipo === 'sello' ? ' class="tb-sello"' : b.filas <= 3 ? ' class="tb-tiny"' : ' class="tb-small"';
+    return '<div class="tb-body"><table' + tblClass + '>' + rows + '</table></div>';
   }
 
   const p2 =
@@ -2298,13 +2302,13 @@ function imprimirDespacho(memo) {
         // TB1: Trifilar
         '<div class="tb" style="left:69.2mm;top:0;width:62.9mm;height:166.4mm;">' + buildHdrTd(BLOQUES_SERIALES[1]) + buildFilas(BLOQUES_SERIALES[1]) + '</div>' +
         // TB2: Sello
-        '<div class="tb" style="left:138.1mm;top:0;width:50.4mm;height:59.7mm;">' + buildHdrTd(BLOQUES_SERIALES[2]) + buildFilas(BLOQUES_SERIALES[2]) + '</div>' +
+        '<div class="tb tb-sello" style="left:138.1mm;top:0;width:50.4mm;height:59.7mm;">' + buildHdrTd(BLOQUES_SERIALES[2]) + buildFilas(BLOQUES_SERIALES[2]) + '</div>' +
         // TB3: Forma 2S
-        '<div class="tb" style="left:0;top:172.3mm;width:62.6mm;height:36.1mm;">' + buildHdrTd(BLOQUES_SERIALES[3]) + buildFilas(BLOQUES_SERIALES[3]) + '</div>' +
+        '<div class="tb tb-small" style="left:0;top:172.3mm;width:62.6mm;height:36.1mm;">' + buildHdrTd(BLOQUES_SERIALES[3]) + buildFilas(BLOQUES_SERIALES[3]) + '</div>' +
         // TB4: Forma 16s
-        '<div class="tb" style="left:69.2mm;top:172.3mm;width:62.9mm;height:36.1mm;">' + buildHdrTd(BLOQUES_SERIALES[4]) + buildFilas(BLOQUES_SERIALES[4]) + '</div>' +
+        '<div class="tb tb-small" style="left:69.2mm;top:172.3mm;width:62.9mm;height:36.1mm;">' + buildHdrTd(BLOQUES_SERIALES[4]) + buildFilas(BLOQUES_SERIALES[4]) + '</div>' +
         // Tabla Forma 12s
-        '<div class="tb" style="left:0;top:215mm;width:82.3mm;">' + buildHdrTd(BLOQUES_SERIALES[5]) + buildFilas(BLOQUES_SERIALES[5]) + '</div>' +
+        '<div class="tb tb-tiny" style="left:0;top:215mm;width:82.3mm;height:36.1mm;">' + buildHdrTd(BLOQUES_SERIALES[5]) + buildFilas(BLOQUES_SERIALES[5]) + '</div>' +
       '</div>' +
     '</div>';
 
