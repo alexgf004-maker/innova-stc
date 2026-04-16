@@ -1284,9 +1284,7 @@ async function showFormSalida(db, session) {
           const indDiv = document.createElement('div');
           indDiv.innerHTML =
             '<p class="text-xs text-gray-400 mb-1">Seriales (uno por línea)</p>' +
-            '<textarea id="mc-sers" rows="4" placeholder="12345001
-12345002
-12345003" class="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-blue-400 resize-none"></textarea>';
+            '<textarea id="mc-sers" rows="4" placeholder="12345001&#10;12345002&#10;12345003" class="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-blue-400 resize-none"></textarea>';
           serDiv.appendChild(indDiv);
         }
         sheet.appendChild(serDiv);
