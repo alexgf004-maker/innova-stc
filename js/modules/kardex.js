@@ -897,7 +897,6 @@ function showFormEntrada(db, session, item) {
   if (esSer) actualizarModo();
 
   ov.querySelector('#fe-submit').onclick = async () => {
-    const cant   = safeNum(ov.querySelector('#fe-cant').value);
     const motivo = ov.querySelector('#fe-motivo').value.trim();
     const errEl  = ov.querySelector('#fe-err');
     const btn    = ov.querySelector('#fe-submit');
