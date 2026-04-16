@@ -1202,63 +1202,136 @@ async function showFormSalida(db, session) {
     return '<div class="rounded-xl px-3 py-2 text-xs font-medium" style="background:' + bg + ';border:1px solid ' + bdr + ';color:' + color + '">' + icon + ' ' + msg + '</div>';
   }
 
-  // ── Modal cantidad ──
+  // ── Modal cantidad + seriales ──
   function showCantidadModal(item) {
-    const modal = document.createElement('div');
-    modal.className = 'fixed inset-0 bg-black/50 flex items-end z-50';
-    modal.innerHTML = `
-      <div class="bg-white w-full rounded-t-3xl px-5 pt-5 space-y-5"
-        style="padding-bottom:max(32px,env(safe-area-inset-bottom))">
-        <div class="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-1"></div>
-        <div>
+    const esSello   = item.sapCode === '354549';
+    const esSer     = !!item.requiereSerial;
+    // Estado interno del modal
+    let modo = esSello ? 'rango' : 'individual';
+
+    function buildModalHTML(cantVal) {
+      const serSection = !esSer ? '' : `
+        <div class="border-t border-gray-100 pt-4 space-y-3">
+          <p class="text-sm font-semibold text-gray-700">Seriales / Sellos</p>
+
+          ${!esSello ? `
+          <!-- Selector modo solo para medidores -->
+          <div class="flex gap-2">
+            <button id="mc-modo-ind"
+              class="flex-1 py-2 rounded-xl text-sm font-semibold border-2 transition-all
+                ${modo==='individual' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-500'}">
+              Individual
+            </button>
+            <button id="mc-modo-rng"
+              class="flex-1 py-2 rounded-xl text-sm font-semibold border-2 transition-all
+                ${modo==='rango' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-500'}">
+              Rango
+            </button>
+          </div>` : ''}
+
+          ${modo === 'rango' ? `
+          <!-- Rango -->
+          <div class="flex gap-2">
+            <div class="flex-1">
+              <p class="text-xs text-gray-400 mb-1">Serial inicio</p>
+              <input id="mc-ini" type="text" placeholder="Ej: 12345001"
+                class="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-400"/>
+            </div>
+            <div class="flex-1">
+              <p class="text-xs text-gray-400 mb-1">Serial fin</p>
+              <input id="mc-fin" type="text" placeholder="Ej: 12345030"
+                class="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-400"/>
+            </div>
+          </div>` : `
+          <!-- Individual -->
+          <div>
+            <p class="text-xs text-gray-400 mb-1">Seriales (uno por línea)</p>
+            <textarea id="mc-sers" rows="4" placeholder="12345001&#10;12345002&#10;12345003"
+              class="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-blue-400 resize-none"></textarea>
+          </div>`}
+        </div>`;
+
+      return `
+      <div class="bg-white w-full rounded-t-3xl px-5 pt-5"
+        style="padding-bottom:max(32px,env(safe-area-inset-bottom));max-height:90dvh;overflow-y:auto">
+        <div class="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-4"></div>
+        <div class="mb-4">
           <p class="font-bold text-gray-900 text-lg leading-tight">${tc(item.name)}</p>
           <p class="text-sm text-gray-400 mt-0.5">${item.stock} ${safeStr(item.unit,'')} en bodega</p>
         </div>
         ${buildStockWarning(item, hdr)}
-        <div class="flex items-center justify-between gap-4">
+        <div class="flex items-center justify-between gap-4 mb-4">
           <button id="mc-dec"
             class="w-16 h-16 rounded-2xl border-2 border-gray-200 bg-gray-50 text-3xl font-bold text-gray-400 flex items-center justify-center active:bg-gray-200">−</button>
           <div class="flex-1 text-center">
-            <input id="mc-cant" type="number" min="1" max="${item.stock}" value="1"
+            <input id="mc-cant" type="number" min="1" max="${item.stock}" value="${cantVal}"
               class="w-full text-center text-5xl font-black text-gray-900 bg-transparent border-none focus:outline-none leading-none py-2"/>
             <p class="text-sm text-gray-400 -mt-1">${safeStr(item.unit,'')}</p>
           </div>
           <button id="mc-inc"
             class="w-16 h-16 rounded-2xl border-2 border-blue-300 bg-blue-50 text-3xl font-bold text-blue-600 flex items-center justify-center active:bg-blue-100">+</button>
         </div>
-        <div id="mc-err" class="hidden text-sm text-red-500 text-center"></div>
+        ${serSection}
+        <div id="mc-err" class="hidden text-sm text-red-500 text-center mt-3"></div>
         <button id="mc-add"
-          class="w-full text-white font-bold rounded-2xl py-4 text-base active:opacity-90" style="background:#1B4F8A">
+          class="w-full text-white font-bold rounded-2xl py-4 text-base active:opacity-90 mt-4" style="background:#1B4F8A">
           Agregar al despacho
         </button>
       </div>`;
+    }
+
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black/50 flex items-end z-50';
+
+    function render(cantVal) {
+      modal.innerHTML = buildModalHTML(cantVal || 1);
+      const cantEl = modal.querySelector('#mc-cant');
+
+      modal.addEventListener('click', e => { if (e.target===modal) modal.remove(); });
+      modal.querySelector('#mc-dec').onclick = () => { const v=safeNum(cantEl.value); if(v>1) { cantEl.value=v-1; } };
+      modal.querySelector('#mc-inc').onclick = () => { const v=safeNum(cantEl.value); if(v<item.stock) { cantEl.value=v+1; } };
+
+      // Botones modo (solo medidores)
+      modal.querySelector('#mc-modo-ind')?.addEventListener('click', () => { modo='individual'; render(safeNum(cantEl.value)); });
+      modal.querySelector('#mc-modo-rng')?.addEventListener('click', () => { modo='rango'; render(safeNum(cantEl.value)); });
+
+      const doAdd = () => {
+        const cant  = safeNum(cantEl.value);
+        const errEl = modal.querySelector('#mc-err');
+        if (cant<=0)         { errEl.textContent='Ingresa una cantidad mayor a 0.'; errEl.classList.remove('hidden'); return; }
+        if (cant>item.stock) { errEl.textContent='Máximo: '+item.stock+' '+safeStr(item.unit,''); errEl.classList.remove('hidden'); return; }
+
+        let seriales=[], serialInicio='', serialFin='';
+        if (esSer) {
+          if (modo === 'rango') {
+            serialInicio = (modal.querySelector('#mc-ini')?.value || '').trim();
+            serialFin    = (modal.querySelector('#mc-fin')?.value || '').trim();
+          } else {
+            const raw = (modal.querySelector('#mc-sers')?.value || '').trim();
+            seriales = raw ? raw.split('
+').map(s=>s.trim()).filter(Boolean) : [];
+          }
+        }
+
+        sel.push({
+          itemId:item.id, name:item.name, unit:item.unit,
+          sapCode:item.sapCode, axCode:item.axCode, stock:item.stock,
+          cantidad:cant, requiereSerial:esSer,
+          modoSerial: esSer ? modo : 'individual',
+          seriales, serialInicio, serialFin,
+        });
+        addRec(item.id);
+        modal.remove();
+        renderStep2();
+      };
+
+      modal.querySelector('#mc-add').addEventListener('click', doAdd);
+      cantEl.addEventListener('keydown', e => { if(e.key==='Enter') doAdd(); });
+      setTimeout(() => { cantEl.focus(); cantEl.select(); }, 80);
+    }
 
     document.body.appendChild(modal);
-    const cantEl = modal.querySelector('#mc-cant');
-    setTimeout(() => { cantEl.focus(); cantEl.select(); }, 80);
-
-    modal.addEventListener('click', e => { if (e.target===modal) modal.remove(); });
-    modal.querySelector('#mc-dec').onclick = () => { const v=safeNum(cantEl.value); if(v>1) cantEl.value=v-1; };
-    modal.querySelector('#mc-inc').onclick = () => { const v=safeNum(cantEl.value); if(v<item.stock) cantEl.value=v+1; };
-
-    const doAdd = () => {
-      const cant  = safeNum(cantEl.value);
-      const errEl = modal.querySelector('#mc-err');
-      if (cant<=0)        { errEl.textContent='Ingresa una cantidad mayor a 0.'; errEl.classList.remove('hidden'); return; }
-      if (cant>item.stock){ errEl.textContent=`Máximo: ${item.stock} ${safeStr(item.unit,'')}`; errEl.classList.remove('hidden'); return; }
-      sel.push({
-        itemId:item.id, name:item.name, unit:item.unit,
-        sapCode:item.sapCode, axCode:item.axCode, stock:item.stock,
-        cantidad:cant, requiereSerial:item.requiereSerial,
-        modoSerial:'individual', seriales:[], serialInicio:'', serialFin:'',
-      });
-      addRec(item.id);
-      modal.remove();
-      renderStep2();
-    };
-
-    modal.querySelector('#mc-add').addEventListener('click', doAdd);
-    cantEl.addEventListener('keydown', e => { if(e.key==='Enter') doAdd(); });
+    render(1);
   }
 
   // ── Submit ──
