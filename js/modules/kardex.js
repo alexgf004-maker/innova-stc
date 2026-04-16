@@ -1660,6 +1660,41 @@ async function showFormSalida(db, session) {
       for (const s of sel) {
         await updateDoc(doc(db,'kardex/inventario/items',s.itemId),{stock:increment(-s.cantidad)});
       }
+
+      // Marcar seriales como despachados en trazabilidad
+      for (const s of sel) {
+        if (!s.requiereSerial) continue;
+        let listaSeriales = s.seriales || [];
+        if (s.modoSerial === 'rango' && s.serialInicio) {
+          const nIni   = parseInt(s.serialInicio.replace(/[^0-9]/g,''), 10);
+          const nFin   = parseInt((s.serialFin||'').replace(/[^0-9]/g,''), 10);
+          const prefix = s.serialInicio.replace(/[0-9]+$/, '');
+          const digits = s.serialInicio.replace(/[^0-9]/g,'').length;
+          listaSeriales = [];
+          for (let n = nIni; n <= nFin; n++) {
+            listaSeriales.push(prefix + String(n).padStart(digits, '0'));
+          }
+        }
+        if (!listaSeriales.length) continue;
+        const snapSer = await getDocs(query(
+          collection(db, 'kardex/seriales/items'),
+          where('itemId', '==', s.itemId),
+          where('estado', '==', 'disponible')
+        ));
+        const serSet = new Set(listaSeriales);
+        const updates = snapSer.docs
+          .filter(function(d){ return serSet.has(d.data().serial); })
+          .map(function(d){
+            return updateDoc(d.ref, {
+              estado: 'despachado',
+              salidaId: ref.id,
+              fechaSalida: serverTimestamp(),
+              usuarioDespacho: hdr.responsable,
+            });
+          });
+        await Promise.all(updates);
+      }
+
       ov.remove();
       showToast('Salida registrada correctamente.','success');
       showMemo({
