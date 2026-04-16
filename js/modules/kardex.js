@@ -2289,8 +2289,16 @@ function imprimirDespacho(memo) {
         rows += '<tr><td class="nb">' + i + '</td><td' + cls + '>' + val + '</td></tr>';
       }
     }
-    const tblClass = b.filas >= 30 ? '' : b.tipo === 'sello' ? ' class="tb-sello"' : b.filas <= 3 ? ' class="tb-tiny"' : ' class="tb-small"';
-    return '<div class="tb-body"><table' + tblClass + '>' + rows + '</table></div>';
+    // Calculate row height to fill the block exactly
+    // Block heights: 30-row=166.4mm, sello=59.7mm, 5-row=36.1mm, 3-row=36.1mm
+    // Header ~9.5mm, sello subheader ~3.5mm
+    var hdrH  = 9.5;
+    var totalH = b.filas >= 30 ? 166.4 : b.tipo === 'sello' ? 59.7 : 36.1;
+    var subH  = b.tipo === 'sello' ? 3.5 : 0;
+    var rowH  = ((totalH - hdrH - subH) / b.filas).toFixed(2);
+    var rowStyle = ' style="height:' + rowH + 'mm;"';
+    rows = rows.replace(/<tr>/g, '<tr' + rowStyle + '>');
+    return '<div class="tb-body"><table>' + rows + '</table></div>';
   }
 
   const p2 =
