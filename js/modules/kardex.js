@@ -1543,7 +1543,7 @@ function showMemo(s) {
     </div>
     <div class="px-5 py-4 border-t border-gray-100 flex gap-3">
       <button id="fm-cancel" class="flex-1 border border-gray-300 text-gray-700 font-medium rounded-lg py-2.5 text-sm hover:bg-gray-50">Cerrar</button>
-      <button id="fm-print"  class="flex-1 text-white font-medium rounded-lg py-2.5 text-sm" style="background-color:#1B4F8A">🖨️ Generar PDF</button>
+      <button id="fm-print"  class="flex-1 text-white font-medium rounded-lg py-2.5 text-sm" style="background-color:#1B4F8A">🖨️ Imprimir memo</button>
     </div>`);
 
   ov.querySelector('#fm-close').onclick = ov.querySelector('#fm-cancel').onclick = () => ov.remove();
@@ -1573,19 +1573,7 @@ function showMemo(s) {
     setTimeout(() => URL.revokeObjectURL(url), 3000);
   });
 
-  ov.querySelector('#fm-print').onclick = async () => {
-    const btn = ov.querySelector('#fm-print');
-    btn.disabled = true;
-    btn.textContent = 'Generando PDF...';
-    try {
-      await generarYAbrirPDF(memo);
-    } catch(e) {
-      showToast(e.message || 'Error al generar el PDF.', 'error');
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = '🖨️ Generar PDF';
-    }
-  };
+  ov.querySelector('#fm-print').onclick = () => imprimirDespacho(memo);
 }
 
 // ─────────────────────────────────────────
@@ -1641,271 +1629,139 @@ function descargarMemoJSON(memo) {
 
 // ─────────────────────────────────────────
 // IMPRIMIR DESPACHO OFICIAL
-// HTML fiel al documento Word original.
-// Medidas exactas extraídas del .docx:
-//   Página carta: 215.9×279.4mm
-//   Márgenes: top=8.8 bottom=4.9 left=12.7 right=6.3
-//   Tabla encabezado: 2 cols de 50% c/u
-//   Tabla materiales: 10.6% | 7.0% | 72.8% | 9.6%
-//   Fuente header: 8pt bold, datos: 7.5pt normal
 // ─────────────────────────────────────────
-
-// 65 filas de la tabla 1 del Word, en orden exacto
-const DOC_ROWS = [
-  {sap:"RESERVA",ax:"STOCK",desc:"DESCRIPICIÓN",header:true},
-  {sap:"USO HABITUAL",ax:"",desc:"",header:true},
-  {sap:"221477",ax:"50203",desc:"ALAMBRE COBRE THHN 8 AWG 600 V FORRO PLASTICO",header:false},
-  {sap:"213719",ax:"50806",desc:"CABLE DUPLEX AL #6 ACSR SETTER",header:false},
-  {sap:"328541",ax:"50807",desc:"CABLE TRIPLEX AL. #6 ACSR PALUDINA",header:false},
-  {sap:"352453",ax:"250201",desc:"CONECTOR DE COMPRESIÓN YPC2A8U",header:false},
-  {sap:"352460",ax:"250202",desc:"CONECTOR DE COMPRESIÓN YPC26R8U",header:false},
-  {sap:"352461",ax:"250203",desc:"CONECTOR DE COMPRESIÓN YP2U3",header:false},
-  {sap:"352462",ax:"250204",desc:"CONECTOR DE COMPRESIÓN YP26AU2",header:false},
-  {sap:"353112",ax:"400910",desc:"ANCLA PLASTICA 1 1/2 X 7 (FTN1-120)",header:false},
-  {sap:"354045",ax:"400919",desc:"TORNILLO CABEZA PLANA DE 11/2 PLG X 7MM (Gruesa de 144 unidades)",header:false},
-  {sap:"354549",ax:"400931",desc:"SELLO ACRILICO VERDE (SERV. NVOS., MTTO.) (CABLE 30 CM) (FTMED-30)",header:false},
-  {sap:"200129",ax:"700101",desc:"MEDIDOR BIFILAR DOMICILIAR BASE A, 100 A (ETE1-330)",header:false},
-  {sap:"355518",ax:"700102",desc:"MEDIDOR TRIFILAR DOMICILIAR BASE A, 100 A (ETE1-330)",header:false},
-  {sap:"338362",ax:"700326",desc:"MEDIDOR FORMA 2(S) T/ESPIGA, CLASE 100, TRIFI. 240 V, 15/100",header:false},
-  {sap:"219359",ax:"750109",desc:"CINTA AISLANTE SUPER 3M #33",header:false},
-  {sap:"MATERIAL PARA CL200",ax:"",desc:"",header:true},
-  {sap:"328560",ax:"50205",desc:"CABLE COBRE THHN # 2 AWG 600 V FORRO PLASTICO (ETM3-310)",header:false},
-  {sap:"243940",ax:"50209",desc:"CABLE COBRE THHN # 1/0 AWG 19 HILOS (ETM3-310)",header:false},
-  {sap:"337775",ax:"250101",desc:"CONECTOR MECANICO PERNO PARTIDO KSU-23",header:false},
-  {sap:"337776",ax:"250102",desc:"CONECTOR MECANICO PERNO PARTIDO KSU-26",header:false},
-  {sap:"337777",ax:"250103",desc:"CONECTOR MECANICO PERNO PARTIDO KSU-29",header:false},
-  {sap:"210525",ax:"400833",desc:"TUBO EMT 2 PLG ALUMINIO UL (FTN1-700)",header:false},
-  {sap:"212720",ax:"400834",desc:"CUERPO TERMINAL PARA EMT DE 2 PLG CON ABRAZADERA",header:false},
-  {sap:"214221",ax:"400836",desc:"CONECTOR EMT DE 2 PLG CON TORNILLO",header:false},
-  {sap:"301560",ax:"400837",desc:"GRAPA CONDUIT EMT DE 2 PLG",header:false},
-  {sap:"245979",ax:"400838",desc:"TUBO EMT DE 2 1/2 PLG (FTN1-700)",header:false},
-  {sap:"355070",ax:"400839",desc:"CUERPO TERMINAL PARA EMT DE 2 1/2 PLG CON ABRAZADERA",header:false},
-  {sap:"244569",ax:"400840",desc:"CONECTOR EMT DE 2 1/2 PLG CON TORNILLO",header:false},
-  {sap:"353992",ax:"400841",desc:"GRAPA CONDUIT EMT DE 2 1/2 PLG",header:false},
-  {sap:"211373",ax:"400903",desc:"CINTA BAND IT 3/4",header:false},
-  {sap:"211375",ax:"400904",desc:"HEBILLA PARA CINTA BAND IT 3/4",header:false},
-  {sap:"353121",ax:"700406",desc:"TAPADERA DE POLICARBONATO PARA BASES SOCKET TIPO ESPIGA",header:false},
-  {sap:"355064",ax:"700332",desc:"MEDIDOR FORMA 16s, CLASE 200, 120-277V. 8 CANALES DE MEM. 200 AMP. C/BASE 7 TERMI. (ETE-16s)",header:false},
-  {sap:"338357",ax:"700333",desc:"MEDIDOR FORMA 12s CLASE 200, 120-277V, TRIFILAR, 60Hz, 8 Canales de memoria, C/Base 5 Term (ETE-12s)",header:false},
-  {sap:"353099",ax:"401102",desc:"BASES SOCKETS DE 5 TERMINALES, 200 AMP",header:false},
-  {sap:"353110",ax:"700404",desc:"BASES SOCKETS 100 AMP. P/MED ESPIGA F 2(S)",header:false},
-  {sap:"353088",ax:"401101",desc:"BASES SOCKETS DE 7 TERMINALES MARCA THOMAS & BETTS, 200 AMPS",header:false},
-  {sap:"ACOMETIDA ESPECIAL",ax:"",desc:"",header:true},
-  {sap:"200468",ax:"50401",desc:"CABLE DE ALUMINIO #2 AWG F.P. 7 HILOS (ETM3-330)",header:false},
-  {sap:"200472",ax:"50809",desc:"CABLE DE ALUMINIO ACSR DESNUDO #2 AWG 7 HILOS SPARROW (ETM3-350)",header:false},
-  {sap:"200469",ax:"50402",desc:"CABLE DE ALUMINIO #1/0 AWG F.P. 7 HILOS (ETM3-330)",header:false},
-  {sap:"200473",ax:"50810",desc:"CABLE DE ALUMINIO ACSR DESNUDO #1/0 AWG 7 HILOS, (ETM3-350)",header:false},
-  {sap:"213410",ax:"50505",desc:"CABLE TRIPLEX ACSR 1/0 AWG NERITINA (ETM3-330)",header:false},
-  {sap:"214726",ax:"150202",desc:"REMATE PREFORMADO ACSR 2 AWG (ETM1-240)",header:false},
-  {sap:"214727",ax:"150205",desc:"REMATE PREFORMADO ACSR 1/0 AWG (ETM1-240)",header:false},
-  {sap:"352463",ax:"250205",desc:"CONECTOR MECANICO COMPRESIÓN YP25U25",header:false},
-  {sap:"SUBTERRÁNEO",ax:"",desc:"",header:true},
-  {sap:"219527",ax:"250418",desc:"TERMINAL DE OJO CABLE 4 AWG, DIAMETRO 3/8 PLG (ETM1-460)",header:false},
-  {sap:"221062",ax:"250420",desc:"TERMINAL DE OJO 1/0 DIAMETRO 3/8 PLG (FTN1-320)",header:false},
-  {sap:"200367",ax:"50220",desc:"CABLE COBRE XHHW # 4 AWG 19 HILOS (ETM3-310)",header:false},
-  {sap:"282485",ax:"50219",desc:"CABLE COBRE XHHW # 6 AWG 7 HILOS (ETM3-310)",header:false},
-  {sap:"350560",ax:"50231",desc:"CABLE COBRE RHHW #1/0 AWG",header:false},
-  {sap:"212896",ax:"250419",desc:"TERMINAL DE OJO NO. 2 DIAMETRO 3/8 PLG",header:false},
-  {sap:"350564",ax:"50234",desc:"CABLE COBRE RHHW # 2 AWG 19 HILOS",header:false},
-  {sap:"PATRON ANTIHURTO Y TELEGESTIÓN",ax:"",desc:"",header:true},
-  {sap:"221472",ax:"50710",desc:"CABLE CONCENTRICO TELESCOPICO CCA BIFILAR 6 AWG PARA ACOMETIDA AEREA (ETM3-470)",header:false},
-  {sap:"200413",ax:"50721",desc:"CABLE CONCENTRICO TELESCOPICO CCA TRIFILAR 6 AWG PARA ACOMETIDA AEREA (ETM3-470)",header:false},
-  {sap:"211829",ax:"400707",desc:"CAJA TRANSPARENTE DE POLICARBONATO PARA MEDIDOR TOTALIZADOR",header:false},
-  {sap:"213340",ax:"150419",desc:"PINZAS DE RETENCION PARA CABLE CONCENTRICO TELESCOPICO #1/0 AWG (FTN1-760)",header:false},
-  {sap:"222315",ax:"150420",desc:"PINZAS DE RETENCION PARA CABLE CONCENTRICO TELESCOPICO DE ACOMETIDA BT #6 (FTN1-770)",header:false},
-  {sap:"353730",ax:"750116",desc:"CINTA DE BLINDAJE 3M, CAT. ARMORCAST 4560-10",header:false},
-  {sap:"338363",ax:"700340",desc:"MEDIDOR TELEGESTIONADO BASE A - 240V (FTMED-32)",header:false},
-  {sap:"338361",ax:"700339",desc:"MEDIDOR RESIDENCIAL PREPAGO CLASE 100, 120V CON TELEGESTION",header:false},
-  {sap:"338360",ax:"700338",desc:"MEDIDOR RESIDENCIAL POSTPAGO CLASE 100, 120-240V CON TELEGESTION",header:false},
-];
-
 function imprimirDespacho(memo) {
   const cantMap = {};
-  for (const item of memo.MATERIALES) {
-    cantMap[String(item.RESERVA).trim()] = item.CANTIDAD;
+  for (const it of (memo.MATERIALES || [])) {
+    cantMap[String(it.RESERVA).trim()] = it.CANTIDAD;
   }
 
-  const filas = DOC_ROWS.map(row => {
-    if (row.header) {
-      if (row.sap === 'RESERVA') {
-        return `<tr><td class="th">RESERVA</td><td class="th">STOCK</td><td class="th cant">CANTIDAD</td><td class="th desc">DESCRIPICIÓN</td></tr>`;
-      }
-      return `<tr><td class="sec" colspan="4">${row.sap}</td></tr>`;
+  const filas = FILAS_DOC.map(function(row) {
+    if (row.header === 'col') {
+      return '<tr><th class="th">RESERVA</th><th class="th">STOCK</th><th class="th">DESCRIPICIÓN</th><th class="th cant">CANTIDAD</th></tr>';
+    }
+    if (row.header === 'sec') {
+      return '<tr><td class="sec" colspan="4">' + row.sap + '</td></tr>';
     }
     const cant = cantMap[row.sap] || '';
-    return `<tr><td class="c0">${row.sap}</td><td class="c1">${row.ax}</td><td class="c2 cant">${cant}</td><td class="c3">${row.desc}</td></tr>`;
+    return '<tr><td class="code">' + row.sap + '</td><td class="code">' + row.ax + '</td><td>' + row.desc + '</td><td class="cant">' + cant + '</td></tr>';
   }).join('');
 
-  // Seriales
-  const seriales = memo.SERIALES || [];
-  let serialHtml = '';
-  if (seriales.length > 0) {
-    const sRows = seriales.map(i => {
-      if (i.modoSerial === 'individual' && (i.seriales||[]).length > 0) {
-        return i.seriales.map((ser, idx) => `<tr>
-          <td class="c0">${idx===0 ? safeStr(i.axCode,'') : ''}</td>
-          <td class="c0">${idx===0 ? safeStr(i.sapCode,'') : ''}</td>
-          <td>${idx===0 ? safeStr(i.nombre||i.name,'').toUpperCase() : ''}</td>
-          <td class="cant">${idx===0 ? safeNum(i.cantidad) : ''}</td>
-          <td class="cant">${idx+1}</td>
-          <td class="c0">${ser}</td>
-          <td></td>
-        </tr>`).join('');
-      }
-      const ini = i.modoSerial==='rango' ? (i.serialInicio||'') : (i.seriales||[])[0]||'';
-      const fin = i.modoSerial==='rango' ? (i.serialFin||'')   : (i.seriales||[]).slice(-1)[0]||'';
-      return `<tr>
-        <td class="c0">${safeStr(i.axCode,'')}</td>
-        <td class="c0">${safeStr(i.sapCode,'')}</td>
-        <td>${safeStr(i.nombre||i.name,'').toUpperCase()}</td>
-        <td class="cant">${safeNum(i.cantidad)}</td>
-        <td class="cant">1</td>
-        <td class="c0">${ini}</td>
-        <td class="c0">${fin}</td>
-      </tr>`;
-    }).join('');
-    serialHtml = `
-      <p class="serial-title">Serial de medidores / sellos entregados</p>
-      <table>
-        <tr><td class="th">STOCK</td><td class="th">RESERVA</td><td class="th desc">DESCRIPCIÓN</td><td class="th cant">CANTIDAD</td><td class="th cant">Cantidad</td><td class="th">Inicio</td><td class="th">Fin</td></tr>
-        ${sRows}
-      </table>`;
-  }
-
   const v = memo;
-  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
-<title>Despacho / Carga de Materiales</title>
-<style>
-/* Página carta con los márgenes exactos del Word */
-@page { size: 215.9mm 279.4mm; margin: 8.8mm 6.3mm 4.9mm 12.7mm; }
-* { margin:0; padding:0; box-sizing:border-box; }
-body { font-family: Arial, sans-serif; font-size: 7.5pt; color: #000; width: 196.9mm; }
+  const css = `
+  @page { size:215.9mm 279.4mm; margin:8.8mm 6.3mm 4.9mm 12.7mm; }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:Arial,sans-serif;font-size:6pt;color:#000;background:#fff;
+       width:196.9mm;max-width:196.9mm;}
 
-/* ── Tabla encabezado institucional ──
-   Replica Tabla 0 del Word: 2 cols de 50%, bordes negros, sin fondo */
-.t0 { width: 100%; border-collapse: collapse; border: 1px solid #000; margin-bottom: 1mm; }
-.t0 td { border: 1px solid #000; padding: 0.8mm 1mm; vertical-align: top; font-size: 7.5pt; }
-.empresa { font-size: 8pt; font-weight: bold; text-align: left; }
-.otc     { font-size: 7.5pt; }
-.label   { font-size: 6.5pt; color: #000; display: block; }
-.valor   { font-size: 7.5pt; display: block; min-height: 3.5mm; border-bottom: 0.5pt solid #555; padding-bottom: 0.3mm; margin-top: 0.2mm; }
+  /* ENCABEZADO */
+  .empresa{font-size:7pt;font-weight:bold;}
+  .sub{font-size:6pt;}
+  .header-campos{margin-top:1.5mm;}
+  .fila-campo{display:flex;gap:4mm;margin-bottom:1mm;}
+  .campo{flex:1;}
+  .campo .lbl{font-size:5.5pt;display:block;}
+  .campo .linea, .linea{font-size:6pt;font-weight:bold;display:inline-block;
+    border-bottom:0.4pt solid #000;min-height:2.5mm;padding-bottom:0.2mm;min-width:45mm;max-width:90mm;}
 
-/* ── Tabla materiales ──
-   Replica Tabla 1 del Word: 4 cols, proporciones exactas */
-.t1 { width: 100%; border-collapse: collapse; }
-.t1 td { border: 1px solid #000; padding: 0.3mm 0.8mm; font-size: 7.5pt; vertical-align: middle; }
-/* Anchos exactos del Word */
-.c0   { width: 10.6%; text-align: center; }
-.c1   { width: 7.0%;  text-align: center; }
-.c2   { width: 9.6%;  text-align: center; }
-.c3   { width: 72.8%; }
-/* Alias para tabla seriales */
-.cant { text-align: center; }
-.desc { }
-/* Encabezado columnas */
-.th  { background: #d9d9d9; font-weight: bold; font-size: 8pt; text-align: center; border: 1px solid #000; padding: 0.5mm 0.8mm; }
-/* Headers de sección */
-.sec { background: #d9d9d9; font-weight: bold; font-size: 7.5pt; border: 1px solid #000; padding: 0.3mm 0.8mm; }
+  /* TABLA MATERIALES — sin fondo gris, bordes simples */
+  .tm{width:196.9mm;border-collapse:collapse;font-size:5.5pt;
+      margin-top:1.5mm;table-layout:fixed;}
+  .tm td,.tm th{border:0.4pt solid #000;padding:0.1mm 0.4mm;
+    vertical-align:middle;overflow:hidden;line-height:1.3;}
+  .c-sap {width:17mm;}
+  .c-ax  {width:11mm;}
+  .c-desc{width:155mm;}
+  .c-cant{width:13.9mm;}
+  /* Sin fondo gris — igual al Word */
+  .th {font-weight:bold;font-size:6pt;text-align:center;}
+  .sec{font-weight:bold;text-align:center;}
+  .code{text-align:center;font-size:5pt;}
+  .cant{text-align:center;font-weight:bold;}
 
-/* Firmas */
-.firmas { display: flex; margin-top: 12mm; gap: 10mm; }
-.firma  { flex:1; text-align: center; }
-.firma .linea { border-top: 0.75pt solid #000; padding-top: 1mm; font-size: 7pt; font-weight: bold; }
+  @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+`;
 
-.serial-title { font-size: 7.5pt; font-weight: bold; text-transform: uppercase; margin: 3mm 0 1mm; }
+  const html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Memo Despacho</title><style>' + css + '</style></head><body>' +
+    '<table style="width:196.9mm;border-collapse:collapse;margin-bottom:1.5mm;">' +
+      '<colgroup><col style="width:98mm"><col style="width:98.9mm"></colgroup>' +
+      '<tr>' +
+        '<td rowspan="2" style="vertical-align:top;padding-right:2mm;border:none;">' +
+          '<div class="empresa">DISTRUIBUIDORA DE ELECTRICIDAD DELSUR S.A. DE C.V.</div>' +
+          '<div class="sub">OTC - GERENCIA COMERCIAL</div>' +
+          '<div class="sub">DESPACHO/ CARGA DE MATERIALES</div>' +
+        '</td>' +
+        '<td style="border:none;padding-bottom:1.5mm;">' +
+          '<span class="lbl">USUARIO RESPONSABLE:</span>' +
+          '<span class="linea">' + (v.USUARIO_RESPONSABLE||'') + '</span>' +
+        '</td>' +
+      '</tr>' +
+      '<tr>' +
+        '<td style="border:none;padding-bottom:1.5mm;">' +
+          '<span class="lbl">INSTALADOR RESPONSABLE:</span>' +
+          '<span class="linea">' + (v.INSTALADOR_RESPONSABLE||'') + '</span>' +
+        '</td>' +
+      '</tr>' +
+      '<tr>' +
+        '<td style="border:none;padding-top:2mm;padding-bottom:1.5mm;">' +
+          '<span class="lbl">EMPRESA CONTRATISTA:</span>' +
+          '<span class="linea">' + (v.EMPRESA_CONTRATISTA||'') + '</span>' +
+        '</td>' +
+        '<td style="border:none;padding-top:2mm;padding-bottom:1.5mm;">' +
+          '<span class="lbl">FIRMA DE RECIBIDO:</span>' +
+          '<span class="linea">&nbsp;</span>' +
+        '</td>' +
+      '</tr>' +
+      '<tr>' +
+        '<td style="border:none;padding-bottom:1.5mm;">' +
+          '<span class="lbl">ENTREGADO POR:</span>' +
+          '<span class="linea">' + (v.ENTREGADO_POR||'') + '</span>' +
+        '</td>' +
+        '<td style="border:none;padding-bottom:1.5mm;">' +
+          '<span class="lbl">PLACA DE VEHICULO:</span>' +
+          '<span class="linea">' + (v.PLACA_VEHICULO||'') + '</span>' +
+        '</td>' +
+      '</tr>' +
+      '<tr>' +
+        '<td style="border:none;padding-bottom:1.5mm;">' +
+          '<span class="lbl">FIRMA DE ENTREGADO:</span>' +
+          '<span class="linea">&nbsp;</span>' +
+        '</td>' +
+        '<td style="border:none;padding-bottom:1.5mm;">' +
+          '<span class="lbl">FECHA ENTREGA DE MATERIAL:</span>' +
+          '<span class="linea">' + (v.FECHA_ENTREGA||'') + '</span>' +
+        '</td>' +
+      '</tr>' +
+      '<tr>' +
+        '<td style="border:none;">' +
+          '<span class="lbl">FECHA DE SOLICITUD</span>' +
+          '<span class="linea">' + (v.FECHA_SOLICITUD||'') + '</span>' +
+        '</td>' +
+        '<td style="border:none;"></td>' +
+      '</tr>' +
+    '</table>' +
+    '<table class="tm">' +
+      '<colgroup><col class="c-sap"><col class="c-ax"><col class="c-desc"><col class="c-cant"></colgroup>' +
+      filas +
+    '</table>' +
+  '</body></html>';
 
-@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
-</style></head><body>
-
-<!-- Tabla 0: Encabezado institucional -->
-<!-- Fila 0-2 col izquierda: empresa, OTC, DESPACHO — unidas con rowspan -->
-<!-- Fila 0 col derecha: vacía -->
-<!-- Filas 3-7: labels y valores en ambas columnas -->
-<table class="t0">
-  <colgroup><col style="width:50%"><col style="width:50%"></colgroup>
-  <tr>
-    <td rowspan="3" style="vertical-align:middle">
-      <span class="empresa">DISTRUIBUIDORA DE ELECTRICIDAD DELSUR S.A. DE C.V.</span><br>
-      <span class="otc">OTC - GERENCIA COMERCIAL</span><br>
-      <span class="otc">DESPACHO/ CARGA DE MATERIALES</span>
-    </td>
-    <td><span class="label">USUARIO RESPONSABLE:</span><span class="valor">${v.USUARIO_RESPONSABLE}</span></td>
-  </tr>
-  <tr>
-    <td>
-      <table style="width:100%;border-collapse:collapse"><tr>
-        <td style="width:50%;padding-right:1mm;border:none">
-          <span class="label">EMPRESA CONTRATISTA:</span><span class="valor">${v.EMPRESA_CONTRATISTA}</span>
-        </td>
-        <td style="width:50%;padding-left:1mm;border:none;border-left:0.5pt solid #999">
-          <span class="label">INSTALADOR RESPONSABLE:</span><span class="valor">${v.INSTALADOR_RESPONSABLE}</span>
-        </td>
-      </tr></table>
-    </td>
-  </tr>
-  <tr>
-    <td>
-      <table style="width:100%;border-collapse:collapse"><tr>
-        <td style="width:50%;padding-right:1mm;border:none">
-          <span class="label">ENTREGADO POR:</span><span class="valor">${v.ENTREGADO_POR}</span>
-        </td>
-        <td style="width:50%;padding-left:1mm;border:none;border-left:0.5pt solid #999">
-          <span class="label">FIRMA DE RECIBIDO:</span><span class="valor">&nbsp;</span>
-        </td>
-      </tr></table>
-    </td>
-  </tr>
-  <tr>
-    <td><span class="label">FIRMA DE ENTREGADO:</span><span class="valor">&nbsp;</span></td>
-    <td><span class="label">PLACA DE VEHICULO:</span><span class="valor">${v.PLACA_VEHICULO}</span></td>
-  </tr>
-  <tr>
-    <td><span class="label">FECHA DE SOLICITUD</span><span class="valor">${v.FECHA_SOLICITUD}</span></td>
-    <td><span class="label">FECHA ENTREGA DE MATERIAL:</span><span class="valor">${v.FECHA_ENTREGA}</span></td>
-  </tr>
-</table>
-
-<!-- Tabla 1: Materiales con todos los 59 materiales y secciones -->
-<table class="t1">
-  <colgroup>
-    <col class="c0"><col class="c1"><col class="c2"><col class="c3">
-  </colgroup>
-  ${filas}
-</table>
-
-${serialHtml}
-
-<!-- Firmas -->
-<div class="firmas">
-  <div class="firma"><div class="linea">FIRMA DE ENTREGADO</div></div>
-  <div class="firma"><div class="linea">FIRMA DE RECIBIDO</div></div>
-</div>
-
-<script>window.onload=()=>window.print();</script>
-</body></html>`;
-
-  // Usar iframe oculto para evitar bloqueo de popups en móvil
-  let iframe = document.getElementById('__print_frame');
-  if (iframe) iframe.remove();
-  iframe = document.createElement('iframe');
-  iframe.id = '__print_frame';
-  iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:210mm;height:297mm;border:none;';
-  document.body.appendChild(iframe);
-
-  const iDoc = iframe.contentDocument || iframe.contentWindow.document;
-  iDoc.open();
-  iDoc.write(html.replace('<script>window.onload=()=>window.print();</script>', ''));
-  iDoc.close();
-
+  // Imprimir via iframe
+  let ifr = document.getElementById('__print_frame');
+  if (ifr) ifr.remove();
+  ifr = document.createElement('iframe');
+  ifr.id = '__print_frame';
+  ifr.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:216mm;height:280mm;border:none;';
+  document.body.appendChild(ifr);
+  const iDoc = ifr.contentDocument || ifr.contentWindow.document;
+  iDoc.open(); iDoc.write(html); iDoc.close();
   setTimeout(function() {
-    try {
-      iframe.contentWindow.print();
-    } catch(e) {
-      // Fallback: abrir en nueva pestaña
+    try { ifr.contentWindow.print(); }
+    catch(e) {
       const w = window.open('','_blank');
       if (w) { w.document.write(html); w.document.close(); }
     }
-  }, 400);
+  }, 500);
 }
 
 // ─────────────────────────────────────────
