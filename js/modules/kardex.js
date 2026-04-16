@@ -777,37 +777,87 @@ function showFormItem(db, session, item) {
 // FORM — ENTRADA DE MATERIAL
 // ─────────────────────────────────────────
 function showFormEntrada(db, session, item) {
-  const ov = mkOverlay(`
-    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-      <h2 class="font-semibold text-gray-900">Registrar entrada</h2>
-      <button id="fe-close" class="text-gray-400 hover:text-gray-700">✕</button>
-    </div>
-    <div class="px-5 py-4 space-y-4">
-      <div class="bg-gray-50 rounded-xl p-3">
-        <p class="text-sm font-medium text-gray-900">${safeStr(item?.name)}</p>
-        <p class="text-xs text-gray-400 font-mono mt-0.5">
-          ${item?.sapCode ? `SAP ${item.sapCode}` : ''}${item?.sapCode && item?.axCode ? ' · ' : ''}${item?.axCode ? `AX ${item.axCode}` : ''}
-        </p>
-        <p class="text-xs text-gray-500 mt-1">Stock actual: <strong>${safeNum(item?.stock)} ${safeStr(item?.unit,'')}</strong></p>
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1.5">Cantidad que ingresa</label>
-        <input id="fe-cant" type="number" min="1" placeholder="0"
-          class="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 text-center text-lg font-semibold"/>
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1.5">Motivo</label>
-        <input id="fe-motivo" type="text" placeholder="Ej. Compra, Reposición"
-          class="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>
-      </div>
-      <div id="fe-err" class="hidden text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5"></div>
-    </div>
-    <div class="px-5 py-4 border-t border-gray-100 flex gap-3">
-      <button id="fe-cancel" class="flex-1 border border-gray-300 text-gray-700 font-medium rounded-lg py-2.5 text-sm hover:bg-gray-50">Cancelar</button>
-      <button id="fe-submit" class="flex-1 text-white font-medium rounded-lg py-2.5 text-sm" style="background-color:#2E7D32">Registrar entrada</button>
-    </div>`);
+  const esSello  = item?.sapCode === '354549';
+  const esSer    = !!item?.requiereSerial;
+  let   modoSer  = esSello ? 'rango' : 'individual';
+
+  const serBlock = !esSer ? '' :
+    '<div class="border-t border-gray-100 pt-4 space-y-3">' +
+      '<p class="text-sm font-semibold text-gray-700">Seriales que ingresan</p>' +
+      (!esSello ?
+        '<div class="flex gap-2">' +
+          '<button id="fe-modo-ind" class="flex-1 py-2 rounded-xl text-sm font-semibold border-2 border-blue-500 bg-blue-50 text-blue-700">Individual</button>' +
+          '<button id="fe-modo-rng" class="flex-1 py-2 rounded-xl text-sm font-semibold border-2 border-gray-200 bg-white text-gray-500">Rango</button>' +
+        '</div>' : '') +
+      '<div id="fe-ser-campos">' +
+        '<p class="text-xs text-gray-400 mb-1">Seriales (uno por línea)</p>' +
+        '<textarea id="fe-sers" rows="5" placeholder="12345001&#10;12345002&#10;12345003" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"></textarea>' +
+      '</div>' +
+    '</div>';
+
+  const ov = mkOverlay(
+    '<div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">' +
+      '<h2 class="font-semibold text-gray-900">Registrar entrada</h2>' +
+      '<button id="fe-close" class="text-gray-400 hover:text-gray-700">✕</button>' +
+    '</div>' +
+    '<div class="px-5 py-4 space-y-4" style="max-height:80dvh;overflow-y:auto">' +
+      '<div class="bg-gray-50 rounded-xl p-3">' +
+        '<p class="text-sm font-medium text-gray-900">' + safeStr(item?.name) + '</p>' +
+        '<p class="text-xs text-gray-400 font-mono mt-0.5">' +
+          (item?.sapCode ? 'SAP ' + item.sapCode : '') +
+          (item?.sapCode && item?.axCode ? ' · ' : '') +
+          (item?.axCode ? 'AX ' + item.axCode : '') +
+        '</p>' +
+        '<p class="text-xs text-gray-500 mt-1">Stock actual: <strong>' + safeNum(item?.stock) + ' ' + safeStr(item?.unit,'') + '</strong></p>' +
+      '</div>' +
+      '<div>' +
+        '<label class="block text-sm font-medium text-gray-700 mb-1.5">Cantidad que ingresa</label>' +
+        '<input id="fe-cant" type="number" min="1" placeholder="0" class="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 text-center text-lg font-semibold"/>' +
+      '</div>' +
+      '<div>' +
+        '<label class="block text-sm font-medium text-gray-700 mb-1.5">Motivo</label>' +
+        '<input id="fe-motivo" type="text" placeholder="Ej. Compra, Reposición" class="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>' +
+      '</div>' +
+      serBlock +
+      '<div id="fe-err" class="hidden text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5"></div>' +
+    '</div>' +
+    '<div class="px-5 py-4 border-t border-gray-100 flex gap-3">' +
+      '<button id="fe-cancel" class="flex-1 border border-gray-300 text-gray-700 font-medium rounded-lg py-2.5 text-sm">Cancelar</button>' +
+      '<button id="fe-submit" class="flex-1 text-white font-medium rounded-lg py-2.5 text-sm" style="background-color:#2E7D32">Registrar entrada</button>' +
+    '</div>');
 
   ov.querySelector('#fe-close').onclick = ov.querySelector('#fe-cancel').onclick = () => ov.remove();
+
+  // Modo seriales (solo medidores)
+  function actualizarModo() {
+    const campos = ov.querySelector('#fe-ser-campos');
+    if (!campos) return;
+    const indBtn = ov.querySelector('#fe-modo-ind');
+    const rngBtn = ov.querySelector('#fe-modo-rng');
+    if (indBtn) {
+      indBtn.className = 'flex-1 py-2 rounded-xl text-sm font-semibold border-2 ' +
+        (modoSer==='individual' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-500');
+      rngBtn.className = 'flex-1 py-2 rounded-xl text-sm font-semibold border-2 ' +
+        (modoSer==='rango' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-500');
+    }
+    if (modoSer === 'rango') {
+      campos.innerHTML =
+        '<div class="flex gap-2">' +
+          '<div class="flex-1"><p class="text-xs text-gray-400 mb-1">Serial inicio</p>' +
+            '<input id="fe-ini" type="text" placeholder="Ej: 12345001" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400"/></div>' +
+          '<div class="flex-1"><p class="text-xs text-gray-400 mb-1">Serial fin</p>' +
+            '<input id="fe-fin" type="text" placeholder="Ej: 12345030" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400"/></div>' +
+        '</div>';
+    } else {
+      campos.innerHTML =
+        '<p class="text-xs text-gray-400 mb-1">Seriales (uno por línea)</p>' +
+        '<textarea id="fe-sers" rows="5" placeholder="12345001&#10;12345002&#10;12345003" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"></textarea>';
+    }
+  }
+
+  ov.querySelector('#fe-modo-ind')?.addEventListener('click', () => { modoSer='individual'; actualizarModo(); });
+  ov.querySelector('#fe-modo-rng')?.addEventListener('click', () => { modoSer='rango'; actualizarModo(); });
+
   ov.querySelector('#fe-submit').onclick = async () => {
     const cant   = safeNum(ov.querySelector('#fe-cant').value);
     const motivo = ov.querySelector('#fe-motivo').value.trim();
@@ -815,6 +865,27 @@ function showFormEntrada(db, session, item) {
     const btn    = ov.querySelector('#fe-submit');
     errEl.classList.add('hidden');
     if (cant <= 0) { errEl.textContent = 'Cantidad inválida.'; errEl.classList.remove('hidden'); return; }
+
+    // Recolectar seriales
+    let seriales = [], serialInicio = '', serialFin = '';
+    if (esSer) {
+      if (modoSer === 'rango') {
+        serialInicio = (ov.querySelector('#fe-ini')?.value || '').trim();
+        serialFin    = (ov.querySelector('#fe-fin')?.value || '').trim();
+        if (!serialInicio || !serialFin) {
+          errEl.textContent = 'Ingresa el serial de inicio y fin.';
+          errEl.classList.remove('hidden'); return;
+        }
+      } else {
+        const raw = (ov.querySelector('#fe-sers')?.value || '').trim();
+        seriales = raw ? raw.split('\n').map(s => s.trim()).filter(Boolean) : [];
+        if (!seriales.length) {
+          errEl.textContent = 'Ingresa al menos un serial.';
+          errEl.classList.remove('hidden'); return;
+        }
+      }
+    }
+
     btn.disabled = true; btn.textContent = 'Registrando...';
     try {
       const stockAntes = safeNum(item?.stock);
@@ -822,10 +893,43 @@ function showFormEntrada(db, session, item) {
       await addDoc(collection(db, 'kardex/movimientos/ajustes'), {
         itemId: item.id, itemNombre: safeStr(item?.name), tipo: 'entrada', cantidad: cant, motivo,
         stockAntes, stockDespues: stockAntes + cant,
+        requiereSerial: esSer,
+        modoSerial: esSer ? modoSer : null,
+        seriales: esSer && modoSer === 'individual' ? seriales : [],
+        serialInicio: esSer && modoSer === 'rango' ? serialInicio : '',
+        serialFin:    esSer && modoSer === 'rango' ? serialFin    : '',
         fecha: serverTimestamp(), registradoPor: session.uid, registradoPorNombre: session.displayName,
       });
+
+      // Registrar seriales individuales en colección de trazabilidad
+      if (esSer) {
+        const batch = [];
+        if (modoSer === 'individual') {
+          for (const ser of seriales) {
+            batch.push(addDoc(collection(db, 'kardex/seriales/items'), {
+              sapCode: item.sapCode, axCode: item.axCode,
+              itemId: item.id, itemNombre: safeStr(item?.name),
+              serial: ser, estado: 'disponible',
+              fechaEntrada: serverTimestamp(),
+              registradoPor: session.uid,
+            }));
+          }
+        } else {
+          batch.push(addDoc(collection(db, 'kardex/seriales/items'), {
+            sapCode: item.sapCode, axCode: item.axCode,
+            itemId: item.id, itemNombre: safeStr(item?.name),
+            serial: serialInicio + ' → ' + serialFin,
+            serialInicio, serialFin, cantidad: cant,
+            estado: 'disponible', modoSerial: 'rango',
+            fechaEntrada: serverTimestamp(),
+            registradoPor: session.uid,
+          }));
+        }
+        await Promise.all(batch);
+      }
+
       ov.remove();
-      showToast(`Entrada de ${cant} ${safeStr(item?.unit,'')} registrada.`, 'success');
+      showToast('Entrada de ' + cant + ' ' + safeStr(item?.unit,'') + ' registrada.', 'success');
       await showInventario(db, session);
     } catch(e) {
       errEl.textContent = 'Error al registrar.'; errEl.classList.remove('hidden');
