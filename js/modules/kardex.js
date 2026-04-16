@@ -870,8 +870,8 @@ function showFormEntrada(db, session, item) {
           const fin = (ov.querySelector('#fe-fin')?.value || '').trim();
           const nIni = parseInt(ini.replace(/\D/g,''), 10);
           const nFin = parseInt(fin.replace(/\D/g,''), 10);
-          const cant = (!isNaN(nIni) && !isNaN(nFin) && nFin >= nIni) ? (nFin - nIni + 1) : 0;
-          actualizarCantDisplay(cant);
+          const cantCalc = (!isNaN(nIni) && !isNaN(nFin) && nFin >= nIni) ? (nFin - nIni + 1) : 0;
+          actualizarCantDisplay(cantCalc);
         };
         ov.querySelector('#fe-ini')?.addEventListener('input', calcRango);
         ov.querySelector('#fe-fin')?.addEventListener('input', calcRango);
