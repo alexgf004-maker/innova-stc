@@ -545,6 +545,9 @@ async function showInventario(db, session) {
         tabla.querySelectorAll('[data-edit]').forEach(b => {
           b.addEventListener('click', () => showFormItem(db, session, allItems.find(i => i.id === b.dataset.edit)));
         });
+        tabla.querySelectorAll('[data-seriales]').forEach(b => {
+          b.addEventListener('click', () => showSeriales(db, session, allItems.find(i => i.id === b.dataset.seriales)));
+        });
       }
     }
 
@@ -633,6 +636,9 @@ function itemRow(item, canEdit, selMode = false, isSelected = false) {
           <button data-entrada="${item.id}" title="Registrar entrada" class="p-1.5 rounded text-gray-400 hover:text-green-600 transition-colors">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
           </button>
+          ${item.requiereSerial ? `<button data-seriales="${item.id}" title="Ver seriales" class="p-1.5 rounded text-gray-400 hover:text-purple-600 transition-colors">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="15" x2="12" y2="15"/></svg>
+          </button>` : ''}
           <button data-edit="${item.id}" title="Editar" class="p-1.5 rounded text-gray-400 hover:text-blue-500 transition-colors">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
@@ -642,6 +648,127 @@ function itemRow(item, canEdit, selMode = false, isSelected = false) {
         </div>
       </td>` : ''}
     </tr>`;
+}
+
+// ─────────────────────────────────────────
+// VISTA DE SERIALES POR MATERIAL
+// ─────────────────────────────────────────
+async function showSeriales(db, session, item) {
+  const ov = mkOverlay(
+    '<div class="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">' +
+      '<div>' +
+        '<h2 class="font-semibold text-gray-900">Seriales</h2>' +
+        '<p class="text-xs text-gray-400 mt-0.5">' + safeStr(item?.name) + '</p>' +
+      '</div>' +
+      '<button id="sv-close" class="text-gray-400 hover:text-gray-700">✕</button>' +
+    '</div>' +
+    '<div class="px-5 pt-3 shrink-0">' +
+      '<div class="relative mb-3">' +
+        '<svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' +
+        '<input id="sv-buscar" type="text" placeholder="Buscar serial..." class="w-full border border-gray-200 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>' +
+      '</div>' +
+      '<div class="flex gap-2 mb-3">' +
+        '<button id="sv-tab-disp" class="flex-1 py-2 rounded-xl text-sm font-semibold border-2 border-blue-500 bg-blue-50 text-blue-700">Disponibles <span id="sv-cnt-disp" class="ml-1 text-xs bg-blue-200 text-blue-800 px-1.5 py-0.5 rounded-full">0</span></button>' +
+        '<button id="sv-tab-desp" class="flex-1 py-2 rounded-xl text-sm font-semibold border-2 border-gray-200 bg-white text-gray-500">Despachados <span id="sv-cnt-desp" class="ml-1 text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full">0</span></button>' +
+      '</div>' +
+    '</div>' +
+    '<div id="sv-lista" class="flex-1 overflow-y-auto px-5 pb-5 space-y-2">' +
+      '<p class="text-sm text-gray-400 text-center py-8">Cargando...</p>' +
+    '</div>'
+  );
+
+  ov.querySelector('#sv-close').onclick = () => ov.remove();
+
+  let tabActual = 'disponible';
+  let todosSeriales = [];
+  let busq = '';
+
+  function fmt(ts) {
+    if (!ts) return '—';
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    return d.toLocaleDateString('es-SV', { day:'2-digit', month:'short', year:'numeric' });
+  }
+
+  function renderLista() {
+    const lista = ov.querySelector('#sv-lista');
+    if (!lista) return;
+    const q = busq.toLowerCase();
+    const filtrados = todosSeriales.filter(s =>
+      s.estado === tabActual &&
+      (!q || s.serial.toLowerCase().includes(q))
+    );
+
+    if (!filtrados.length) {
+      lista.innerHTML = '<p class="text-sm text-gray-400 text-center py-8">' +
+        (q ? 'Sin resultados para "' + q + '"' : 'Sin seriales ' + (tabActual === 'disponible' ? 'disponibles' : 'despachados')) +
+      '</p>';
+      return;
+    }
+
+    lista.innerHTML = filtrados.map(function(s) {
+      const isDisp = s.estado === 'disponible';
+      const badgeBg    = isDisp ? '#DCFCE7' : '#FEE2E2';
+      const badgeColor = isDisp ? '#166534' : '#C62828';
+      const badgeText  = isDisp ? 'Disponible' : 'Despachado';
+
+      return '<div class="bg-white border border-gray-200 rounded-2xl px-4 py-3">' +
+        '<div class="flex items-center justify-between mb-1">' +
+          '<span class="font-mono text-sm font-bold text-gray-900">' + s.serial + '</span>' +
+          '<span class="text-xs font-semibold px-2 py-0.5 rounded-full" style="background:' + badgeBg + ';color:' + badgeColor + '">' + badgeText + '</span>' +
+        '</div>' +
+        '<div class="text-xs text-gray-400 space-y-0.5">' +
+          '<p>📥 Entrada: ' + fmt(s.fechaEntrada) + '</p>' +
+          (!isDisp ? '<p>📤 Salida: ' + fmt(s.fechaSalida) + '</p>' : '') +
+          (!isDisp && s.usuarioDespacho ? '<p>👤 Despachado a: <span class="font-medium text-gray-600">' + s.usuarioDespacho + '</span></p>' : '') +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function updateTabs() {
+    const disp = todosSeriales.filter(s => s.estado === 'disponible').length;
+    const desp = todosSeriales.filter(s => s.estado === 'despachado').length;
+    const cntD = ov.querySelector('#sv-cnt-disp');
+    const cntDp = ov.querySelector('#sv-cnt-desp');
+    if (cntD)  cntD.textContent  = disp;
+    if (cntDp) cntDp.textContent = desp;
+
+    const tabDisp = ov.querySelector('#sv-tab-disp');
+    const tabDesp = ov.querySelector('#sv-tab-desp');
+    if (tabActual === 'disponible') {
+      tabDisp.className = 'flex-1 py-2 rounded-xl text-sm font-semibold border-2 border-blue-500 bg-blue-50 text-blue-700';
+      tabDesp.className = 'flex-1 py-2 rounded-xl text-sm font-semibold border-2 border-gray-200 bg-white text-gray-500';
+    } else {
+      tabDesp.className = 'flex-1 py-2 rounded-xl text-sm font-semibold border-2 border-blue-500 bg-blue-50 text-blue-700';
+      tabDisp.className = 'flex-1 py-2 rounded-xl text-sm font-semibold border-2 border-gray-200 bg-white text-gray-500';
+    }
+  }
+
+  // Cargar seriales
+  try {
+    const snap = await getDocs(query(
+      collection(db, 'kardex/seriales/items'),
+      where('itemId', '==', item.id)
+    ));
+    todosSeriales = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    todosSeriales.sort((a, b) => a.serial.localeCompare(b.serial, undefined, { numeric: true }));
+    updateTabs();
+    renderLista();
+  } catch(e) {
+    ov.querySelector('#sv-lista').innerHTML = '<p class="text-sm text-red-500 text-center py-8">Error al cargar seriales.</p>';
+    console.error(e);
+  }
+
+  ov.querySelector('#sv-buscar').addEventListener('input', function(e) {
+    busq = e.target.value.trim();
+    renderLista();
+  });
+  ov.querySelector('#sv-tab-disp').addEventListener('click', function() {
+    tabActual = 'disponible'; updateTabs(); renderLista();
+  });
+  ov.querySelector('#sv-tab-desp').addEventListener('click', function() {
+    tabActual = 'despachado'; updateTabs(); renderLista();
+  });
 }
 
 // ─────────────────────────────────────────
