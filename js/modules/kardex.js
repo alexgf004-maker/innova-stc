@@ -810,10 +810,18 @@ function showFormEntrada(db, session, item) {
         '</p>' +
         '<p class="text-xs text-gray-500 mt-1">Stock actual: <strong>' + safeNum(item?.stock) + ' ' + safeStr(item?.unit,'') + '</strong></p>' +
       '</div>' +
-      '<div>' +
-        '<label class="block text-sm font-medium text-gray-700 mb-1.5">Cantidad que ingresa</label>' +
-        '<input id="fe-cant" type="number" min="1" placeholder="0" class="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 text-center text-lg font-semibold"/>' +
-      '</div>' +
+      (!esSer ?
+        '<div>' +
+          '<label class="block text-sm font-medium text-gray-700 mb-1.5">Cantidad que ingresa</label>' +
+          '<input id="fe-cant" type="number" min="1" placeholder="0" class="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 text-center text-lg font-semibold"/>' +
+        '</div>'
+        :
+        '<div class="bg-blue-50 border border-blue-100 rounded-xl p-3 text-center">' +
+          '<p class="text-xs text-blue-500 mb-0.5">Cantidad calculada del serial</p>' +
+          '<p id="fe-cant-display" class="text-3xl font-black text-blue-700">—</p>' +
+          '<input id="fe-cant" type="hidden" value="0"/>' +
+        '</div>'
+      ) +
       '<div>' +
         '<label class="block text-sm font-medium text-gray-700 mb-1.5">Motivo</label>' +
         '<input id="fe-motivo" type="text" placeholder="Ej. Compra, Reposición" class="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>' +
@@ -829,6 +837,13 @@ function showFormEntrada(db, session, item) {
   ov.querySelector('#fe-close').onclick = ov.querySelector('#fe-cancel').onclick = () => ov.remove();
 
   // Modo seriales (solo medidores)
+  function actualizarCantDisplay(cant) {
+    const disp = ov.querySelector('#fe-cant-display');
+    const inp  = ov.querySelector('#fe-cant');
+    if (disp) disp.textContent = cant > 0 ? cant : '—';
+    if (inp)  inp.value = cant;
+  }
+
   function actualizarModo() {
     const campos = ov.querySelector('#fe-ser-campos');
     if (!campos) return;
@@ -848,15 +863,38 @@ function showFormEntrada(db, session, item) {
           '<div class="flex-1"><p class="text-xs text-gray-400 mb-1">Serial fin</p>' +
             '<input id="fe-fin" type="text" placeholder="Ej: 12345030" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400"/></div>' +
         '</div>';
+      // Auto-calcular cantidad del rango
+      setTimeout(() => {
+        const calcRango = () => {
+          const ini = (ov.querySelector('#fe-ini')?.value || '').trim();
+          const fin = (ov.querySelector('#fe-fin')?.value || '').trim();
+          const nIni = parseInt(ini.replace(/\D/g,''), 10);
+          const nFin = parseInt(fin.replace(/\D/g,''), 10);
+          const cant = (!isNaN(nIni) && !isNaN(nFin) && nFin >= nIni) ? (nFin - nIni + 1) : 0;
+          actualizarCantDisplay(cant);
+        };
+        ov.querySelector('#fe-ini')?.addEventListener('input', calcRango);
+        ov.querySelector('#fe-fin')?.addEventListener('input', calcRango);
+      }, 50);
     } else {
       campos.innerHTML =
         '<p class="text-xs text-gray-400 mb-1">Seriales (uno por línea)</p>' +
         '<textarea id="fe-sers" rows="5" placeholder="12345001&#10;12345002&#10;12345003" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"></textarea>';
+      // Auto-calcular cantidad del textarea
+      setTimeout(() => {
+        ov.querySelector('#fe-sers')?.addEventListener('input', function() {
+          const sers = this.value.trim().split('\n').map(s=>s.trim()).filter(Boolean);
+          actualizarCantDisplay(sers.length);
+        });
+      }, 50);
     }
+    actualizarCantDisplay(0);
   }
 
   ov.querySelector('#fe-modo-ind')?.addEventListener('click', () => { modoSer='individual'; actualizarModo(); });
   ov.querySelector('#fe-modo-rng')?.addEventListener('click', () => { modoSer='rango'; actualizarModo(); });
+  // Inicializar modo actual
+  if (esSer) actualizarModo();
 
   ov.querySelector('#fe-submit').onclick = async () => {
     const cant   = safeNum(ov.querySelector('#fe-cant').value);
@@ -864,10 +902,9 @@ function showFormEntrada(db, session, item) {
     const errEl  = ov.querySelector('#fe-err');
     const btn    = ov.querySelector('#fe-submit');
     errEl.classList.add('hidden');
-    if (cant <= 0) { errEl.textContent = 'Cantidad inválida.'; errEl.classList.remove('hidden'); return; }
-
-    // Recolectar seriales
+    // Recolectar seriales primero para calcular cantidad real
     let seriales = [], serialInicio = '', serialFin = '';
+    let cant = 0;
     if (esSer) {
       if (modoSer === 'rango') {
         serialInicio = (ov.querySelector('#fe-ini')?.value || '').trim();
@@ -876,14 +913,19 @@ function showFormEntrada(db, session, item) {
           errEl.textContent = 'Ingresa el serial de inicio y fin.';
           errEl.classList.remove('hidden'); return;
         }
+        const nIni = parseInt(serialInicio.replace(/\D/g,''), 10);
+        const nFin = parseInt(serialFin.replace(/\D/g,''), 10);
+        cant = (!isNaN(nIni) && !isNaN(nFin) && nFin >= nIni) ? (nFin - nIni + 1) : 0;
+        if (cant <= 0) { errEl.textContent = 'El rango es inválido.'; errEl.classList.remove('hidden'); return; }
       } else {
         const raw = (ov.querySelector('#fe-sers')?.value || '').trim();
         seriales = raw ? raw.split('\n').map(s => s.trim()).filter(Boolean) : [];
-        if (!seriales.length) {
-          errEl.textContent = 'Ingresa al menos un serial.';
-          errEl.classList.remove('hidden'); return;
-        }
+        if (!seriales.length) { errEl.textContent = 'Ingresa al menos un serial.'; errEl.classList.remove('hidden'); return; }
+        cant = seriales.length;
       }
+    } else {
+      cant = safeNum(ov.querySelector('#fe-cant').value);
+      if (cant <= 0) { errEl.textContent = 'Cantidad inválida.'; errEl.classList.remove('hidden'); return; }
     }
 
     btn.disabled = true; btn.textContent = 'Registrando...';
