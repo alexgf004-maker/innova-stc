@@ -2080,40 +2080,77 @@ async function showHistorial(db, session) {
   const content = document.getElementById('kardex-content');
   content.innerHTML = loading();
   try {
-    const q     = query(collection(db, 'kardex/movimientos/salidas'), orderBy('fecha', 'desc'));
-    const snap  = await getDocs(q);
-    const salidas = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const [snapSalidas, snapDev] = await Promise.all([
+      getDocs(query(collection(db, 'kardex/movimientos/salidas'), orderBy('fecha', 'desc'))),
+      getDocs(query(collection(db, 'kardex/movimientos/ajustes'), where('tipo','==','devolucion'), orderBy('fecha', 'desc'))),
+    ]);
+    const salidas = snapSalidas.docs.map(d => ({ id: d.id, _tipo:'salida', ...d.data() }));
+    const devs    = snapDev.docs.map(d => ({ id: d.id, _tipo:'devolucion', ...d.data() }));
 
-    content.innerHTML = `
-      <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div class="px-4 py-3 border-b border-gray-100">
-          <p class="font-semibold text-sm text-gray-900">Historial de salidas</p>
-          <p class="text-xs text-gray-400 mt-0.5">${salidas.length} registro(s)</p>
-        </div>
-        ${salidas.length === 0
+    // Merge and sort by fecha desc
+    const todos = [...salidas, ...devs].sort((a, b) => {
+      const ta = a.fecha?.toMillis?.() || 0;
+      const tb = b.fecha?.toMillis?.() || 0;
+      return tb - ta;
+    });
+
+    function rowSalida(s) {
+      return '<div class="px-4 py-3">' +
+        '<div class="flex items-start justify-between gap-2">' +
+          '<div class="min-w-0">' +
+            '<div class="flex items-center gap-1.5">' +
+              '<span class="text-xs font-semibold px-1.5 py-0.5 rounded" style="background:#DCFCE7;color:#166534">↑ Salida</span>' +
+              '<p class="text-sm font-semibold text-gray-900">' + safeStr(s.usuarioResponsable||s.tecnicoNombre) + '</p>' +
+            '</div>' +
+            '<p class="text-xs text-gray-400 mt-0.5">' + fmtDate(s.fecha) + ' · ' + safeStr(s.entregadoPor||s.registradoPorNombre) + '</p>' +
+            (s.empresaContratista ? '<p class="text-xs text-gray-400">' + s.empresaContratista + '</p>' : '') +
+          '</div>' +
+          '<div class="flex gap-1.5 shrink-0">' +
+            '<button data-smemo="' + s.id + '" class="text-xs font-medium px-2 py-1 rounded-lg" style="color:#1B4F8A;background:#EFF6FF">Memo</button>' +
+            '<button data-sdev="' + s.id + '" class="text-xs font-medium px-2 py-1 rounded-lg" style="color:#B45309;background:#FEF3C7">Devolver</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="flex flex-wrap gap-1 mt-2">' +
+          (s.items||[]).map(function(i) {
+            return '<span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">' + safeNum(i.cantidad) + ' ' + safeStr(i.unit||i.unidad,'') + ' ' + safeStr(i.nombre||i.name) + '</span>';
+          }).join('') +
+        '</div>' +
+      '</div>';
+    }
+
+    function rowDevolucion(d) {
+      return '<div class="px-4 py-3">' +
+        '<div class="flex items-start justify-between gap-2">' +
+          '<div class="min-w-0">' +
+            '<div class="flex items-center gap-1.5">' +
+              '<span class="text-xs font-semibold px-1.5 py-0.5 rounded" style="background:#FEE2E2;color:#C62828">↩ Devolución</span>' +
+              '<p class="text-sm font-semibold text-gray-900">' + safeStr(d.usuarioResponsable) + '</p>' +
+            '</div>' +
+            '<p class="text-xs text-gray-400 mt-0.5">' + fmtDate(d.fecha) + ' · ' + safeStr(d.registradoPorNombre) + '</p>' +
+            (d.motivo ? '<p class="text-xs text-gray-500 mt-0.5 italic">' + d.motivo + '</p>' : '') +
+          '</div>' +
+        '</div>' +
+        '<div class="flex flex-wrap gap-1 mt-2">' +
+          (d.items||[]).map(function(i) {
+            return '<span class="text-xs px-2 py-0.5 rounded-full text-red-700" style="background:#FEE2E2">' + safeNum(i.cantidad) + ' ' + safeStr(i.unit,'') + ' ' + safeStr(i.nombre) + '</span>';
+          }).join('') +
+        '</div>' +
+      '</div>';
+    }
+
+    content.innerHTML =
+      '<div class="bg-white rounded-xl border border-gray-200 overflow-hidden">' +
+        '<div class="px-4 py-3 border-b border-gray-100">' +
+          '<p class="font-semibold text-sm text-gray-900">Historial de movimientos</p>' +
+          '<p class="text-xs text-gray-400 mt-0.5">' + todos.length + ' registro(s)</p>' +
+        '</div>' +
+        (todos.length === 0
           ? '<div class="py-12 text-center text-sm text-gray-400">Sin movimientos registrados</div>'
-          : '<div class="divide-y divide-gray-100">' + salidas.map(s => `
-            <div class="px-4 py-3">
-              <div class="flex items-start justify-between gap-2">
-                <div class="min-w-0">
-                  <p class="text-sm font-semibold text-gray-900">${safeStr(s.usuarioResponsable || s.tecnicoNombre)}</p>
-                  <p class="text-xs text-gray-400">${fmtDate(s.fecha)} · ${safeStr(s.entregadoPor || s.registradoPorNombre)}</p>
-                  ${s.empresaContratista ? `<p class="text-xs text-gray-400">${s.empresaContratista}</p>` : ''}
-                </div>
-                <div class="flex gap-1.5 shrink-0">
-                  <button data-smemo="${s.id}" class="text-xs font-medium px-2 py-1 rounded-lg" style="color:#1B4F8A;background:#EFF6FF">Memo</button>
-                  <button data-sdev="${s.id}" class="text-xs font-medium px-2 py-1 rounded-lg" style="color:#B45309;background:#FEF3C7">Devolver</button>
-                </div>
-              </div>
-              <div class="flex flex-wrap gap-1 mt-2">
-                ${(s.items||[]).map(i =>
-                  `<span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                    ${safeNum(i.cantidad)} ${safeStr(i.unit||i.unidad,'')} ${safeStr(i.nombre||i.name)}
-                  </span>`).join('')}
-              </div>
-            </div>`).join('') + '</div>'
-        }
-      </div>`;
+          : '<div class="divide-y divide-gray-100">' +
+              todos.map(function(m) { return m._tipo === 'salida' ? rowSalida(m) : rowDevolucion(m); }).join('') +
+            '</div>'
+        ) +
+      '</div>';
 
     const salidaMap = {};
     salidas.forEach(s => { salidaMap[s.id] = s; });
