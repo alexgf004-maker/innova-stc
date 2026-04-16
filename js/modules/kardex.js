@@ -1628,8 +1628,19 @@ function descargarMemoJSON(memo) {
 }
 
 // ─────────────────────────────────────────
-// IMPRIMIR DESPACHO OFICIAL
+// IMPRIMIR DESPACHO OFICIAL — 2 páginas
 // ─────────────────────────────────────────
+
+// 6 bloques fijos de la página 2
+const BLOQUES_SERIALES = [
+  { ax:'700101', sap:'200129', nombre:'MEDIDOR BIFILAR DOMICILIAR BASE A, 100 A (ETE1-330)',                                          filas:30, tipo:'serial' },
+  { ax:'700102', sap:'355518', nombre:'MEDIDOR TRIFILAR DOMICILIAR BASE A, 100 A (ETE1-330)',                                         filas:30, tipo:'serial' },
+  { ax:'400931', sap:'354549', nombre:'SELLO ACRILICO VERDE (SERV. NVOS., MTTO.) (CABLE 30 CM) (FTMED-30)',                           filas:10, tipo:'sello'  },
+  { ax:'700326', sap:'338362', nombre:'MEDIDOR FORMA 2(S) T/ESPIGA, CLASE 100, TRIFI. 240 V, 15/100',                                 filas:5,  tipo:'serial' },
+  { ax:'700332', sap:'355064', nombre:'MEDIDOR FORMA 16s, CLASE 200, 120-277V. 8 CANALES DE MEM. 200 AMP. C/BASE 7 TERMI. (ETE-16s)', filas:5,  tipo:'serial' },
+  { ax:'700333', sap:'338357', nombre:'MEDIDOR FORMA 12s CLASE 200, 120-277V, TRIFILAR, 60Hz, 8 Canales de memoria, C/Base 5 Term (ETE-12s)', filas:3, tipo:'serial' },
+];
+
 const FILAS_DOC = [
   {sap:'RESERVA',ax:'STOCK',desc:'DESCRIPICIÓN',header:'col'},
   {sap:'USO HABITUAL',ax:'',desc:'',header:'sec'},
@@ -1704,53 +1715,62 @@ function imprimirDespacho(memo) {
     cantMap[String(it.RESERVA).trim()] = it.CANTIDAD;
   }
 
+  // Mapa de seriales por SAP (desde los items del despacho)
+  const serialMap = {};
+  for (const it of (memo.MATERIALES || [])) {
+    const sap = String(it.RESERVA || '').trim();
+    if (it.SERIALES && it.SERIALES.length > 0) serialMap[sap] = { tipo:'individual', seriales: it.SERIALES };
+    else if (it.SERIAL_INICIO) serialMap[sap] = { tipo:'rango', inicio: it.SERIAL_INICIO, fin: it.SERIAL_FIN };
+  }
+
+  // ── CSS compartido ──
+  const css = `
+    @page { size:215.9mm 279.4mm; margin:8.8mm 6.3mm 4.9mm 12.7mm; }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:Arial,sans-serif;font-size:6pt;color:#000;background:#fff;width:196.9mm;}
+    .empresa{font-size:7pt;font-weight:bold;}
+    .sub{font-size:6pt;}
+    .lbl{font-size:5.5pt;display:block;}
+    .linea{font-size:6pt;font-weight:bold;display:inline-block;
+      border-bottom:0.4pt solid #000;min-height:2.5mm;padding-bottom:0.2mm;
+      min-width:45mm;max-width:90mm;}
+    .tm{width:196.9mm;border-collapse:collapse;font-size:5.5pt;margin-top:1.5mm;table-layout:fixed;}
+    .tm td,.tm th{border:0.4pt solid #000;padding:0.25mm 0.4mm;vertical-align:middle;overflow:hidden;line-height:1.35;}
+    .c-sap{width:17mm;}.c-ax{width:11mm;}.c-desc{width:155mm;}.c-cant{width:13.9mm;}
+    .th{font-weight:bold;font-size:6pt;text-align:center;}
+    .sec{font-weight:bold;text-align:center;}
+    .code{text-align:center;font-size:5pt;}
+    .cant{text-align:center;font-weight:bold;}
+    /* Página 2 */
+    .page2{page-break-before:always;}
+    .titulo-p2{font-size:7pt;font-weight:bold;margin-bottom:2mm;}
+    .pg2{position:relative;width:196.9mm;height:260mm;}
+    .tb{position:absolute;border:0.5pt solid #000;overflow:hidden;}
+    .tb-hdr{background:#F7C6AC;font-weight:bold;border-bottom:0.5pt solid #000;}
+    .tb-hdr table{width:100%;border-collapse:collapse;table-layout:fixed;}
+    .tb-hdr .cod{font-size:5pt;line-height:1.4;padding:0.5mm 0.8mm;border-right:0.5pt solid #000;vertical-align:middle;text-align:center;width:15mm;min-width:15mm;max-width:15mm;}
+    .tb-hdr .nom{font-size:5.5pt;padding:0.5mm 0.8mm;vertical-align:middle;text-align:center;}
+    .tb-body table{width:100%;border-collapse:collapse;table-layout:fixed;}
+    .tb-body td{border:0.3pt solid #ccc;padding:0.2mm 0.5mm;font-size:5pt;height:3.5mm;line-height:3.5mm;}
+    .nb{width:15mm;min-width:15mm;max-width:15mm;text-align:center;padding-right:1mm;color:#555;border-right:0.4pt solid #999;}
+    .hc{background:#f5f5f5;font-weight:bold;text-align:center;font-size:4.5pt;border-bottom:0.4pt solid #999;}
+    .cc{text-align:center;border-right:0.3pt solid #999;}
+    .ci{text-align:center;border-right:0.3pt solid #999;}
+    .cf{text-align:center;}
+    .filled{color:#1B4F8A;font-weight:bold;}
+    @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+  `;
+
+  // ── PÁGINA 1: materiales ──
   const filas = FILAS_DOC.map(function(row) {
-    if (row.header === 'col') {
-      return '<tr><th class="th">RESERVA</th><th class="th">STOCK</th><th class="th">DESCRIPICIÓN</th><th class="th cant">CANTIDAD</th></tr>';
-    }
-    if (row.header === 'sec') {
-      return '<tr><td class="sec" colspan="4">' + row.sap + '</td></tr>';
-    }
+    if (row.header === 'col') return '<tr><th class="th">RESERVA</th><th class="th">STOCK</th><th class="th">DESCRIPICIÓN</th><th class="th cant">CANTIDAD</th></tr>';
+    if (row.header === 'sec') return '<tr><td class="sec" colspan="4">' + row.sap + '</td></tr>';
     const cant = cantMap[row.sap] || '';
     return '<tr><td class="code">' + row.sap + '</td><td class="code">' + row.ax + '</td><td>' + row.desc + '</td><td class="cant">' + cant + '</td></tr>';
   }).join('');
 
   const v = memo;
-  const css = `
-  @page { size:215.9mm 279.4mm; margin:8.8mm 6.3mm 4.9mm 12.7mm; }
-  *{margin:0;padding:0;box-sizing:border-box;}
-  body{font-family:Arial,sans-serif;font-size:6pt;color:#000;background:#fff;
-       width:196.9mm;max-width:196.9mm;}
-
-  /* ENCABEZADO */
-  .empresa{font-size:7pt;font-weight:bold;}
-  .sub{font-size:6pt;}
-  .header-campos{margin-top:1.5mm;}
-  .fila-campo{display:flex;gap:4mm;margin-bottom:1mm;}
-  .campo{flex:1;}
-  .campo .lbl{font-size:5.5pt;display:block;}
-  .campo .linea, .linea{font-size:6pt;font-weight:bold;display:inline-block;
-    border-bottom:0.4pt solid #000;min-height:2.5mm;padding-bottom:0.2mm;min-width:45mm;max-width:90mm;}
-
-  /* TABLA MATERIALES — sin fondo gris, bordes simples */
-  .tm{width:196.9mm;border-collapse:collapse;font-size:5.5pt;
-      margin-top:1.5mm;table-layout:fixed;}
-  .tm td,.tm th{border:0.4pt solid #000;padding:0.25mm 0.4mm;
-    vertical-align:middle;overflow:hidden;line-height:1.35;}
-  .c-sap {width:17mm;}
-  .c-ax  {width:11mm;}
-  .c-desc{width:155mm;}
-  .c-cant{width:13.9mm;}
-  /* Sin fondo gris — igual al Word */
-  .th {font-weight:bold;font-size:6pt;text-align:center;}
-  .sec{font-weight:bold;text-align:center;}
-  .code{text-align:center;font-size:5pt;}
-  .cant{text-align:center;font-weight:bold;}
-
-  @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
-`;
-
-  const html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Memo Despacho</title><style>' + css + '</style></head><body>' +
+  const p1 =
     '<table style="width:196.9mm;border-collapse:collapse;margin-bottom:1.5mm;">' +
       '<colgroup><col style="width:98mm"><col style="width:98.9mm"></colgroup>' +
       '<tr>' +
@@ -1759,60 +1779,119 @@ function imprimirDespacho(memo) {
           '<div class="sub">OTC - GERENCIA COMERCIAL</div>' +
           '<div class="sub">DESPACHO/ CARGA DE MATERIALES</div>' +
         '</td>' +
-        '<td style="border:none;padding-bottom:1.5mm;">' +
-          '<span class="lbl">USUARIO RESPONSABLE:</span>' +
-          '<span class="linea">' + (v.USUARIO_RESPONSABLE||'') + '</span>' +
-        '</td>' +
+        '<td style="border:none;padding-bottom:1.5mm;"><span class="lbl">USUARIO RESPONSABLE:</span><span class="linea">' + (v.USUARIO_RESPONSABLE||'') + '</span></td>' +
+      '</tr>' +
+      '<tr><td style="border:none;padding-bottom:1.5mm;"><span class="lbl">INSTALADOR RESPONSABLE:</span><span class="linea">' + (v.INSTALADOR_RESPONSABLE||'') + '</span></td></tr>' +
+      '<tr>' +
+        '<td style="border:none;padding-top:2mm;padding-bottom:1.5mm;"><span class="lbl">EMPRESA CONTRATISTA:</span><span class="linea">' + (v.EMPRESA_CONTRATISTA||'') + '</span></td>' +
+        '<td style="border:none;padding-top:2mm;padding-bottom:1.5mm;"><span class="lbl">FIRMA DE RECIBIDO:</span><span class="linea">&nbsp;</span></td>' +
       '</tr>' +
       '<tr>' +
-        '<td style="border:none;padding-bottom:1.5mm;">' +
-          '<span class="lbl">INSTALADOR RESPONSABLE:</span>' +
-          '<span class="linea">' + (v.INSTALADOR_RESPONSABLE||'') + '</span>' +
-        '</td>' +
+        '<td style="border:none;padding-bottom:1.5mm;"><span class="lbl">ENTREGADO POR:</span><span class="linea">' + (v.ENTREGADO_POR||'') + '</span></td>' +
+        '<td style="border:none;padding-bottom:1.5mm;"><span class="lbl">PLACA DE VEHICULO:</span><span class="linea">' + (v.PLACA_VEHICULO||'') + '</span></td>' +
       '</tr>' +
       '<tr>' +
-        '<td style="border:none;padding-top:2mm;padding-bottom:1.5mm;">' +
-          '<span class="lbl">EMPRESA CONTRATISTA:</span>' +
-          '<span class="linea">' + (v.EMPRESA_CONTRATISTA||'') + '</span>' +
-        '</td>' +
-        '<td style="border:none;padding-top:2mm;padding-bottom:1.5mm;">' +
-          '<span class="lbl">FIRMA DE RECIBIDO:</span>' +
-          '<span class="linea">&nbsp;</span>' +
-        '</td>' +
+        '<td style="border:none;padding-bottom:1.5mm;"><span class="lbl">FIRMA DE ENTREGADO:</span><span class="linea">&nbsp;</span></td>' +
+        '<td style="border:none;padding-bottom:1.5mm;"><span class="lbl">FECHA ENTREGA DE MATERIAL:</span><span class="linea">' + (v.FECHA_ENTREGA||'') + '</span></td>' +
       '</tr>' +
       '<tr>' +
-        '<td style="border:none;padding-bottom:1.5mm;">' +
-          '<span class="lbl">ENTREGADO POR:</span>' +
-          '<span class="linea">' + (v.ENTREGADO_POR||'') + '</span>' +
-        '</td>' +
-        '<td style="border:none;padding-bottom:1.5mm;">' +
-          '<span class="lbl">PLACA DE VEHICULO:</span>' +
-          '<span class="linea">' + (v.PLACA_VEHICULO||'') + '</span>' +
-        '</td>' +
-      '</tr>' +
-      '<tr>' +
-        '<td style="border:none;padding-bottom:1.5mm;">' +
-          '<span class="lbl">FIRMA DE ENTREGADO:</span>' +
-          '<span class="linea">&nbsp;</span>' +
-        '</td>' +
-        '<td style="border:none;padding-bottom:1.5mm;">' +
-          '<span class="lbl">FECHA ENTREGA DE MATERIAL:</span>' +
-          '<span class="linea">' + (v.FECHA_ENTREGA||'') + '</span>' +
-        '</td>' +
-      '</tr>' +
-      '<tr>' +
-        '<td style="border:none;">' +
-          '<span class="lbl">FECHA DE SOLICITUD</span>' +
-          '<span class="linea">' + (v.FECHA_SOLICITUD||'') + '</span>' +
-        '</td>' +
+        '<td style="border:none;"><span class="lbl">FECHA DE SOLICITUD</span><span class="linea">' + (v.FECHA_SOLICITUD||'') + '</span></td>' +
         '<td style="border:none;"></td>' +
       '</tr>' +
     '</table>' +
-    '<table class="tm">' +
-      '<colgroup><col class="c-sap"><col class="c-ax"><col class="c-desc"><col class="c-cant"></colgroup>' +
-      filas +
-    '</table>' +
-  '</body></html>';
+    '<table class="tm"><colgroup><col class="c-sap"><col class="c-ax"><col class="c-desc"><col class="c-cant"></colgroup>' + filas + '</table>';
+
+  // ── PÁGINA 2: seriales ──
+  function buildBloque(b) {
+    const serData = serialMap[b.sap] || null;
+    const isSello = b.tipo === 'sello';
+    const ancho   = b.filas >= 30 ? '62mm' : b.filas >= 10 ? '62mm' : '62mm';
+
+    let filasHtml = '';
+    if (isSello) {
+      // Encabezado de columnas
+      filasHtml += '<tr class="sub-header"><td class="num"></td><td class="col-cant">Cantidad</td><td class="col-ini">Inicio</td><td class="col-fin">Fin</td></tr>';
+      for (let i = 1; i <= b.filas; i++) {
+        let cant = '', ini = '', fin = '';
+        if (serData && serData.tipo === 'rango' && i === 1) {
+          cant = cantMap[b.sap] || '';
+          ini  = serData.inicio || '';
+          fin  = serData.fin    || '';
+        }
+        const cls = cant ? ' class="filled"' : '';
+        filasHtml += '<tr><td class="num">' + i + '</td>' +
+          '<td class="col-cant"' + cls + '>' + cant + '</td>' +
+          '<td class="col-ini"'  + cls + '>' + ini  + '</td>' +
+          '<td class="col-fin"'  + cls + '>' + fin  + '</td></tr>';
+      }
+    } else {
+      // Filas con serial individual
+      const seriales = serData && serData.tipo === 'individual' ? serData.seriales : [];
+      for (let i = 1; i <= b.filas; i++) {
+        const val = seriales[i-1] || '';
+        const cls = val ? ' class="filled"' : '';
+        filasHtml += '<tr><td class="num">' + i + '</td><td' + cls + '>' + val + '</td></tr>';
+      }
+    }
+
+    return '<div class="bloque" style="width:' + ancho + '">' +
+      '<div class="bloque-header">' +
+        '<div class="codigos">' + b.ax + '<br>' + b.sap + '</div>' +
+        '<div class="nombre">' + b.nombre + '</div>' +
+      '</div>' +
+      '<div class="bloque-filas"><table>' + filasHtml + '</table></div>' +
+    '</div>';
+  }
+
+  function buildHdrTd(b) {
+    return '<div class="tb-hdr"><table><tr>' +
+      '<td class="cod">' + b.ax + '<br>' + b.sap + '</td>' +
+      '<td class="nom">' + b.nombre + '</td>' +
+    '</tr></table></div>';
+  }
+
+  function buildFilas(b) {
+    const serData = serialMap[b.sap] || null;
+    let rows = '';
+    if (b.tipo === 'sello') {
+      rows += '<tr><td class="nb hc"></td><td class="cc hc">Cantidad</td><td class="ci hc">Inicio</td><td class="cf hc">Fin</td></tr>';
+      for (let i = 1; i <= b.filas; i++) {
+        let cant='', ini='', fin='';
+        if (serData && serData.tipo==='rango' && i===1) { cant=cantMap[b.sap]||''; ini=serData.inicio||''; fin=serData.fin||''; }
+        const cls = cant ? ' class="filled"' : '';
+        rows += '<tr><td class="nb">' + i + '</td><td class="cc"' + cls + '>' + cant + '</td><td class="ci"' + cls + '>' + ini + '</td><td class="cf"' + cls + '>' + fin + '</td></tr>';
+      }
+    } else {
+      const sers = serData && serData.tipo==='individual' ? serData.seriales : [];
+      for (let i = 1; i <= b.filas; i++) {
+        const val = sers[i-1] || '';
+        const cls = val ? ' class="filled"' : '';
+        rows += '<tr><td class="nb">' + i + '</td><td' + cls + '>' + val + '</td></tr>';
+      }
+    }
+    return '<div class="tb-body"><table>' + rows + '</table></div>';
+  }
+
+  const p2 =
+    '<div class="page2">' +
+      '<div class="titulo-p2">Serial de medidores /sellos entregados</div>' +
+      '<div class="pg2">' +
+        // TB0: Bifilar
+        '<div class="tb" style="left:0;top:0;width:62.6mm;height:166.4mm;">' + buildHdrTd(BLOQUES_SERIALES[0]) + buildFilas(BLOQUES_SERIALES[0]) + '</div>' +
+        // TB1: Trifilar
+        '<div class="tb" style="left:69.2mm;top:0;width:62.9mm;height:166.4mm;">' + buildHdrTd(BLOQUES_SERIALES[1]) + buildFilas(BLOQUES_SERIALES[1]) + '</div>' +
+        // TB2: Sello
+        '<div class="tb" style="left:138.1mm;top:0;width:50.4mm;height:59.7mm;">' + buildHdrTd(BLOQUES_SERIALES[2]) + buildFilas(BLOQUES_SERIALES[2]) + '</div>' +
+        // TB3: Forma 2S
+        '<div class="tb" style="left:0;top:172.3mm;width:62.6mm;height:36.1mm;">' + buildHdrTd(BLOQUES_SERIALES[3]) + buildFilas(BLOQUES_SERIALES[3]) + '</div>' +
+        // TB4: Forma 16s
+        '<div class="tb" style="left:69.2mm;top:172.3mm;width:62.9mm;height:36.1mm;">' + buildHdrTd(BLOQUES_SERIALES[4]) + buildFilas(BLOQUES_SERIALES[4]) + '</div>' +
+        // Tabla Forma 12s
+        '<div class="tb" style="left:0;top:215mm;width:82.3mm;">' + buildHdrTd(BLOQUES_SERIALES[5]) + buildFilas(BLOQUES_SERIALES[5]) + '</div>' +
+      '</div>' +
+    '</div>';
+
+  const html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Memo Despacho</title><style>' + css + '</style></head><body>' + p1 + p2 + '</body></html>';
 
   // Imprimir via iframe
   let ifr = document.getElementById('__print_frame');
