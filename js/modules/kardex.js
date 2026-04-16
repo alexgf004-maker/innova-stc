@@ -1735,8 +1735,8 @@ function imprimirDespacho(memo) {
   /* TABLA MATERIALES — sin fondo gris, bordes simples */
   .tm{width:196.9mm;border-collapse:collapse;font-size:5.5pt;
       margin-top:1.5mm;table-layout:fixed;}
-  .tm td,.tm th{border:0.4pt solid #000;padding:0.1mm 0.4mm;
-    vertical-align:middle;overflow:hidden;line-height:1.3;}
+  .tm td,.tm th{border:0.4pt solid #000;padding:0.25mm 0.4mm;
+    vertical-align:middle;overflow:hidden;line-height:1.35;}
   .c-sap {width:17mm;}
   .c-ax  {width:11mm;}
   .c-desc{width:155mm;}
