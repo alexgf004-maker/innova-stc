@@ -2082,7 +2082,7 @@ async function showHistorial(db, session) {
   try {
     const [snapSalidas, snapDev] = await Promise.all([
       getDocs(query(collection(db, 'kardex/movimientos/salidas'), orderBy('fecha', 'desc'))),
-      getDocs(query(collection(db, 'kardex/movimientos/ajustes'), where('tipo','==','devolucion'), orderBy('fecha', 'desc'))),
+      getDocs(query(collection(db, 'kardex/movimientos/ajustes'), where('tipo','==','devolucion'))),
     ]);
     const salidas = snapSalidas.docs.map(d => ({ id: d.id, _tipo:'salida', ...d.data() }));
     const devs    = snapDev.docs.map(d => ({ id: d.id, _tipo:'devolucion', ...d.data() }));
