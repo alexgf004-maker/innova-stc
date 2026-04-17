@@ -3305,34 +3305,32 @@ function showRegistrarConsumo(db, session) {
   const usuario = session.usuarioOperativoAsignado;
   if (!usuario) { showToast('Sin usuario operativo asignado.', 'error'); return; }
 
-  // Get items from user stock
-  const stockU = window.__kardexStockUsuario?.[usuario] || {};
-  const snapItems = window.__kardexItemMap || {};
-
-  // Build material list from user stock
-  let misItems = Object.entries(stockU)
-    .map(function(e) { return { id: e[0], cant: e[1], item: snapItems[e[0]] }; })
+  const stockU  = window.__kardexStockUsuario?.[usuario] || {};
+  const itemMap = window.__kardexItemMap || {};
+  let misItems  = Object.entries(stockU)
+    .map(function(e) { return { id: e[0], cant: e[1], item: itemMap[e[0]] }; })
     .filter(function(e) { return e.cant > 0 && e.item; })
     .sort(function(a, b) { return safeStr(a.item.name).localeCompare(safeStr(b.item.name)); });
 
-  let selConsumo = {}; // itemId -> cantidad
-  let tipoTrabajo = TIPOS_TRABAJO[0];
-  let busqMat = '';
+  let selConsumo = {};
+  let wos        = [];
+  let busqMat    = '';
 
   const ov = mkOverlay(
     '<div class="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">' +
       '<div><h2 class="font-semibold text-gray-900">Registrar consumo</h2>' +
-        '<p class="text-xs text-gray-400 mt-0.5">Material usado en OT · ' + usuario + '</p>' +
-      '</div>' +
-      '<button id="rc-close" class="text-gray-400 hover:text-gray-700">✕</button>' +
+        '<p class="text-xs text-gray-400 mt-0.5">' + usuario + '</p></div>' +
+      '<button id="rc-close" class="text-gray-400 hover:text-gray-700">&#x2715;</button>' +
     '</div>' +
     '<div class="flex-1 overflow-y-auto px-5 py-4 space-y-4">' +
-      // WO
       '<div>' +
-        '<label class="block text-sm font-medium text-gray-700 mb-1.5">Número de OT / WO <span class="text-red-500">*</span></label>' +
-        '<input id="rc-wo" type="text" placeholder="Ej. OT-2026-001" class="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>' +
+        '<label class="block text-sm font-medium text-gray-700 mb-1.5">&#211;rdenes de trabajo <span class="text-red-500">*</span></label>' +
+        '<div class="flex gap-2 mb-2">' +
+          '<input id="rc-wo-input" type="text" inputmode="numeric" placeholder="Ej. 802335101" class="flex-1 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>' +
+          '<button id="rc-wo-add" class="px-4 py-2.5 rounded-xl text-sm font-semibold text-white shrink-0" style="background:#1B4F8A">Agregar</button>' +
+        '</div>' +
+        '<div id="rc-wo-badges" class="flex flex-wrap gap-2 min-h-4"></div>' +
       '</div>' +
-      // Tipo de trabajo
       '<div>' +
         '<label class="block text-sm font-medium text-gray-700 mb-1.5">Tipo de trabajo <span class="text-red-500">*</span></label>' +
         '<select id="rc-tipo" class="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">' +
@@ -3340,21 +3338,18 @@ function showRegistrarConsumo(db, session) {
         '</select>' +
       '</div>' +
       '<div id="rc-otro-div" class="hidden">' +
-        '<label class="block text-sm font-medium text-gray-700 mb-1.5">Especifica el tipo</label>' +
-        '<input id="rc-otro" type="text" placeholder="Tipo de trabajo..." class="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>' +
+        '<input id="rc-otro" type="text" placeholder="Especifica el tipo de trabajo..." class="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>' +
       '</div>' +
-      // Materiales
       '<div>' +
         '<label class="block text-sm font-medium text-gray-700 mb-1.5">Materiales usados <span class="text-red-500">*</span></label>' +
         '<div class="relative mb-2">' +
           '<svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' +
           '<input id="rc-buscar" type="text" placeholder="Buscar material..." class="w-full border border-gray-200 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>' +
         '</div>' +
-        '<div id="rc-lista" class="space-y-2 max-h-64 overflow-y-auto"></div>' +
+        '<div id="rc-lista" class="space-y-2 max-h-60 overflow-y-auto"></div>' +
       '</div>' +
-      // Resumen seleccionados
       '<div id="rc-resumen" class="hidden">' +
-        '<p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Material a consumir</p>' +
+        '<p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Resumen</p>' +
         '<div id="rc-resumen-items" class="space-y-1.5"></div>' +
       '</div>' +
       '<div id="rc-err" class="hidden text-sm text-red-500 bg-red-50 rounded-xl px-3 py-2"></div>' +
@@ -3365,12 +3360,38 @@ function showRegistrarConsumo(db, session) {
     '</div>'
   );
 
-  ov.querySelector('#rc-close').onclick = ov.querySelector('#rc-cancel').onclick = () => ov.remove();
-
-  // Tipo trabajo toggle
+  ov.querySelector('#rc-close').onclick = ov.querySelector('#rc-cancel').onclick = function() { ov.remove(); };
   ov.querySelector('#rc-tipo').addEventListener('change', function() {
-    tipoTrabajo = this.value;
     ov.querySelector('#rc-otro-div').classList.toggle('hidden', this.value !== 'Otro');
+  });
+
+  function renderWoBadges() {
+    const cont = ov.querySelector('#rc-wo-badges');
+    if (!cont) return;
+    cont.innerHTML = wos.map(function(wo) {
+      return '<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-mono font-semibold" style="background:#EFF6FF;color:#1B4F8A">' +
+        wo + '<button class="rc-wo-rm font-bold" data-wo="' + wo + '" style="color:#93C5FD;margin-left:2px">&#x2715;</button></span>';
+    }).join('');
+    cont.querySelectorAll('.rc-wo-rm').forEach(function(b) {
+      b.addEventListener('click', function() {
+        wos = wos.filter(function(w) { return w !== b.dataset.wo; });
+        renderWoBadges();
+      });
+    });
+  }
+
+  function addWo() {
+    const inp = ov.querySelector('#rc-wo-input');
+    const val = inp.value.trim();
+    if (!val) return;
+    if (!wos.includes(val)) wos.push(val);
+    inp.value = '';
+    renderWoBadges();
+  }
+
+  ov.querySelector('#rc-wo-add').addEventListener('click', addWo);
+  ov.querySelector('#rc-wo-input').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); addWo(); }
   });
 
   function renderLista() {
@@ -3378,8 +3399,7 @@ function showRegistrarConsumo(db, session) {
     if (!lista) return;
     const q = busqMat.toLowerCase();
     const filtrados = q ? misItems.filter(function(e) {
-      return safeStr(e.item.name).toLowerCase().includes(q) ||
-             safeStr(e.item.sapCode,'').includes(q);
+      return safeStr(e.item.name).toLowerCase().includes(q) || safeStr(e.item.sapCode,'').includes(q);
     }) : misItems;
 
     if (!filtrados.length) {
@@ -3388,26 +3408,25 @@ function showRegistrarConsumo(db, session) {
     }
 
     lista.innerHTML = filtrados.map(function(e) {
-      const sel = selConsumo[e.id] || 0;
+      const sel  = selConsumo[e.id] || 0;
       const unit = safeStr(e.item.unit, '');
-      return '<div class="flex items-center gap-3 bg-gray-50 rounded-xl px-3 py-2.5 border ' + (sel > 0 ? 'border-green-300' : 'border-gray-200') + '">' +
+      return '<div class="flex items-center gap-2 rounded-xl px-3 py-2.5 border ' + (sel > 0 ? 'border-green-300 bg-green-50' : 'border-gray-200 bg-gray-50') + '">' +
         '<div class="flex-1 min-w-0">' +
           '<p class="text-sm font-medium text-gray-900 leading-tight">' + safeStr(e.item.name) + '</p>' +
-          '<p class="text-xs text-gray-400 mt-0.5">Disponible: ' + e.cant + ' ' + unit + '</p>' +
+          '<p class="text-xs text-gray-400 mt-0.5">Disp: ' + e.cant + ' ' + unit + '</p>' +
         '</div>' +
-        '<div class="flex items-center gap-1.5 shrink-0">' +
-          '<button class="rc-dec w-7 h-7 rounded-lg border border-gray-300 bg-white text-gray-600 font-bold flex items-center justify-center active:bg-gray-100" data-iid="' + e.id + '">−</button>' +
-          '<span class="w-8 text-center text-sm font-bold ' + (sel > 0 ? 'text-green-700' : 'text-gray-400') + '">' + (sel || 0) + '</span>' +
-          '<button class="rc-inc w-7 h-7 rounded-lg border font-bold flex items-center justify-center active:opacity-70 ' + (sel >= e.cant ? 'border-gray-200 text-gray-300' : 'border-blue-300 bg-blue-50 text-blue-600') + '" data-iid="' + e.id + '" data-max="' + e.cant + '">+</button>' +
+        '<div class="flex items-center gap-1 shrink-0">' +
+          '<button class="rc-dec w-8 h-8 rounded-lg border border-gray-300 bg-white text-gray-600 font-bold text-lg flex items-center justify-center" data-iid="' + e.id + '">&#8722;</button>' +
+          '<input type="number" min="0" max="' + e.cant + '" value="' + sel + '" class="rc-cant-inp w-14 text-center text-sm font-bold border border-gray-200 rounded-lg py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 ' + (sel > 0 ? 'text-green-700' : 'text-gray-500') + '" data-iid="' + e.id + '" data-max="' + e.cant + '"/>' +
+          '<button class="rc-inc w-8 h-8 rounded-lg border font-bold text-lg flex items-center justify-center ' + (sel >= e.cant ? 'border-gray-200 text-gray-300 bg-white' : 'border-blue-300 bg-blue-50 text-blue-600') + '" data-iid="' + e.id + '" data-max="' + e.cant + '">+</button>' +
         '</div>' +
       '</div>';
     }).join('');
 
-    // Wire buttons
     lista.querySelectorAll('.rc-dec').forEach(function(b) {
       b.addEventListener('click', function() {
         const iid = b.dataset.iid;
-        if ((selConsumo[iid] || 0) > 0) { selConsumo[iid]--; if (!selConsumo[iid]) delete selConsumo[iid]; }
+        if ((selConsumo[iid]||0) > 0) { selConsumo[iid]--; if (!selConsumo[iid]) delete selConsumo[iid]; }
         renderLista(); renderResumen();
       });
     });
@@ -3415,16 +3434,28 @@ function showRegistrarConsumo(db, session) {
       b.addEventListener('click', function() {
         const iid = b.dataset.iid;
         const max = safeNum(b.dataset.max);
-        if ((selConsumo[iid] || 0) < max) selConsumo[iid] = (selConsumo[iid] || 0) + 1;
+        if ((selConsumo[iid]||0) < max) selConsumo[iid] = (selConsumo[iid]||0) + 1;
+        renderLista(); renderResumen();
+      });
+    });
+    lista.querySelectorAll('.rc-cant-inp').forEach(function(inp) {
+      inp.addEventListener('change', function() {
+        const iid = inp.dataset.iid;
+        const max = safeNum(inp.dataset.max);
+        let v = safeNum(inp.value);
+        if (v < 0) v = 0;
+        if (v > max) v = max;
+        inp.value = v;
+        if (v > 0) selConsumo[iid] = v; else delete selConsumo[iid];
         renderLista(); renderResumen();
       });
     });
   }
 
   function renderResumen() {
-    const resDiv = ov.querySelector('#rc-resumen');
+    const resDiv   = ov.querySelector('#rc-resumen');
     const resItems = ov.querySelector('#rc-resumen-items');
-    const entries = Object.entries(selConsumo).filter(function(e) { return e[1] > 0; });
+    const entries  = Object.entries(selConsumo).filter(function(e) { return e[1] > 0; });
     if (!entries.length) { resDiv.classList.add('hidden'); return; }
     resDiv.classList.remove('hidden');
     resItems.innerHTML = entries.map(function(e) {
@@ -3432,28 +3463,25 @@ function showRegistrarConsumo(db, session) {
       if (!itData) return '';
       return '<div class="flex items-center justify-between px-3 py-2 bg-green-50 rounded-lg border border-green-200">' +
         '<p class="text-sm text-gray-800 flex-1 leading-tight">' + safeStr(itData.item.name) + '</p>' +
-        '<span class="text-sm font-bold text-green-700 ml-2">' + e[1] + ' ' + safeStr(itData.item.unit,'') + '</span>' +
+        '<span class="text-sm font-bold text-green-700 ml-2 shrink-0">' + e[1] + ' ' + safeStr(itData.item.unit,'') + '</span>' +
       '</div>';
     }).join('');
   }
 
   ov.querySelector('#rc-buscar').addEventListener('input', function(e) {
-    busqMat = e.target.value.trim();
-    renderLista();
+    busqMat = e.target.value.trim(); renderLista();
   });
-
   renderLista();
 
   ov.querySelector('#rc-submit').onclick = async function() {
-    const errEl  = ov.querySelector('#rc-err');
-    const btn    = ov.querySelector('#rc-submit');
-    const wo     = ov.querySelector('#rc-wo').value.trim();
-    const tipo   = ov.querySelector('#rc-tipo').value;
-    const otro   = ov.querySelector('#rc-otro')?.value.trim() || '';
+    const errEl     = ov.querySelector('#rc-err');
+    const btn       = ov.querySelector('#rc-submit');
+    const tipo      = ov.querySelector('#rc-tipo').value;
+    const otro      = ov.querySelector('#rc-otro')?.value.trim() || '';
     const tipoFinal = tipo === 'Otro' ? (otro || 'Otro') : tipo;
     errEl.classList.add('hidden');
 
-    if (!wo) { errEl.textContent = 'Ingresa el número de OT/WO.'; errEl.classList.remove('hidden'); return; }
+    if (!wos.length) { errEl.textContent = 'Agrega al menos una OT.'; errEl.classList.remove('hidden'); return; }
     const items = Object.entries(selConsumo).filter(function(e) { return e[1] > 0; });
     if (!items.length) { errEl.textContent = 'Selecciona al menos un material.'; errEl.classList.remove('hidden'); return; }
 
@@ -3463,25 +3491,18 @@ function showRegistrarConsumo(db, session) {
         const itData = misItems.find(function(m) { return m.id === e[0]; });
         return { itemId: e[0], nombre: safeStr(itData?.item.name), unit: safeStr(itData?.item.unit,''), sapCode: safeStr(itData?.item.sapCode,''), cantidad: e[1] };
       });
-
       await addDoc(collection(db, 'kardex/consumos'), {
-        wo: wo,
-        tipoTrabajo: tipoFinal,
+        wo: wos.join(', '), wos: wos, tipoTrabajo: tipoFinal,
         usuarioOperativo: usuario,
-        registradoPor: session.uid,
-        registradoPorNombre: session.displayName,
-        items: consumoItems,
-        fecha: serverTimestamp(),
+        registradoPor: session.uid, registradoPorNombre: session.displayName,
+        items: consumoItems, fecha: serverTimestamp(),
       });
-
-      // Discount from user stock cache
       if (window.__kardexStockUsuario) {
         if (!window.__kardexStockUsuario[usuario]) window.__kardexStockUsuario[usuario] = {};
         items.forEach(function(e) {
           window.__kardexStockUsuario[usuario][e[0]] = Math.max(0, (window.__kardexStockUsuario[usuario][e[0]] || 0) - e[1]);
         });
       }
-
       ov.remove();
       showToast('Consumo registrado correctamente.', 'success');
       await showDashboard(db, session);
