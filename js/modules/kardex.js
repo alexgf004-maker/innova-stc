@@ -3312,9 +3312,10 @@ function showRegistrarConsumo(db, session) {
     .filter(function(e) { return e.cant > 0 && e.item; })
     .sort(function(a, b) { return safeStr(a.item.name).localeCompare(safeStr(b.item.name)); });
 
-  let selConsumo = {}; // itemId -> { cantidad, serial }
-  let wos        = [];
-  let busqMat    = '';
+  let selConsumo    = {}; // itemId -> { cantidad, serial }
+  let wos           = [];
+  let busqMat       = '';
+  let serialesDisp  = {}; // itemId -> [serial, serial, ...]  — seriales del usuario
 
   const ov = mkOverlay(
     '<div class="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">' +
@@ -3450,10 +3451,22 @@ function showRegistrarConsumo(db, session) {
             '</div>'
           ) +
         '</div>' +
-        // Serial input — solo si es serializable y está seleccionado
+        // Serial selector — solo si es serializable y está seleccionado
         (esSer && sel > 0 ?
-          '<div class="mt-2">' +
-            '<input type="text" class="rc-serial-inp w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400" placeholder="Ingresa el serial del medidor..." value="' + safeStr(sd.serial) + '" data-iid="' + e.id + '"/>' +
+          '<div class="mt-2 space-y-1.5">' +
+            '<p class="text-xs text-gray-500 font-medium">Selecciona el serial:</p>' +
+            (serialesDisp[e.id] && serialesDisp[e.id].length ?
+              '<div class="flex flex-wrap gap-1.5">' +
+                serialesDisp[e.id].map(function(ser) {
+                  const activo = sd.serial === ser;
+                  return '<button class="rc-serial-badge px-2.5 py-1 rounded-lg text-xs font-mono border-2 ' +
+                    (activo ? 'border-green-500 bg-green-100 text-green-700 font-bold' : 'border-gray-200 bg-white text-gray-600') +
+                    '" data-iid="' + e.id + '" data-ser="' + ser + '">' + ser + '</button>';
+                }).join('') +
+              '</div>'
+            :
+              '<p class="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">Sin seriales asignados cargados aún</p>'
+            ) +
           '</div>'
         : '') +
       '</div>';
@@ -3472,11 +3485,14 @@ function showRegistrarConsumo(db, session) {
       });
     });
 
-    lista.querySelectorAll('.rc-serial-inp').forEach(function(inp) {
-      inp.addEventListener('input', function() {
-        const iid = inp.dataset.iid;
-        if (selConsumo[iid]) selConsumo[iid].serial = inp.value.trim();
-        renderResumen();
+    lista.querySelectorAll('.rc-serial-badge').forEach(function(b) {
+      b.addEventListener('click', function() {
+        const iid = b.dataset.iid;
+        const ser = b.dataset.ser;
+        if (selConsumo[iid]) {
+          selConsumo[iid].serial = selConsumo[iid].serial === ser ? '' : ser;
+        }
+        renderLista(); renderResumen();
       });
     });
 
@@ -3540,7 +3556,25 @@ function showRegistrarConsumo(db, session) {
   ov.querySelector('#rc-buscar').addEventListener('input', function(e) {
     busqMat = e.target.value.trim(); renderLista();
   });
-  renderLista();
+
+  // Cargar seriales despachados al usuario
+  const sapIds = misItems.filter(function(e) { return e.item.requiereSerial; }).map(function(e) { return e.id; });
+  if (sapIds.length) {
+    getDocs(query(
+      collection(db, 'kardex/seriales/items'),
+      where('usuarioDespacho', '==', usuario),
+      where('estado', '==', 'despachado')
+    )).then(function(snap) {
+      snap.docs.forEach(function(d) {
+        const data = d.data();
+        if (!serialesDisp[data.itemId]) serialesDisp[data.itemId] = [];
+        serialesDisp[data.itemId].push(data.serial);
+      });
+      renderLista();
+    }).catch(function(e) { console.warn('seriales:', e); renderLista(); });
+  } else {
+    renderLista();
+  }
 
   ov.querySelector('#rc-submit').onclick = async function() {
     const errEl     = ov.querySelector('#rc-err');
