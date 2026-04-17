@@ -3333,9 +3333,11 @@ function showRegistrarConsumo(db, session) {
       '</div>' +
       '<div>' +
         '<label class="block text-sm font-medium text-gray-700 mb-1.5">Tipo de trabajo <span class="text-red-500">*</span></label>' +
-        '<select id="rc-tipo" class="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">' +
-          TIPOS_TRABAJO.map(function(t) { return '<option value="' + t + '">' + t + '</option>'; }).join('') +
-        '</select>' +
+        '<div id="rc-tipos" class="flex flex-wrap gap-2">' +
+          TIPOS_TRABAJO.map(function(t) {
+            return '<button class="rc-tipo-btn px-3 py-2 rounded-xl text-sm font-medium border-2 border-gray-200 bg-white text-gray-600 active:opacity-80" data-tipo="' + t + '">' + t + '</button>';
+          }).join('') +
+        '</div>' +
       '</div>' +
       '<div id="rc-otro-div" class="hidden">' +
         '<input id="rc-otro" type="text" placeholder="Especifica el tipo de trabajo..." class="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>' +
@@ -3361,9 +3363,25 @@ function showRegistrarConsumo(db, session) {
   );
 
   ov.querySelector('#rc-close').onclick = ov.querySelector('#rc-cancel').onclick = function() { ov.remove(); };
-  ov.querySelector('#rc-tipo').addEventListener('change', function() {
-    ov.querySelector('#rc-otro-div').classList.toggle('hidden', this.value !== 'Otro');
+  // Select first tipo by default
+  let tipoSeleccionado = TIPOS_TRABAJO[0];
+  function renderTipos() {
+    ov.querySelectorAll('.rc-tipo-btn').forEach(function(b) {
+      const activo = b.dataset.tipo === tipoSeleccionado;
+      b.style.borderColor  = activo ? '#1B4F8A' : '#E5E7EB';
+      b.style.background   = activo ? '#EFF6FF' : 'white';
+      b.style.color        = activo ? '#1B4F8A' : '#4B5563';
+      b.style.fontWeight   = activo ? '700' : '500';
+    });
+    ov.querySelector('#rc-otro-div').classList.toggle('hidden', tipoSeleccionado !== 'Otro');
+  }
+  ov.querySelectorAll('.rc-tipo-btn').forEach(function(b) {
+    b.addEventListener('click', function() {
+      tipoSeleccionado = b.dataset.tipo;
+      renderTipos();
+    });
   });
+  renderTipos();
 
   function renderWoBadges() {
     const cont = ov.querySelector('#rc-wo-badges');
@@ -3476,9 +3494,8 @@ function showRegistrarConsumo(db, session) {
   ov.querySelector('#rc-submit').onclick = async function() {
     const errEl     = ov.querySelector('#rc-err');
     const btn       = ov.querySelector('#rc-submit');
-    const tipo      = ov.querySelector('#rc-tipo').value;
     const otro      = ov.querySelector('#rc-otro')?.value.trim() || '';
-    const tipoFinal = tipo === 'Otro' ? (otro || 'Otro') : tipo;
+    const tipoFinal = tipoSeleccionado === 'Otro' ? (otro || 'Otro') : tipoSeleccionado;
     errEl.classList.add('hidden');
 
     if (!wos.length) { errEl.textContent = 'Agrega al menos una OT.'; errEl.classList.remove('hidden'); return; }
