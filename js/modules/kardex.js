@@ -110,9 +110,10 @@ function renderShell(container, session) {
     <button data-tab="solicitudes" class="ktab flex-1 py-2 text-xs font-medium rounded-lg transition-colors">Pedidos</button>`;
 
   const tabsCampo = `
-    <button data-tab="dashboard"   class="ktab flex-1 py-2 text-sm font-medium rounded-lg transition-colors">Inicio</button>
-    <button data-tab="solicitar"   class="ktab flex-1 py-2 text-sm font-medium rounded-lg transition-colors">Solicitar</button>
-    <button data-tab="mis-pedidos" class="ktab flex-1 py-2 text-sm font-medium rounded-lg transition-colors">Mis pedidos</button>`;
+    <button data-tab="dashboard"    class="ktab flex-1 py-2 text-xs font-medium rounded-lg transition-colors">Inicio</button>
+    <button data-tab="consumo"      class="ktab flex-1 py-2 text-xs font-medium rounded-lg transition-colors">Consumo</button>
+    <button data-tab="solicitar"    class="ktab flex-1 py-2 text-xs font-medium rounded-lg transition-colors">Solicitar</button>
+    <button data-tab="mis-pedidos"  class="ktab flex-1 py-2 text-xs font-medium rounded-lg transition-colors">Pedidos</button>`;
 
   container.innerHTML =
     '<div class="space-y-4">' +
@@ -148,6 +149,7 @@ function bindNav(db, session) {
       if (t === 'historial')   await showHistorial(db, session);
       if (t === 'usuarios')    await showStockUsuarios(db, session);
       if (t === 'solicitudes') await showSolicitudes(db, session);
+      if (t === 'consumo')     await showMisConsumos(db, session);
       if (t === 'solicitar')   await showSolicitarMaterial(db, session);
       if (t === 'mis-pedidos') await showMisSolicitudes(db, session);
     });
@@ -257,6 +259,7 @@ async function showDashboardAdmin(db, session) {
         if (t === 'historial')   await showHistorial(db, session);
         if (t === 'usuarios')    await showStockUsuarios(db, session);
         if (t === 'solicitudes') await showSolicitudes(db, session);
+        if (t === 'consumo')     await showMisConsumos(db, session);
         if (t === 'solicitar')   await showSolicitarMaterial(db, session);
         if (t === 'mis-pedidos') await showMisSolicitudes(db, session);
       });
@@ -290,7 +293,9 @@ async function showDashboardCampo(db, session) {
       const item = normalizeItem({ id: d.id, ...d.data() });
       if (esValido(item)) itemMap[d.id] = item;
     });
+    window.__kardexItemMap = itemMap;
 
+    // Stock = salidas recibidas - consumos registrados
     const stockU = {};
     snapSalidas.docs.forEach(function(d) {
       const s = d.data();
@@ -301,6 +306,25 @@ async function showDashboardCampo(db, session) {
         stockU[i.itemId] = (stockU[i.itemId] || 0) + cant;
       });
     });
+
+    // Descontar consumos del usuario
+    try {
+      const snapConsumos = await getDocs(query(
+        collection(db, 'kardex/consumos'),
+        where('usuarioOperativo', '==', usuario)
+      ));
+      snapConsumos.docs.forEach(function(d) {
+        const c = d.data();
+        (c.items || []).forEach(function(i) {
+          const cant = safeNum(i.cantidad);
+          if (!i.itemId || cant <= 0) return;
+          stockU[i.itemId] = Math.max(0, (stockU[i.itemId] || 0) - cant);
+        });
+      });
+    } catch(ce) { console.warn('No se pudieron cargar consumos:', ce); }
+
+    if (!window.__kardexStockUsuario) window.__kardexStockUsuario = {};
+    window.__kardexStockUsuario[usuario] = stockU;
 
     const misItems = Object.entries(stockU)
       .map(function(e) { return { id: e[0], cant: e[1], item: itemMap[e[0]] }; })
@@ -345,14 +369,23 @@ async function showDashboardCampo(db, session) {
       '<p class="text-xs opacity-70 mt-0.5">' + misItems.length + ' material' + (misItems.length !== 1 ? 'es' : '') + ' asignados</p>' +
     '</div>';
 
-    // Acción rápida
-    html += '<button id="db-solicitar" class="w-full flex items-center justify-between px-4 py-3.5 bg-white rounded-xl border-2 border-blue-200 text-left active:bg-blue-50">' +
-      '<div>' +
-        '<p class="font-semibold text-gray-900">Solicitar material</p>' +
-        '<p class="text-xs text-gray-400 mt-0.5">Pide materiales de bodega</p>' +
-      '</div>' +
-      '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1B4F8A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>' +
-    '</button>';
+    // Acciones rápidas
+    html += '<div class="grid grid-cols-2 gap-3">' +
+      '<button id="db-consumo" class="flex items-center justify-between px-4 py-3.5 bg-white rounded-xl border-2 text-left active:opacity-80" style="border-color:#166534">' +
+        '<div>' +
+          '<p class="font-semibold text-gray-900 text-sm">Registrar consumo</p>' +
+          '<p class="text-xs text-gray-400 mt-0.5">Material usado en OT</p>' +
+        '</div>' +
+        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#166534" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>' +
+      '</button>' +
+      '<button id="db-solicitar" class="flex items-center justify-between px-4 py-3.5 bg-white rounded-xl border-2 border-blue-200 text-left active:bg-blue-50">' +
+        '<div>' +
+          '<p class="font-semibold text-gray-900 text-sm">Solicitar material</p>' +
+          '<p class="text-xs text-gray-400 mt-0.5">Pide a bodega</p>' +
+        '</div>' +
+        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1B4F8A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>' +
+      '</button>' +
+    '</div>';
 
     // Mi material
     if (misItems.length > 0) {
@@ -410,6 +443,9 @@ async function showDashboardCampo(db, session) {
     html += '</div>';
     content.innerHTML = html;
 
+    content.querySelector('#db-consumo')?.addEventListener('click', function() {
+      showRegistrarConsumo(db, session);
+    });
     content.querySelector('#db-solicitar')?.addEventListener('click', function() {
       showSolicitarMaterial(db, session);
       setTab('solicitar');
@@ -3252,6 +3288,276 @@ async function showStockUsuarios(db, session) {
 // ─────────────────────────────────────────
 // SOLICITAR MATERIAL (vista campo)
 // ─────────────────────────────────────────
+// ─────────────────────────────────────────
+// CONSUMO DE MATERIAL (campo)
+// ─────────────────────────────────────────
+const TIPOS_TRABAJO = [
+  'Servicio nuevo',
+  'Cambio de voltaje',
+  'Reconexión',
+  'Cambio de medidor',
+  'Reubicación de medidor',
+  'Reubicación de acometida',
+  'Otro',
+];
+
+function showRegistrarConsumo(db, session) {
+  const usuario = session.usuarioOperativoAsignado;
+  if (!usuario) { showToast('Sin usuario operativo asignado.', 'error'); return; }
+
+  // Get items from user stock
+  const stockU = window.__kardexStockUsuario?.[usuario] || {};
+  const snapItems = window.__kardexItemMap || {};
+
+  // Build material list from user stock
+  let misItems = Object.entries(stockU)
+    .map(function(e) { return { id: e[0], cant: e[1], item: snapItems[e[0]] }; })
+    .filter(function(e) { return e.cant > 0 && e.item; })
+    .sort(function(a, b) { return safeStr(a.item.name).localeCompare(safeStr(b.item.name)); });
+
+  let selConsumo = {}; // itemId -> cantidad
+  let tipoTrabajo = TIPOS_TRABAJO[0];
+  let busqMat = '';
+
+  const ov = mkOverlay(
+    '<div class="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">' +
+      '<div><h2 class="font-semibold text-gray-900">Registrar consumo</h2>' +
+        '<p class="text-xs text-gray-400 mt-0.5">Material usado en OT · ' + usuario + '</p>' +
+      '</div>' +
+      '<button id="rc-close" class="text-gray-400 hover:text-gray-700">✕</button>' +
+    '</div>' +
+    '<div class="flex-1 overflow-y-auto px-5 py-4 space-y-4">' +
+      // WO
+      '<div>' +
+        '<label class="block text-sm font-medium text-gray-700 mb-1.5">Número de OT / WO <span class="text-red-500">*</span></label>' +
+        '<input id="rc-wo" type="text" placeholder="Ej. OT-2026-001" class="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>' +
+      '</div>' +
+      // Tipo de trabajo
+      '<div>' +
+        '<label class="block text-sm font-medium text-gray-700 mb-1.5">Tipo de trabajo <span class="text-red-500">*</span></label>' +
+        '<select id="rc-tipo" class="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">' +
+          TIPOS_TRABAJO.map(function(t) { return '<option value="' + t + '">' + t + '</option>'; }).join('') +
+        '</select>' +
+      '</div>' +
+      '<div id="rc-otro-div" class="hidden">' +
+        '<label class="block text-sm font-medium text-gray-700 mb-1.5">Especifica el tipo</label>' +
+        '<input id="rc-otro" type="text" placeholder="Tipo de trabajo..." class="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>' +
+      '</div>' +
+      // Materiales
+      '<div>' +
+        '<label class="block text-sm font-medium text-gray-700 mb-1.5">Materiales usados <span class="text-red-500">*</span></label>' +
+        '<div class="relative mb-2">' +
+          '<svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' +
+          '<input id="rc-buscar" type="text" placeholder="Buscar material..." class="w-full border border-gray-200 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>' +
+        '</div>' +
+        '<div id="rc-lista" class="space-y-2 max-h-64 overflow-y-auto"></div>' +
+      '</div>' +
+      // Resumen seleccionados
+      '<div id="rc-resumen" class="hidden">' +
+        '<p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Material a consumir</p>' +
+        '<div id="rc-resumen-items" class="space-y-1.5"></div>' +
+      '</div>' +
+      '<div id="rc-err" class="hidden text-sm text-red-500 bg-red-50 rounded-xl px-3 py-2"></div>' +
+    '</div>' +
+    '<div class="px-5 py-4 border-t border-gray-100 flex gap-3 shrink-0">' +
+      '<button id="rc-cancel" class="flex-1 border border-gray-200 text-gray-600 font-medium rounded-xl py-3 text-sm">Cancelar</button>' +
+      '<button id="rc-submit" class="flex-1 text-white font-medium rounded-xl py-3 text-sm" style="background:#166534">Guardar consumo</button>' +
+    '</div>'
+  );
+
+  ov.querySelector('#rc-close').onclick = ov.querySelector('#rc-cancel').onclick = () => ov.remove();
+
+  // Tipo trabajo toggle
+  ov.querySelector('#rc-tipo').addEventListener('change', function() {
+    tipoTrabajo = this.value;
+    ov.querySelector('#rc-otro-div').classList.toggle('hidden', this.value !== 'Otro');
+  });
+
+  function renderLista() {
+    const lista = ov.querySelector('#rc-lista');
+    if (!lista) return;
+    const q = busqMat.toLowerCase();
+    const filtrados = q ? misItems.filter(function(e) {
+      return safeStr(e.item.name).toLowerCase().includes(q) ||
+             safeStr(e.item.sapCode,'').includes(q);
+    }) : misItems;
+
+    if (!filtrados.length) {
+      lista.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">' + (q ? 'Sin resultados' : 'Sin material asignado') + '</p>';
+      return;
+    }
+
+    lista.innerHTML = filtrados.map(function(e) {
+      const sel = selConsumo[e.id] || 0;
+      const unit = safeStr(e.item.unit, '');
+      return '<div class="flex items-center gap-3 bg-gray-50 rounded-xl px-3 py-2.5 border ' + (sel > 0 ? 'border-green-300' : 'border-gray-200') + '">' +
+        '<div class="flex-1 min-w-0">' +
+          '<p class="text-sm font-medium text-gray-900 leading-tight">' + safeStr(e.item.name) + '</p>' +
+          '<p class="text-xs text-gray-400 mt-0.5">Disponible: ' + e.cant + ' ' + unit + '</p>' +
+        '</div>' +
+        '<div class="flex items-center gap-1.5 shrink-0">' +
+          '<button class="rc-dec w-7 h-7 rounded-lg border border-gray-300 bg-white text-gray-600 font-bold flex items-center justify-center active:bg-gray-100" data-iid="' + e.id + '">−</button>' +
+          '<span class="w-8 text-center text-sm font-bold ' + (sel > 0 ? 'text-green-700' : 'text-gray-400') + '">' + (sel || 0) + '</span>' +
+          '<button class="rc-inc w-7 h-7 rounded-lg border font-bold flex items-center justify-center active:opacity-70 ' + (sel >= e.cant ? 'border-gray-200 text-gray-300' : 'border-blue-300 bg-blue-50 text-blue-600') + '" data-iid="' + e.id + '" data-max="' + e.cant + '">+</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    // Wire buttons
+    lista.querySelectorAll('.rc-dec').forEach(function(b) {
+      b.addEventListener('click', function() {
+        const iid = b.dataset.iid;
+        if ((selConsumo[iid] || 0) > 0) { selConsumo[iid]--; if (!selConsumo[iid]) delete selConsumo[iid]; }
+        renderLista(); renderResumen();
+      });
+    });
+    lista.querySelectorAll('.rc-inc').forEach(function(b) {
+      b.addEventListener('click', function() {
+        const iid = b.dataset.iid;
+        const max = safeNum(b.dataset.max);
+        if ((selConsumo[iid] || 0) < max) selConsumo[iid] = (selConsumo[iid] || 0) + 1;
+        renderLista(); renderResumen();
+      });
+    });
+  }
+
+  function renderResumen() {
+    const resDiv = ov.querySelector('#rc-resumen');
+    const resItems = ov.querySelector('#rc-resumen-items');
+    const entries = Object.entries(selConsumo).filter(function(e) { return e[1] > 0; });
+    if (!entries.length) { resDiv.classList.add('hidden'); return; }
+    resDiv.classList.remove('hidden');
+    resItems.innerHTML = entries.map(function(e) {
+      const itData = misItems.find(function(m) { return m.id === e[0]; });
+      if (!itData) return '';
+      return '<div class="flex items-center justify-between px-3 py-2 bg-green-50 rounded-lg border border-green-200">' +
+        '<p class="text-sm text-gray-800 flex-1 leading-tight">' + safeStr(itData.item.name) + '</p>' +
+        '<span class="text-sm font-bold text-green-700 ml-2">' + e[1] + ' ' + safeStr(itData.item.unit,'') + '</span>' +
+      '</div>';
+    }).join('');
+  }
+
+  ov.querySelector('#rc-buscar').addEventListener('input', function(e) {
+    busqMat = e.target.value.trim();
+    renderLista();
+  });
+
+  renderLista();
+
+  ov.querySelector('#rc-submit').onclick = async function() {
+    const errEl  = ov.querySelector('#rc-err');
+    const btn    = ov.querySelector('#rc-submit');
+    const wo     = ov.querySelector('#rc-wo').value.trim();
+    const tipo   = ov.querySelector('#rc-tipo').value;
+    const otro   = ov.querySelector('#rc-otro')?.value.trim() || '';
+    const tipoFinal = tipo === 'Otro' ? (otro || 'Otro') : tipo;
+    errEl.classList.add('hidden');
+
+    if (!wo) { errEl.textContent = 'Ingresa el número de OT/WO.'; errEl.classList.remove('hidden'); return; }
+    const items = Object.entries(selConsumo).filter(function(e) { return e[1] > 0; });
+    if (!items.length) { errEl.textContent = 'Selecciona al menos un material.'; errEl.classList.remove('hidden'); return; }
+
+    btn.disabled = true; btn.textContent = 'Guardando...';
+    try {
+      const consumoItems = items.map(function(e) {
+        const itData = misItems.find(function(m) { return m.id === e[0]; });
+        return { itemId: e[0], nombre: safeStr(itData?.item.name), unit: safeStr(itData?.item.unit,''), sapCode: safeStr(itData?.item.sapCode,''), cantidad: e[1] };
+      });
+
+      await addDoc(collection(db, 'kardex/consumos'), {
+        wo: wo,
+        tipoTrabajo: tipoFinal,
+        usuarioOperativo: usuario,
+        registradoPor: session.uid,
+        registradoPorNombre: session.displayName,
+        items: consumoItems,
+        fecha: serverTimestamp(),
+      });
+
+      // Discount from user stock cache
+      if (window.__kardexStockUsuario) {
+        if (!window.__kardexStockUsuario[usuario]) window.__kardexStockUsuario[usuario] = {};
+        items.forEach(function(e) {
+          window.__kardexStockUsuario[usuario][e[0]] = Math.max(0, (window.__kardexStockUsuario[usuario][e[0]] || 0) - e[1]);
+        });
+      }
+
+      ov.remove();
+      showToast('Consumo registrado correctamente.', 'success');
+      await showDashboard(db, session);
+    } catch(e) {
+      errEl.textContent = 'Error al guardar. Intenta de nuevo.';
+      errEl.classList.remove('hidden');
+      btn.disabled = false; btn.textContent = 'Guardar consumo';
+      console.error(e);
+    }
+  };
+}
+
+// ─────────────────────────────────────────
+// HISTORIAL DE CONSUMOS (campo)
+// ─────────────────────────────────────────
+async function showMisConsumos(db, session) {
+  setTab('consumo');
+  const content = document.getElementById('kardex-content');
+  content.innerHTML = loading();
+  const usuario = session.usuarioOperativoAsignado;
+
+  try {
+    const snap = await getDocs(query(
+      collection(db, 'kardex/consumos'),
+      where('usuarioOperativo', '==', usuario)
+    ));
+    const consumos = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+    consumos.sort(function(a, b) { return (b.fecha?.seconds||0) - (a.fecha?.seconds||0); });
+
+    content.innerHTML =
+      '<div class="space-y-3">' +
+        '<div class="flex items-center justify-between">' +
+          '<p class="font-semibold text-gray-900">Mis consumos</p>' +
+          '<button id="btn-nuevo-consumo" class="text-xs font-medium px-3 py-1.5 rounded-lg text-white" style="background:#166534">+ Registrar</button>' +
+        '</div>' +
+        (consumos.length === 0
+          ? '<div class="bg-white rounded-xl border border-gray-200 py-12 text-center"><p class="text-sm text-gray-400">Sin consumos registrados</p></div>'
+          : '<div class="space-y-2">' +
+              consumos.map(function(c) {
+                return '<div class="bg-white rounded-xl border border-gray-200 px-4 py-3">' +
+                  '<div class="flex items-start justify-between gap-2 mb-2">' +
+                    '<div>' +
+                      '<p class="text-sm font-bold text-gray-900">' + safeStr(c.wo) + '</p>' +
+                      '<p class="text-xs text-gray-400 mt-0.5">' + fmtDate(c.fecha) + ' · ' + safeStr(c.tipoTrabajo) + '</p>' +
+                    '</div>' +
+                    '<span class="text-xs font-semibold px-2 py-0.5 rounded-full shrink-0" style="background:#DCFCE7;color:#166534">✓ Registrado</span>' +
+                  '</div>' +
+                  '<div class="flex flex-wrap gap-1">' +
+                    (c.items||[]).map(function(i) {
+                      return '<span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">' + i.cantidad + ' ' + safeStr(i.unit,'') + ' ' + safeStr(i.nombre) + '</span>';
+                    }).join('') +
+                  '</div>' +
+                '</div>';
+              }).join('') +
+            '</div>'
+        ) +
+      '</div>';
+
+    content.querySelector('#btn-nuevo-consumo')?.addEventListener('click', function() {
+      showRegistrarConsumo(db, session);
+    });
+
+    // Rebind tabs
+    document.querySelectorAll('.ktab').forEach(function(b) {
+      b.addEventListener('click', async function() {
+        const t = b.dataset.tab;
+        if (t === 'dashboard')   await showDashboard(db, session);
+        if (t === 'consumo')     await showMisConsumos(db, session);
+        if (t === 'solicitar')   await showSolicitarMaterial(db, session);
+        if (t === 'mis-pedidos') await showMisSolicitudes(db, session);
+      });
+    });
+
+  } catch(e) { content.innerHTML = errHtml(); console.error(e); }
+}
+
 async function showSolicitarMaterial(db, session) {
   setTab('solicitar');
   const content = document.getElementById('kardex-content');
