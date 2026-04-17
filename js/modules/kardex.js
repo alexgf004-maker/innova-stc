@@ -3312,7 +3312,7 @@ function showRegistrarConsumo(db, session) {
     .filter(function(e) { return e.cant > 0 && e.item; })
     .sort(function(a, b) { return safeStr(a.item.name).localeCompare(safeStr(b.item.name)); });
 
-  let selConsumo = {};
+  let selConsumo = {}; // itemId -> { cantidad, serial }
   let wos        = [];
   let busqMat    = '';
 
@@ -3426,25 +3426,68 @@ function showRegistrarConsumo(db, session) {
     }
 
     lista.innerHTML = filtrados.map(function(e) {
-      const sel  = selConsumo[e.id] || 0;
+      const sd   = selConsumo[e.id] || { cantidad: 0, serial: '' };
+      const sel  = sd.cantidad;
       const unit = safeStr(e.item.unit, '');
-      return '<div class="flex items-center gap-2 rounded-xl px-3 py-2.5 border ' + (sel > 0 ? 'border-green-300 bg-green-50' : 'border-gray-200 bg-gray-50') + '">' +
-        '<div class="flex-1 min-w-0">' +
-          '<p class="text-sm font-medium text-gray-900 leading-tight">' + safeStr(e.item.name) + '</p>' +
-          '<p class="text-xs text-gray-400 mt-0.5">Disp: ' + e.cant + ' ' + unit + '</p>' +
+      const esSer = !!e.item.requiereSerial;
+      return '<div class="rounded-xl px-3 py-2.5 border ' + (sel > 0 ? 'border-green-300 bg-green-50' : 'border-gray-200 bg-gray-50') + '">' +
+        '<div class="flex items-center gap-2">' +
+          '<div class="flex-1 min-w-0">' +
+            '<p class="text-sm font-medium text-gray-900 leading-tight">' + safeStr(e.item.name) + '</p>' +
+            '<p class="text-xs text-gray-400 mt-0.5">Disp: ' + e.cant + ' ' + unit + '</p>' +
+          '</div>' +
+          (esSer ?
+            // Serializable: checkbox toggle
+            '<button class="rc-ser-toggle px-3 py-1.5 rounded-lg text-xs font-semibold border-2 ' +
+              (sel > 0 ? 'border-green-500 bg-green-100 text-green-700' : 'border-gray-200 bg-white text-gray-500') +
+              '" data-iid="' + e.id + '">' + (sel > 0 ? '✓ Seleccionado' : 'Seleccionar') + '</button>'
+          :
+            // No serializable: +/- con input
+            '<div class="flex items-center gap-1 shrink-0">' +
+              '<button class="rc-dec w-8 h-8 rounded-lg border border-gray-300 bg-white text-gray-600 font-bold text-lg flex items-center justify-center" data-iid="' + e.id + '">&#8722;</button>' +
+              '<input type="number" min="0" max="' + e.cant + '" value="' + sel + '" class="rc-cant-inp w-14 text-center text-sm font-bold border border-gray-200 rounded-lg py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 ' + (sel > 0 ? 'text-green-700' : 'text-gray-500') + '" data-iid="' + e.id + '" data-max="' + e.cant + '"/>' +
+              '<button class="rc-inc w-8 h-8 rounded-lg border font-bold text-lg flex items-center justify-center ' + (sel >= e.cant ? 'border-gray-200 text-gray-300 bg-white' : 'border-blue-300 bg-blue-50 text-blue-600') + '" data-iid="' + e.id + '" data-max="' + e.cant + '">+</button>' +
+            '</div>'
+          ) +
         '</div>' +
-        '<div class="flex items-center gap-1 shrink-0">' +
-          '<button class="rc-dec w-8 h-8 rounded-lg border border-gray-300 bg-white text-gray-600 font-bold text-lg flex items-center justify-center" data-iid="' + e.id + '">&#8722;</button>' +
-          '<input type="number" min="0" max="' + e.cant + '" value="' + sel + '" class="rc-cant-inp w-14 text-center text-sm font-bold border border-gray-200 rounded-lg py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 ' + (sel > 0 ? 'text-green-700' : 'text-gray-500') + '" data-iid="' + e.id + '" data-max="' + e.cant + '"/>' +
-          '<button class="rc-inc w-8 h-8 rounded-lg border font-bold text-lg flex items-center justify-center ' + (sel >= e.cant ? 'border-gray-200 text-gray-300 bg-white' : 'border-blue-300 bg-blue-50 text-blue-600') + '" data-iid="' + e.id + '" data-max="' + e.cant + '">+</button>' +
-        '</div>' +
+        // Serial input — solo si es serializable y está seleccionado
+        (esSer && sel > 0 ?
+          '<div class="mt-2">' +
+            '<input type="text" class="rc-serial-inp w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400" placeholder="Ingresa el serial del medidor..." value="' + safeStr(sd.serial) + '" data-iid="' + e.id + '"/>' +
+          '</div>'
+        : '') +
       '</div>';
     }).join('');
+
+    // Toggle serializable
+    lista.querySelectorAll('.rc-ser-toggle').forEach(function(b) {
+      b.addEventListener('click', function() {
+        const iid = b.dataset.iid;
+        if (selConsumo[iid] && selConsumo[iid].cantidad > 0) {
+          delete selConsumo[iid];
+        } else {
+          selConsumo[iid] = { cantidad: 1, serial: '' };
+        }
+        renderLista(); renderResumen();
+      });
+    });
+
+    lista.querySelectorAll('.rc-serial-inp').forEach(function(inp) {
+      inp.addEventListener('input', function() {
+        const iid = inp.dataset.iid;
+        if (selConsumo[iid]) selConsumo[iid].serial = inp.value.trim();
+        renderResumen();
+      });
+    });
 
     lista.querySelectorAll('.rc-dec').forEach(function(b) {
       b.addEventListener('click', function() {
         const iid = b.dataset.iid;
-        if ((selConsumo[iid]||0) > 0) { selConsumo[iid]--; if (!selConsumo[iid]) delete selConsumo[iid]; }
+        const cur = selConsumo[iid]?.cantidad || 0;
+        if (cur > 0) {
+          if (cur - 1 === 0) delete selConsumo[iid];
+          else selConsumo[iid] = { cantidad: cur - 1, serial: '' };
+        }
         renderLista(); renderResumen();
       });
     });
@@ -3452,7 +3495,8 @@ function showRegistrarConsumo(db, session) {
       b.addEventListener('click', function() {
         const iid = b.dataset.iid;
         const max = safeNum(b.dataset.max);
-        if ((selConsumo[iid]||0) < max) selConsumo[iid] = (selConsumo[iid]||0) + 1;
+        const cur = selConsumo[iid]?.cantidad || 0;
+        if (cur < max) selConsumo[iid] = { cantidad: cur + 1, serial: selConsumo[iid]?.serial || '' };
         renderLista(); renderResumen();
       });
     });
@@ -3464,7 +3508,8 @@ function showRegistrarConsumo(db, session) {
         if (v < 0) v = 0;
         if (v > max) v = max;
         inp.value = v;
-        if (v > 0) selConsumo[iid] = v; else delete selConsumo[iid];
+        if (v > 0) selConsumo[iid] = { cantidad: v, serial: selConsumo[iid]?.serial || '' };
+        else delete selConsumo[iid];
         renderLista(); renderResumen();
       });
     });
@@ -3473,15 +3518,21 @@ function showRegistrarConsumo(db, session) {
   function renderResumen() {
     const resDiv   = ov.querySelector('#rc-resumen');
     const resItems = ov.querySelector('#rc-resumen-items');
-    const entries  = Object.entries(selConsumo).filter(function(e) { return e[1] > 0; });
+    const entries  = Object.entries(selConsumo).filter(function(e) { return (typeof e[1] === 'object' ? e[1].cantidad : e[1]) > 0; });
     if (!entries.length) { resDiv.classList.add('hidden'); return; }
     resDiv.classList.remove('hidden');
     resItems.innerHTML = entries.map(function(e) {
       const itData = misItems.find(function(m) { return m.id === e[0]; });
       if (!itData) return '';
-      return '<div class="flex items-center justify-between px-3 py-2 bg-green-50 rounded-lg border border-green-200">' +
-        '<p class="text-sm text-gray-800 flex-1 leading-tight">' + safeStr(itData.item.name) + '</p>' +
-        '<span class="text-sm font-bold text-green-700 ml-2 shrink-0">' + e[1] + ' ' + safeStr(itData.item.unit,'') + '</span>' +
+      const sd = e[1];
+      const cant = typeof sd === 'object' ? sd.cantidad : sd;
+      const serial = typeof sd === 'object' ? sd.serial : '';
+      return '<div class="px-3 py-2 bg-green-50 rounded-lg border border-green-200">' +
+        '<div class="flex items-center justify-between">' +
+          '<p class="text-sm text-gray-800 flex-1 leading-tight">' + safeStr(itData.item.name) + '</p>' +
+          '<span class="text-sm font-bold text-green-700 ml-2 shrink-0">' + cant + ' ' + safeStr(itData.item.unit,'') + '</span>' +
+        '</div>' +
+        (serial ? '<p class="text-xs font-mono text-green-600 mt-0.5">Serial: ' + serial + '</p>' : '') +
       '</div>';
     }).join('');
   }
@@ -3499,14 +3550,27 @@ function showRegistrarConsumo(db, session) {
     errEl.classList.add('hidden');
 
     if (!wos.length) { errEl.textContent = 'Agrega al menos una OT.'; errEl.classList.remove('hidden'); return; }
-    const items = Object.entries(selConsumo).filter(function(e) { return e[1] > 0; });
+    const items = Object.entries(selConsumo).filter(function(e) { return (typeof e[1] === 'object' ? e[1].cantidad : e[1]) > 0; });
     if (!items.length) { errEl.textContent = 'Selecciona al menos un material.'; errEl.classList.remove('hidden'); return; }
 
     btn.disabled = true; btn.textContent = 'Guardando...';
     try {
+      // Validate serials
+      for (var si = 0; si < items.length; si++) {
+        var sItem = items[si];
+        var sData = typeof sItem[1] === 'object' ? sItem[1] : { cantidad: sItem[1], serial: '' };
+        var sItData = misItems.find(function(m) { return m.id === sItem[0]; });
+        if (sItData && sItData.item.requiereSerial && !sData.serial) {
+          errEl.textContent = 'Ingresa el serial de: ' + safeStr(sItData.item.name);
+          errEl.classList.remove('hidden');
+          btn.disabled = false; btn.textContent = 'Guardar consumo';
+          return;
+        }
+      }
       const consumoItems = items.map(function(e) {
         const itData = misItems.find(function(m) { return m.id === e[0]; });
-        return { itemId: e[0], nombre: safeStr(itData?.item.name), unit: safeStr(itData?.item.unit,''), sapCode: safeStr(itData?.item.sapCode,''), cantidad: e[1] };
+        const sd = typeof e[1] === 'object' ? e[1] : { cantidad: e[1], serial: '' };
+        return { itemId: e[0], nombre: safeStr(itData?.item.name), unit: safeStr(itData?.item.unit,''), sapCode: safeStr(itData?.item.sapCode,''), cantidad: sd.cantidad, serial: sd.serial || '' };
       });
       await addDoc(collection(db, 'kardex/consumos'), {
         wo: wos.join(', '), wos: wos, tipoTrabajo: tipoFinal,
@@ -3517,7 +3581,8 @@ function showRegistrarConsumo(db, session) {
       if (window.__kardexStockUsuario) {
         if (!window.__kardexStockUsuario[usuario]) window.__kardexStockUsuario[usuario] = {};
         items.forEach(function(e) {
-          window.__kardexStockUsuario[usuario][e[0]] = Math.max(0, (window.__kardexStockUsuario[usuario][e[0]] || 0) - e[1]);
+          const cantDesc = typeof e[1] === 'object' ? e[1].cantidad : e[1];
+          window.__kardexStockUsuario[usuario][e[0]] = Math.max(0, (window.__kardexStockUsuario[usuario][e[0]] || 0) - cantDesc);
         });
       }
       ov.remove();
