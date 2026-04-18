@@ -1,4 +1,3 @@
-
 /**
  * kardex.js — Fase 1 (v4)
  * Formato de despacho alineado al documento físico real de DELSUR/INNOVA.
