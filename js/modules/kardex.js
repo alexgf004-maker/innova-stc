@@ -194,9 +194,8 @@ function renderShell(container, session) {
             ['OTC','CAMBIOS'].map(function(a) {
               const activa = window.__kardexArea === a;
               const aColor = a === 'CAMBIOS' ? '#B45309' : '#1B4F8A';
-              return '<button class="karea-btn flex-1 py-2 rounded-lg text-sm font-bold transition-all ' +
-                (activa ? 'bg-white shadow-sm' : 'text-gray-400') +
-                '" style="' + (activa ? 'color:' + aColor : '') + '" data-area="' + a + '">' + a + '</button>';
+              const bgStyle = activa ? 'background:white;color:' + aColor + ';box-shadow:0 1px 3px rgba(0,0,0,0.1);' : 'background:transparent;color:#9CA3AF;';
+              return '<button class="karea-btn flex-1 py-2 rounded-lg text-sm font-bold transition-all" style="' + bgStyle + '" data-area="' + a + '">' + a + '</button>';
             }).join('') +
           '</div>' +
           // Area indicator strip
@@ -258,15 +257,24 @@ function bindNav(db, session) {
     btn.addEventListener('click', async function() {
       window.__kardexArea = btn.dataset.area;
       localStorage.setItem('kardex_area', btn.dataset.area);
-      // Update active styles
+      // Update area button styles
+      const newColor = getAreaColor();
       document.querySelectorAll('.karea-btn').forEach(function(b) {
         const activa = b.dataset.area === window.__kardexArea;
-        b.className = 'karea-btn px-3 py-1.5 rounded-md text-xs font-bold transition-all ' +
-          (activa ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600');
+        const bColor = b.dataset.area === 'CAMBIOS' ? '#B45309' : '#1B4F8A';
+        b.style.backgroundColor = activa ? 'white' : 'transparent';
+        b.style.color           = activa ? bColor : '#9CA3AF';
+        b.style.boxShadow       = activa ? '0 1px 3px rgba(0,0,0,0.1)' : 'none';
       });
-      // Update label
-      const lbl = document.getElementById('kardex-area-label');
-      if (lbl) lbl.textContent = window.__kardexArea;
+      // Update strip
+      const strip = document.getElementById('area-strip');
+      if (strip) {
+        strip.style.background = newColor;
+        strip.textContent = window.__kardexArea === 'CAMBIOS' ? '⚠ Área activa: CAMBIOS' : '✓ Área activa: OTC';
+      }
+      // Update nueva salida button
+      const btnSalida = document.getElementById('btn-nueva-salida');
+      if (btnSalida) btnSalida.style.background = newColor;
       // Reload current tab
       await showDashboard(db, session);
     });
