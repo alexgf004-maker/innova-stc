@@ -102,6 +102,31 @@ function getArea() {
   return window.__kardexArea || localStorage.getItem('kardex_area') || 'OTC';
 }
 
+function getAreaColor() {
+  return getArea() === 'CAMBIOS' ? '#B45309' : '#1B4F8A';
+}
+
+function applyAreaTheme() {
+  const color = getAreaColor();
+  const area  = getArea();
+  // Update all primary buttons
+  document.querySelectorAll('[data-area-primary]').forEach(function(el) {
+    el.style.background = color;
+  });
+  // Update tab active color
+  document.querySelectorAll('.ktab').forEach(function(b) {
+    if (b.style.color && b.style.color !== 'rgb(107, 114, 128)') {
+      b.style.color = color;
+    }
+  });
+  // Update area indicator strip
+  const strip = document.getElementById('area-strip');
+  if (strip) {
+    strip.style.background = color;
+    strip.textContent = area === 'CAMBIOS' ? '⚠ Área: CAMBIOS' : 'Área: OTC';
+  }
+}
+
 async function backfillArea(db, docs, area) {
   // Silently add area field to docs that don't have it
   const batch = [];
@@ -159,18 +184,25 @@ function renderShell(container, session) {
               '<span id="badge-pedidos" class="hidden absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full text-white font-black flex items-center justify-center" style="background:#C62828;font-size:9px;line-height:1"></span>' +
             '</button>'
           : '') +
-          (canEdit ? '<button id="btn-nueva-salida" class="inline-flex items-center gap-1.5 text-white text-sm font-medium px-3.5 py-2 rounded-lg" style="background:#1B4F8A"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Nueva salida</button>' : '') +
+          (canEdit ? '<button id="btn-nueva-salida" class="inline-flex items-center gap-1.5 text-white text-sm font-medium px-3.5 py-2 rounded-lg" style="background:' + getAreaColor() + '"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Nueva salida</button>' : '') +
         '</div>' +
       '</div>' +
       // Fila 2: selector de área (solo admin) — ancho completo
       (canEdit ? (
-        '<div class="flex gap-1 bg-gray-100 rounded-xl p-1">' +
-          ['OTC','CAMBIOS'].map(function(a) {
-            const activa = window.__kardexArea === a;
-            return '<button class="karea-btn flex-1 py-2 rounded-lg text-sm font-bold transition-all ' +
-              (activa ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400') +
-              '" data-area="' + a + '">' + a + '</button>';
-          }).join('') +
+        '<div>' +
+          '<div class="flex gap-1 bg-gray-100 rounded-xl p-1">' +
+            ['OTC','CAMBIOS'].map(function(a) {
+              const activa = window.__kardexArea === a;
+              const aColor = a === 'CAMBIOS' ? '#B45309' : '#1B4F8A';
+              return '<button class="karea-btn flex-1 py-2 rounded-lg text-sm font-bold transition-all ' +
+                (activa ? 'bg-white shadow-sm' : 'text-gray-400') +
+                '" style="' + (activa ? 'color:' + aColor : '') + '" data-area="' + a + '">' + a + '</button>';
+            }).join('') +
+          '</div>' +
+          // Area indicator strip
+          '<div id="area-strip" class="mt-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white text-center transition-all" style="background:' + (window.__kardexArea === 'CAMBIOS' ? '#B45309' : '#1B4F8A') + '">' +
+            (window.__kardexArea === 'CAMBIOS' ? '⚠ Área activa: CAMBIOS' : '✓ Área activa: OTC') +
+          '</div>' +
         '</div>'
       ) : '') +
       // Fila 3: tabs de navegación
@@ -182,10 +214,11 @@ function renderShell(container, session) {
 }
 
 function setTab(tab) {
+  const color = getAreaColor();
   document.querySelectorAll('.ktab').forEach(b => {
     const a = b.dataset.tab === tab;
     b.style.backgroundColor = a ? 'white' : 'transparent';
-    b.style.color            = a ? '#1B4F8A' : '#6B7280';
+    b.style.color            = a ? color : '#6B7280';
     b.style.boxShadow        = a ? '0 1px 3px rgba(0,0,0,0.1)' : 'none';
   });
 }
