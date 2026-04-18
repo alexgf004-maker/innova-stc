@@ -16,11 +16,11 @@
       theme: {
         extend: {
           colors: {
-            primary: '#111214',
-            accent:  '#34D399',
+            primary: '#1B4F8A',
+            accent:  '#2196F3',
             success: '#2E7D32',
             danger:  '#C62828',
-            surface: '#18191C',
+            surface: '#F5F7FA',
           },
           fontFamily: {
             sans: ['Inter', 'system-ui', 'sans-serif'],
@@ -31,12 +31,12 @@
     }
   </script>
 </head>
-<body class="font-sans text-gray-900" style="background:#111214;">
+<body class="bg-surface font-sans text-gray-900">
 
   <div id="app-shell" class="flex h-screen overflow-hidden opacity-0 transition-opacity duration-300">
 
     <!-- ── SIDEBAR (desktop) ── -->
-    <aside id="sidebar" class="hidden md:flex flex-col w-60 text-white shrink-0 overflow-y-auto" style="background:#1A1C1F;border-right:1px solid rgba(255,255,255,0.06);">
+    <aside id="sidebar" class="hidden md:flex flex-col w-60 bg-primary text-white shrink-0 overflow-y-auto">
 
       <!-- Logo -->
       <div class="px-5 py-5 border-b border-white/10">
@@ -76,9 +76,9 @@
     <div class="flex flex-col flex-1 min-w-0 overflow-hidden">
 
       <!-- Topbar -->
-      <header id="topbar" class="h-14 flex items-center px-4 shrink-0 z-10 gap-3" style="background:#1A1C1F;border-bottom:1px solid rgba(255,255,255,0.06);">
+      <header id="topbar" class="h-14 bg-white border-b border-gray-200 flex items-center px-4 shrink-0 z-10 gap-3">
         <div class="flex items-center gap-2 flex-1">
-          <div class="w-7 h-7 rounded flex items-center justify-center md:hidden" style="background:#34D399">
+          <div class="w-7 h-7 rounded flex items-center justify-center md:hidden" style="background-color:#1B4F8A">
             <svg width="14" height="14" viewBox="0 0 32 32" fill="none">
               <path d="M4 8h6v16H4zM13 8h6l6 16h-6z" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
@@ -88,13 +88,13 @@
         <div class="hidden md:block" />
         <div class="flex items-center gap-3 shrink-0">
           <div class="text-right hidden sm:block">
-            <p id="topbar-name" class="text-sm font-medium leading-tight" style="color:#F1F3F5;"></p>
-            <p id="topbar-role" class="text-xs capitalize" style="color:rgba(255,255,255,0.3);"></p>
+            <p id="topbar-name" class="text-sm font-medium text-gray-800 leading-tight"></p>
+            <p id="topbar-role" class="text-xs text-gray-400 capitalize"></p>
           </div>
           <div class="relative">
             <button id="topbar-avatar"
               class="w-8 h-8 rounded-full text-white text-xs font-bold flex items-center justify-center shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
-              style="background:#34D399;color:#0D1F0D;min-width:2rem;min-height:2rem;">
+              style="background-color:#1B4F8A; min-width:2rem; min-height:2rem;">
             </button>
             <div id="avatar-menu" class="hidden absolute right-0 top-10 bg-white border border-gray-200 rounded-xl shadow-lg py-1 z-50 w-44">
               <div id="avatar-menu-name" class="px-4 py-2 text-xs text-gray-400 border-b border-gray-100 truncate"></div>
@@ -110,7 +110,7 @@
       </header>
 
       <!-- Contenido principal -->
-      <main id="content-area" class="flex-1 overflow-y-auto p-4 pb-20 md:pb-6" style="background:#111214;">
+      <main id="content-area" class="flex-1 overflow-y-auto p-4 pb-20 md:pb-6">
         <!-- Las vistas se inyectan aquí por router.js -->
         <div class="flex items-center justify-center h-full">
           <div class="flex items-center gap-3 text-gray-400 text-sm">
@@ -126,7 +126,7 @@
 
     <!-- ── BOTTOM NAV (móvil) ── -->
     <nav id="bottom-nav"
-      class="md:hidden fixed bottom-0 left-0 right-0 flex justify-around items-center px-2 py-1 z-50 safe-area-bottom" style="background:#1A1C1F;border-top:1px solid rgba(255,255,255,0.06);">
+      class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around items-center px-2 py-1 z-50 safe-area-bottom">
       <!-- Generado por router.js -->
     </nav>
 
