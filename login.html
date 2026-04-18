@@ -3,137 +3,231 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>INNOVA STC — Acceso</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/base.css" />
-  <link rel="stylesheet" href="css/pages/login.css" />
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            primary:   '#1B4F8A',
-            accent:    '#2196F3',
-            success:   '#2E7D32',
-            danger:    '#C62828',
-            surface:   '#F5F7FA',
-          },
-          fontFamily: {
-            sans: ['Inter', 'system-ui', 'sans-serif'],
-            mono: ['IBM Plex Mono', 'monospace'],
-          }
-        }
-      }
+  <title>INNOVA STC — Preview</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+      background: #111214;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      position: relative;
+      overflow: hidden;
     }
-  </script>
+
+    /* Textura sutil */
+    /* Orbs pronunciados para que el blur tenga efecto */
+    .orb {
+      position: fixed;
+      border-radius: 50%;
+      pointer-events: none;
+      filter: blur(80px);
+    }
+    .orb-1 {
+      width: 500px; height: 500px;
+      top: -15%; left: -10%;
+      background: radial-gradient(circle, rgba(52,211,153,0.18) 0%, transparent 70%);
+    }
+    .orb-2 {
+      width: 400px; height: 400px;
+      bottom: -10%; right: -5%;
+      background: radial-gradient(circle, rgba(30,80,160,0.25) 0%, transparent 70%);
+    }
+    .orb-3 {
+      width: 300px; height: 300px;
+      top: 40%; left: 50%;
+      transform: translateX(-50%);
+      background: radial-gradient(circle, rgba(52,211,153,0.08) 0%, transparent 70%);
+    }
+
+    .card {
+      width: 100%;
+      max-width: 360px;
+      background: rgba(20,22,26,0.75);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 20px;
+      overflow: hidden;
+      position: relative;
+      z-index: 1;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+    }
+
+    /* Línea de acento arriba */
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #34D399, transparent);
+    }
+
+    .card-header {
+      padding: 2rem 2rem 1.5rem;
+      text-align: center;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .logo-ring {
+      width: 56px;
+      height: 56px;
+      margin: 0 auto 1rem;
+      border-radius: 14px;
+      background: #242628;
+      border: 1px solid rgba(255,255,255,0.08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card-title {
+      color: #F1F3F5;
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+    }
+    .card-sub {
+      color: rgba(255,255,255,0.3);
+      font-size: 0.72rem;
+      margin-top: 0.3rem;
+    }
+
+    .card-body { padding: 1.75rem 2rem 2rem; }
+
+    .step-title {
+      color: #F1F3F5;
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-bottom: 0.2rem;
+    }
+    .step-sub {
+      color: rgba(255,255,255,0.3);
+      font-size: 0.78rem;
+      margin-bottom: 1.5rem;
+    }
+
+    label {
+      display: block;
+      color: rgba(255,255,255,0.35);
+      font-size: 0.7rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    input {
+      width: 100%;
+      background: #111214;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      padding: 0.75rem 1rem;
+      color: #F1F3F5;
+      font-size: 0.875rem;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    input::placeholder { color: rgba(255,255,255,0.15); }
+    input:focus {
+      border-color: #34D399;
+      box-shadow: 0 0 0 3px rgba(52,211,153,0.08);
+    }
+
+    .btn-primary {
+      width: 100%;
+      background: #34D399;
+      color: #0D1F0D;
+      font-weight: 700;
+      font-size: 0.875rem;
+      border: none;
+      border-radius: 10px;
+      padding: 0.875rem;
+      cursor: pointer;
+      margin-top: 1rem;
+      letter-spacing: 0.02em;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    .btn-primary:hover { opacity: 0.9; }
+    .btn-primary:active { transform: scale(0.98); }
+
+    .footer-text {
+      text-align: center;
+      color: rgba(255,255,255,0.1);
+      font-size: 0.68rem;
+      margin-top: 1.5rem;
+      letter-spacing: 0.08em;
+    }
+
+    .space-y > * + * { margin-top: 0.875rem; }
+    .error-box { background:rgba(220,38,38,0.12);border:1px solid rgba(220,38,38,0.3);border-radius:10px;padding:0.65rem 0.875rem;color:#FCA5A5;font-size:0.78rem; }
+    .back-btn { background:none;border:none;color:rgba(255,255,255,0.35);cursor:pointer;padding:0.2rem;display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;margin-bottom:1.25rem;transition:color 0.2s;font-family:'Inter',sans-serif; }
+    .back-btn:hover { color:rgba(255,255,255,0.7); }
+    .hidden { display:none !important; }
+  </style>
 </head>
-<body class="min-h-screen bg-primary flex items-center justify-center p-4 login-bg">
+<body>
 
-  <div class="w-full max-w-sm">
-
-    <!-- Card principal -->
-    <div class="bg-white rounded-2xl shadow-2xl overflow-hidden">
-
-      <!-- Header de la card -->
-      <div class="bg-primary px-8 py-8 text-center border-b-4 border-accent">
-        <div class="inline-flex items-center justify-center w-16 h-16 rounded-xl bg-white/10 mb-4 login-logo">
-          <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-            <path d="M4 8h6v16H4zM13 8h6l6 16h-6zM19 8h6" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <div class="orb orb-1"></div><div class="orb orb-2"></div><div class="orb orb-3"></div>
+  <div style="width:100%;max-width:360px;position:relative;z-index:1;">
+    <div class="card">
+      <div class="card-header">
+        <div class="logo-ring">
+          <svg width="26" height="26" viewBox="0 0 32 32" fill="none">
+            <path d="M4 8h6v16H4zM13 8h6l6 16h-6zM19 8h6" stroke="#34D399" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </div>
-        <h1 class="text-white font-bold text-xl tracking-wide">INNOVA</h1>
-        <p class="text-white/60 text-sm mt-1">Servicios Técnicos y Comerciales</p>
+        <div class="card-title">INNOVA STC</div>
+        <div class="card-sub">Servicios Técnicos y Comerciales</div>
       </div>
-
-      <!-- Formulario -->
-      <div class="px-8 py-8">
+      <div class="card-body">
 
         <!-- Paso 1: Username -->
         <div id="step-username">
-          <h2 class="text-gray-800 font-semibold text-base mb-1">Iniciar sesión</h2>
-          <p class="text-gray-500 text-sm mb-6">Ingresa tu nombre de usuario</p>
-
-          <div class="space-y-4">
+          <p class="step-title">Bienvenido</p>
+          <p class="step-sub">Ingresa tu nombre de usuario</p>
+          <div class="space-y">
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1.5">Usuario</label>
-              <input
-                id="input-username"
-                type="text"
-                autocomplete="username"
-                autocapitalize="none"
-                spellcheck="false"
-                placeholder="ej. juan.perez"
-                class="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all"
-              />
+              <label>Usuario</label>
+              <input id="input-username" type="text" autocomplete="username"
+                autocapitalize="none" spellcheck="false" placeholder="ej. juan.perez"/>
             </div>
-
-            <div id="error-username" class="hidden text-sm text-danger bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5"></div>
-
-            <button
-              id="btn-username"
-              class="w-full bg-primary hover:bg-accent text-white font-semibold rounded-lg py-2.5 text-sm transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Continuar
-            </button>
+            <div id="error-username" class="error-box hidden"></div>
+            <button id="btn-username" class="btn-primary">Continuar →</button>
           </div>
         </div>
 
         <!-- Paso 2: PIN -->
         <div id="step-pin" class="hidden">
-          <div class="flex items-center gap-2 mb-6">
-            <button id="btn-back" class="text-gray-400 hover:text-gray-700 transition-colors">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M19 12H5M12 5l-7 7 7 7"/>
-              </svg>
-            </button>
+          <button id="btn-back" class="back-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+            Volver
+          </button>
+          <p class="step-title">Ingresa tu PIN</p>
+          <p class="step-sub" id="pin-username-label" style="color:rgba(255,255,255,0.5)"></p>
+          <div class="space-y">
             <div>
-              <h2 class="text-gray-800 font-semibold text-base leading-tight">Ingresa tu PIN</h2>
-              <p id="pin-username-label" class="text-gray-500 text-sm"></p>
+              <label>PIN</label>
+              <input id="input-pin" type="password" inputmode="numeric" maxlength="8" placeholder="••••" style="text-align:center;font-size:1.75rem;letter-spacing:0.4em;font-family:'IBM Plex Mono',monospace;padding:0.875rem 1rem;"/>
             </div>
-          </div>
-
-          <div class="space-y-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1.5">PIN</label>
-              <input
-                id="input-pin"
-                type="password"
-                inputmode="numeric"
-                maxlength="8"
-                placeholder="••••"
-                class="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-center text-2xl tracking-widest font-mono focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all"
-              />
-            </div>
-
-            <div id="error-pin" class="hidden text-sm text-danger bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5"></div>
-
-            <button
-              id="btn-pin"
-              class="w-full bg-primary hover:bg-accent text-white font-semibold rounded-lg py-2.5 text-sm transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Entrar
-            </button>
+            <div id="error-pin" class="error-box hidden"></div>
+            <button id="btn-pin" class="btn-primary">Entrar</button>
           </div>
         </div>
 
-        <!-- Estado de carga -->
-        <div id="step-loading" class="hidden text-center py-4">
-          <div class="inline-flex items-center gap-3 text-gray-500 text-sm">
-            <svg class="animate-spin w-5 h-5 text-accent" viewBox="0 0 24 24" fill="none">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-            </svg>
-            Verificando...
-          </div>
+        <!-- Loading -->
+        <div id="step-loading" class="hidden" style="text-align:center;padding:1.5rem 0">
+          <div style="width:20px;height:20px;border:2px solid rgba(255,255,255,0.1);border-top-color:#34D399;border-radius:50%;animation:spin 0.7s linear infinite;margin:0 auto;"></div>
+          <p style="color:rgba(255,255,255,0.3);font-size:0.8rem;margin-top:0.75rem">Verificando...</p>
         </div>
 
       </div>
     </div>
-
-    <p class="text-center text-white/30 text-xs mt-6">INNOVA STC · Uso interno</p>
+    <p class="footer-text">INNOVA STC · Uso interno</p>
   </div>
 
   <!-- Firebase CDN -->
@@ -148,13 +242,11 @@
     const auth = getAuth(app);
     const db   = getFirestore(app);
 
-    // --- Estado local del login ---
-    let currentUser = null; // { uid, internalEmail, username }
+    let currentUser = null;
 
-    // --- Elementos del DOM ---
-    const stepUsername = document.getElementById('step-username');
-    const stepPin      = document.getElementById('step-pin');
-    const stepLoading  = document.getElementById('step-loading');
+    const stepUsername  = document.getElementById('step-username');
+    const stepPin       = document.getElementById('step-pin');
+    const stepLoading   = document.getElementById('step-loading');
     const inputUsername = document.getElementById('input-username');
     const inputPin      = document.getElementById('input-pin');
     const btnUsername   = document.getElementById('btn-username');
@@ -164,157 +256,94 @@
     const errorPin      = document.getElementById('error-pin');
     const pinLabel      = document.getElementById('pin-username-label');
 
-    // --- Helpers UI ---
     function showStep(step) {
-      stepUsername.classList.add('hidden');
-      stepPin.classList.add('hidden');
-      stepLoading.classList.add('hidden');
+      [stepUsername, stepPin, stepLoading].forEach(s => s.classList.add('hidden'));
       step.classList.remove('hidden');
     }
+    function showError(el, msg) { el.textContent = msg; el.classList.remove('hidden'); }
+    function hideError(el) { el.classList.add('hidden'); }
 
-    function showError(el, msg) {
-      el.textContent = msg;
-      el.classList.remove('hidden');
-    }
-
-    function hideError(el) {
-      el.classList.add('hidden');
-    }
-
-    function setLoading(btn, loading) {
-      btn.disabled = loading;
-      if (loading) showStep(stepLoading);
-    }
-
-    // --- Paso 1: validar username ---
     async function handleUsername() {
       const username = inputUsername.value.trim().toLowerCase();
       if (!username) return;
-
       hideError(errorUsername);
-      setLoading(btnUsername, true);
-
+      btnUsername.disabled = true;
+      showStep(stepLoading);
       try {
-        // Busca solo los campos mínimos necesarios para el login.
-        // La Security Rule permite leer SOLO username, uid e internalEmail
-        // a cualquier usuario autenticado o anónimo en esta consulta.
         const q    = query(collection(db, 'users'), where('username', '==', username));
         const snap = await getDocs(q);
-
-        if (snap.empty) {
-          showStep(stepUsername);
-          showError(errorUsername, 'Usuario no encontrado.');
-          return;
-        }
-
+        if (snap.empty) { showStep(stepUsername); showError(errorUsername, 'Usuario no encontrado.'); btnUsername.disabled = false; return; }
         const data = snap.docs[0].data();
-
-        if (!data.active) {
-          showStep(stepUsername);
-          showError(errorUsername, 'Usuario inactivo. Contacta al administrador.');
-          return;
-        }
-
-        currentUser = {
-          uid:           data.uid,
-          internalEmail: data.internalEmail,
-          username:      data.username,
-        };
-
-        pinLabel.textContent = username;
+        if (!data.active) { showStep(stepUsername); showError(errorUsername, 'Usuario inactivo. Contacta al administrador.'); btnUsername.disabled = false; return; }
+        currentUser = { uid: data.uid, internalEmail: data.internalEmail, username: data.username };
+        pinLabel.textContent = '@' + username;
         showStep(stepPin);
         inputPin.focus();
-
       } catch (err) {
         showStep(stepUsername);
         showError(errorUsername, 'Error al conectar. Intenta de nuevo.');
+        btnUsername.disabled = false;
         console.error(err);
       }
     }
 
-    // --- Paso 2: validar PIN ---
     async function handlePin() {
       const pinInput = inputPin.value.replace(/\D/g, '');
       if (pinInput.length < 4) return;
-
       hideError(errorPin);
-      setLoading(btnPin, true);
-
+      btnPin.disabled = true;
+      showStep(stepLoading);
       try {
-        // Derivar contraseña interna única por usuario
         const internalPass = await derivePassword(currentUser.uid, SEED);
-
-        // Autenticar con Firebase Auth
         await signInWithEmailAndPassword(auth, currentUser.internalEmail, internalPass);
-
-        // Leer perfil completo (ya autenticado, la regla permite leer /users/{uid})
         const snap = await getDoc(doc(db, 'users', currentUser.uid));
         if (!snap.exists()) throw new Error('Perfil no encontrado.');
-
         const profile = snap.data();
-
-        if (!profile.active) {
-          await signOut(auth);
-          showStep(stepPin);
-          showError(errorPin, 'Usuario inactivo.');
-          return;
-        }
-
-        // Verificar PIN
+        if (!profile.active) { await signOut(auth); showStep(stepPin); showError(errorPin, 'Usuario inactivo.'); btnPin.disabled = false; return; }
         const computed = await hashPin(profile.pinSalt, pinInput);
         if (computed !== profile.pinHash) {
           await signOut(auth);
           inputPin.value = '';
           showStep(stepPin);
           showError(errorPin, 'PIN incorrecto.');
+          btnPin.disabled = false;
           return;
         }
-
-        // Sesión válida — guardar perfil en sessionStorage
         sessionStorage.setItem('innova_session', JSON.stringify({
-          uid:                      profile.uid,
-          username:                 profile.username,
-          displayName:              profile.displayName,
-          role:                     profile.role,
-          usuarioOperativoAsignado: profile.usuarioOperativoAsignado || null,
-          pinVerified:              true,
+          uid: profile.uid, username: profile.username, displayName: profile.displayName,
+          role: profile.role, usuarioOperativoAsignado: profile.usuarioOperativoAsignado || null,
+          pinVerified: true,
         }));
-
         window.location.href = 'index.html';
-
       } catch (err) {
         await signOut(auth).catch(() => {});
         inputPin.value = '';
         showStep(stepPin);
         showError(errorPin, 'Error de autenticación. Intenta de nuevo.');
+        btnPin.disabled = false;
         console.error(err);
       }
     }
 
-    // --- Eventos ---
     btnUsername.addEventListener('click', handleUsername);
     inputUsername.addEventListener('keydown', e => { if (e.key === 'Enter') handleUsername(); });
-
     btnPin.addEventListener('click', handlePin);
     inputPin.addEventListener('keydown', e => { if (e.key === 'Enter') handlePin(); });
-    inputPin.addEventListener('input', e => {
-      e.target.value = e.target.value.replace(/\D/g, '').slice(0, 8);
-    });
-
+    inputPin.addEventListener('input', e => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 8); });
     btnBack.addEventListener('click', () => {
       currentUser = null;
       inputPin.value = '';
       hideError(errorPin);
       showStep(stepUsername);
+      btnUsername.disabled = false;
       inputUsername.focus();
     });
 
-    // Si ya hay sesión activa, redirigir
     const existing = sessionStorage.getItem('innova_session');
     if (existing) window.location.href = 'index.html';
-
     inputUsername.focus();
   </script>
+
 
 </body>
 </html>
