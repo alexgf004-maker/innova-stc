@@ -115,14 +115,39 @@ function renderShell(container, session) {
     <button data-tab="solicitar"    class="ktab flex-1 py-2 text-xs font-medium rounded-lg transition-colors">Solicitar</button>
     <button data-tab="mis-pedidos"  class="ktab flex-1 py-2 text-xs font-medium rounded-lg transition-colors">Pedidos</button>`;
 
+  // Área activa para admin — persiste en localStorage
+  if (canEdit && !window.__kardexArea) {
+    window.__kardexArea = localStorage.getItem('kardex_area') || 'OTC';
+  }
+
+  const areaSelector = canEdit ? (
+    '<div class="flex gap-2 items-center">' +
+      '<span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Área</span>' +
+      '<div class="flex gap-1 bg-gray-100 rounded-lg p-0.5">' +
+        ['OTC','CAMBIOS'].map(function(a) {
+          const activa = window.__kardexArea === a;
+          return '<button class="karea-btn px-3 py-1.5 rounded-md text-xs font-bold transition-all ' +
+            (activa ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600') +
+            '" data-area="' + a + '">' + a + '</button>';
+        }).join('') +
+      '</div>' +
+    '</div>'
+  ) : '';
+
   container.innerHTML =
     '<div class="space-y-4">' +
       '<div class="flex items-center justify-between">' +
         '<div>' +
           '<h1 class="text-xl font-semibold text-gray-900">Kardex</h1>' +
-          '<p class="text-sm text-gray-500 mt-0.5">Control de materiales</p>' +
+          (canEdit
+            ? '<p class="text-xs text-gray-400 mt-0.5">Área: <span id="kardex-area-label" class="font-semibold text-gray-600">' + (window.__kardexArea||'OTC') + '</span></p>'
+            : '<p class="text-sm text-gray-500 mt-0.5">Control de materiales</p>'
+          ) +
         '</div>' +
-        (canEdit ? '<button id="btn-nueva-salida" class="inline-flex items-center gap-2 text-white text-sm font-medium px-4 py-2.5 rounded-lg" style="background:#1B4F8A"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Nueva salida</button>' : '') +
+        '<div class="flex items-center gap-2">' +
+          areaSelector +
+          (canEdit ? '<button id="btn-nueva-salida" class="inline-flex items-center gap-1.5 text-white text-xs font-medium px-3 py-2 rounded-lg" style="background:#1B4F8A"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Nueva salida</button>' : '') +
+        '</div>' +
       '</div>' +
       '<div class="flex gap-1 bg-gray-100 rounded-xl p-1">' +
         (isCampo ? tabsCampo : tabsAdmin) +
@@ -155,6 +180,25 @@ function bindNav(db, session) {
     });
   });
   document.getElementById('btn-nueva-salida')?.addEventListener('click', () => showFormSalida(db, session));
+
+  // Área selector
+  document.querySelectorAll('.karea-btn').forEach(function(btn) {
+    btn.addEventListener('click', async function() {
+      window.__kardexArea = btn.dataset.area;
+      localStorage.setItem('kardex_area', btn.dataset.area);
+      // Update active styles
+      document.querySelectorAll('.karea-btn').forEach(function(b) {
+        const activa = b.dataset.area === window.__kardexArea;
+        b.className = 'karea-btn px-3 py-1.5 rounded-md text-xs font-bold transition-all ' +
+          (activa ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600');
+      });
+      // Update label
+      const lbl = document.getElementById('kardex-area-label');
+      if (lbl) lbl.textContent = window.__kardexArea;
+      // Reload current tab
+      await showDashboard(db, session);
+    });
+  });
 }
 
 function esValido(item) {
@@ -646,7 +690,7 @@ function itemRow(item, canEdit, selMode = false, isSelected = false) {
   ].filter(Boolean).join('<span class="mx-1 text-gray-300">·</span>');
 
   const serialBadge = item.requiereSerial
-    ? `<span class="text-xs px-1.5 py-0.5 rounded font-medium" style="background:rgba(52,211,153,0.1);color:#1D4ED8">Serial</span>`
+    ? `<span class="text-xs px-1.5 py-0.5 rounded font-medium" style="background:#EFF6FF;color:#1D4ED8">Serial</span>`
     : '';
 
   return `
