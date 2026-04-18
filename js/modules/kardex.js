@@ -103,7 +103,7 @@ function getArea() {
 }
 
 function getAreaColor() {
-  return getArea() === 'CAMBIOS' ? '#B45309' : '#1B4F8A';
+  return getArea() === 'CAMBIOS' ? '#0F766E' : '#1B4F8A';
 }
 
 function applyAreaTheme() {
@@ -193,13 +193,13 @@ function renderShell(container, session) {
           '<div class="flex gap-1 bg-gray-100 rounded-xl p-1">' +
             ['OTC','CAMBIOS'].map(function(a) {
               const activa = window.__kardexArea === a;
-              const aColor = a === 'CAMBIOS' ? '#B45309' : '#1B4F8A';
+              const aColor = a === 'CAMBIOS' ? '#0F766E' : '#1B4F8A';
               const bgStyle = activa ? 'background:white;color:' + aColor + ';box-shadow:0 1px 3px rgba(0,0,0,0.1);' : 'background:transparent;color:#9CA3AF;';
               return '<button class="karea-btn flex-1 py-2 rounded-lg text-sm font-bold transition-all" style="' + bgStyle + '" data-area="' + a + '">' + a + '</button>';
             }).join('') +
           '</div>' +
           // Area indicator strip
-          '<div id="area-strip" class="mt-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white text-center transition-all" style="background:' + (window.__kardexArea === 'CAMBIOS' ? '#B45309' : '#1B4F8A') + '">' +
+          '<div id="area-strip" class="mt-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white text-center transition-all" style="background:' + (window.__kardexArea === 'CAMBIOS' ? '#0F766E' : '#1B4F8A') + '">' +
             (window.__kardexArea === 'CAMBIOS' ? '⚠ Área activa: CAMBIOS' : '✓ Área activa: OTC') +
           '</div>' +
         '</div>'
@@ -261,7 +261,7 @@ function bindNav(db, session) {
       const newColor = getAreaColor();
       document.querySelectorAll('.karea-btn').forEach(function(b) {
         const activa = b.dataset.area === window.__kardexArea;
-        const bColor = b.dataset.area === 'CAMBIOS' ? '#B45309' : '#1B4F8A';
+        const bColor = b.dataset.area === 'CAMBIOS' ? '#0F766E' : '#1B4F8A';
         b.style.backgroundColor = activa ? 'white' : 'transparent';
         b.style.color           = activa ? bColor : '#9CA3AF';
         b.style.boxShadow       = activa ? '0 1px 3px rgba(0,0,0,0.1)' : 'none';
@@ -480,7 +480,7 @@ async function showDashboardCampo(db, session) {
     } catch(solErr) { console.warn('No se pudieron cargar solicitudes:', solErr); }
 
     const ESTADO_BADGE = {
-      pendiente: { label: 'Pendiente', bg: '#FEF3C7', color: '#B45309' },
+      pendiente: { label: 'Pendiente', bg: '#FEF3C7', color: '#0F766E' },
       aprobado:  { label: 'Aprobado',  bg: '#DCFCE7', color: '#166534' },
       rechazado: { label: 'Rechazado', bg: '#FEE2E2', color: '#C62828' },
     };
@@ -553,7 +553,7 @@ async function showDashboardCampo(db, session) {
       html += '<div class="bg-white rounded-xl border border-gray-200 overflow-hidden">' +
         '<div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">' +
           '<p class="font-semibold text-sm text-gray-900">Mis solicitudes</p>' +
-          (solPendientes > 0 ? '<span class="text-xs font-bold px-2 py-0.5 rounded-full text-white" style="background:#B45309">' + solPendientes + ' pendiente' + (solPendientes !== 1 ? 's' : '') + '</span>' : '') +
+          (solPendientes > 0 ? '<span class="text-xs font-bold px-2 py-0.5 rounded-full text-white" style="background:#0F766E">' + solPendientes + ' pendiente' + (solPendientes !== 1 ? 's' : '') + '</span>' : '') +
         '</div>' +
         '<div class="divide-y divide-gray-50">' +
         solRecientes.map(function(s) {
@@ -1636,7 +1636,7 @@ async function showFormSalida(db, session) {
     if (yaT <= 0) return '';
     const min        = safeNum(item.minStock || 5);
     const suficiente = yaT > min;
-    const color = suficiente ? '#166534' : '#B45309';
+    const color = suficiente ? '#166534' : '#0F766E';
     const bg    = suficiente ? '#F0FDF4'  : '#FFFBEB';
     const bdr   = suficiente ? '#BBF7D0'  : '#FDE68A';
     const icon  = suficiente ? '✅' : '⚠️';
@@ -2094,7 +2094,7 @@ async function showFormDevolucion(db, session, salida) {
     '</div>' +
     '<div class="px-5 py-4 border-t border-gray-100 flex gap-3 shrink-0">' +
       '<button id="dv-cancel" class="flex-1 border border-gray-200 text-gray-600 font-medium rounded-xl py-3 text-sm">Cancelar</button>' +
-      '<button id="dv-submit" class="flex-1 text-white font-medium rounded-xl py-3 text-sm" style="background:#B45309">Registrar devolución</button>' +
+      '<button id="dv-submit" class="flex-1 text-white font-medium rounded-xl py-3 text-sm" style="background:#0F766E">Registrar devolución</button>' +
     '</div>'
   );
 
@@ -2290,7 +2290,7 @@ async function showHistorial(db, session) {
           '</div>' +
           '<div class="flex gap-1.5 shrink-0">' +
             '<button data-smemo="' + s.id + '" class="text-xs font-medium px-2 py-1 rounded-lg" style="color:#1B4F8A;background:#EFF6FF">Memo</button>' +
-            '<button data-sdev="' + s.id + '" class="text-xs font-medium px-2 py-1 rounded-lg" style="color:#B45309;background:#FEF3C7">Devolver</button>' +
+            '<button data-sdev="' + s.id + '" class="text-xs font-medium px-2 py-1 rounded-lg" style="color:#0F766E;background:#FEF3C7">Devolver</button>' +
           '</div>' +
         '</div>' +
         '<div class="flex flex-wrap gap-1 mt-2">' +
@@ -3279,7 +3279,7 @@ async function showStockUsuarios(db, session) {
 
     const ESTADO_CFG = {
       critico: { icon: '🔴', label: 'Stock crítico', order: 0, bg: '#FEF2F2', border: '#FECACA', color: '#C62828' },
-      bajo:    { icon: '🟡', label: 'Stock bajo',    order: 1, bg: '#FFFBEB', border: '#FDE68A', color: '#B45309' },
+      bajo:    { icon: '🟡', label: 'Stock bajo',    order: 1, bg: '#FFFBEB', border: '#FDE68A', color: '#0F766E' },
       ok:      { icon: '🟢', label: 'Suficiente',    order: 2, bg: 'transparent', border: 'transparent', color: '#166534' },
     };
 
@@ -3365,7 +3365,7 @@ async function showStockUsuarios(db, session) {
         : bajos > 0
         ? '⚠️ ' + bajos + ' bajo' + (bajos !== 1 ? 's' : '')
         : '✓ Sin alertas';
-      const alertaColor = criticos > 0 ? '#C62828' : bajos > 0 ? '#B45309' : '#166534';
+      const alertaColor = criticos > 0 ? '#C62828' : bajos > 0 ? '#0F766E' : '#166534';
       const chevron = isOpen ? 'rotate-180' : '';
 
       let detalle = '';
@@ -4107,7 +4107,7 @@ async function showMisSolicitudes(db, session) {
       .sort(function(a, b) { return (b.fecha?.seconds||0) - (a.fecha?.seconds||0); });
 
     const ESTADO_BADGE = {
-      pendiente:  { label: 'Pendiente',  bg: '#FEF3C7', color: '#B45309' },
+      pendiente:  { label: 'Pendiente',  bg: '#FEF3C7', color: '#0F766E' },
       aprobado:   { label: 'Aprobado',   bg: '#DCFCE7', color: '#166534' },
       rechazado:  { label: 'Rechazado',  bg: '#FEE2E2', color: '#C62828' },
     };
@@ -4171,7 +4171,7 @@ async function showSolicitudes(db, session) {
     const pendientes  = solicitudes.filter(function(s) { return s.estado === 'pendiente'; });
 
     const ESTADO_BADGE = {
-      pendiente:           { label: 'Pendiente',            bg: '#FEF3C7', color: '#B45309' },
+      pendiente:           { label: 'Pendiente',            bg: '#FEF3C7', color: '#0F766E' },
       aprobado:            { label: 'Aprobado',             bg: '#DCFCE7', color: '#166534' },
       rechazado:           { label: 'Rechazado',            bg: '#FEE2E2', color: '#C62828' },
       listo_para_despacho: { label: 'Listo para despacho',  bg: '#EFF6FF', color: '#1D4ED8' },
