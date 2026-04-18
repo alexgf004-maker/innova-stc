@@ -3652,34 +3652,68 @@ async function showMisConsumos(db, session) {
     const consumos = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
     consumos.sort(function(a, b) { return (b.fecha?.seconds||0) - (a.fecha?.seconds||0); });
 
+    let busqConsumo = '';
+
+    function renderConsumos() {
+      const q = busqConsumo.toLowerCase();
+      const filtrados = q ? consumos.filter(function(c) {
+        return safeStr(c.wo).toLowerCase().includes(q) ||
+               safeStr(c.tipoTrabajo).toLowerCase().includes(q) ||
+               safeStr(c.registradoPorNombre).toLowerCase().includes(q) ||
+               (c.items||[]).some(function(i) { return safeStr(i.serial).toLowerCase().includes(q) || safeStr(i.nombre).toLowerCase().includes(q); });
+      }) : consumos;
+
+      const lista = content.querySelector('#consumos-lista');
+      if (!lista) return;
+
+      lista.innerHTML = filtrados.length === 0
+        ? '<div class="bg-white rounded-xl border border-gray-200 py-10 text-center"><p class="text-sm text-gray-400">' + (q ? 'Sin resultados' : 'Sin consumos registrados') + '</p></div>'
+        : filtrados.map(function(c) {
+            return '<div class="bg-white rounded-xl border border-gray-200 px-4 py-3 space-y-2">' +
+              // Encabezado
+              '<div class="flex items-start justify-between gap-2">' +
+                '<div>' +
+                  '<p class="text-sm font-bold text-gray-900">' + safeStr(c.wo) + '</p>' +
+                  '<p class="text-xs text-gray-400 mt-0.5">' + fmtDate(c.fecha) + ' · ' + safeStr(c.tipoTrabajo) + '</p>' +
+                  '<p class="text-xs text-gray-400 mt-0.5">👤 ' + safeStr(c.registradoPorNombre || c.usuarioOperativo) + '</p>' +
+                '</div>' +
+                '<span class="text-xs font-semibold px-2 py-0.5 rounded-full shrink-0" style="background:#DCFCE7;color:#166534">✓</span>' +
+              '</div>' +
+              // Materiales con serial
+              '<div class="space-y-1">' +
+                (c.items||[]).map(function(i) {
+                  return '<div class="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-gray-50">' +
+                    '<p class="text-xs text-gray-700 flex-1 leading-tight">' + safeStr(i.nombre) + '</p>' +
+                    '<div class="text-right ml-2 shrink-0">' +
+                      '<p class="text-xs font-bold text-gray-900">' + i.cantidad + ' ' + safeStr(i.unit,'') + '</p>' +
+                      (i.serial ? '<p class="text-xs font-mono text-blue-600 mt-0.5">' + safeStr(i.serial) + '</p>' : '') +
+                    '</div>' +
+                  '</div>';
+                }).join('') +
+              '</div>' +
+            '</div>';
+          }).join('');
+    }
+
     content.innerHTML =
       '<div class="space-y-3">' +
         '<div class="flex items-center justify-between">' +
           '<p class="font-semibold text-gray-900">Mis consumos</p>' +
           '<button id="btn-nuevo-consumo" class="text-xs font-medium px-3 py-1.5 rounded-lg text-white" style="background:#166534">+ Registrar</button>' +
         '</div>' +
-        (consumos.length === 0
-          ? '<div class="bg-white rounded-xl border border-gray-200 py-12 text-center"><p class="text-sm text-gray-400">Sin consumos registrados</p></div>'
-          : '<div class="space-y-2">' +
-              consumos.map(function(c) {
-                return '<div class="bg-white rounded-xl border border-gray-200 px-4 py-3">' +
-                  '<div class="flex items-start justify-between gap-2 mb-2">' +
-                    '<div>' +
-                      '<p class="text-sm font-bold text-gray-900">' + safeStr(c.wo) + '</p>' +
-                      '<p class="text-xs text-gray-400 mt-0.5">' + fmtDate(c.fecha) + ' · ' + safeStr(c.tipoTrabajo) + '</p>' +
-                    '</div>' +
-                    '<span class="text-xs font-semibold px-2 py-0.5 rounded-full shrink-0" style="background:#DCFCE7;color:#166534">✓ Registrado</span>' +
-                  '</div>' +
-                  '<div class="flex flex-wrap gap-1">' +
-                    (c.items||[]).map(function(i) {
-                      return '<span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">' + i.cantidad + ' ' + safeStr(i.unit,'') + ' ' + safeStr(i.nombre) + '</span>';
-                    }).join('') +
-                  '</div>' +
-                '</div>';
-              }).join('') +
-            '</div>'
-        ) +
+        // Buscador
+        '<div class="relative">' +
+          '<svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' +
+          '<input id="busq-consumo" type="text" placeholder="Buscar por OT, serial, tipo..." class="w-full border border-gray-200 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>' +
+        '</div>' +
+        '<div id="consumos-lista" class="space-y-2"></div>' +
       '</div>';
+
+    renderConsumos();
+    content.querySelector('#busq-consumo').addEventListener('input', function(e) {
+      busqConsumo = e.target.value.trim();
+      renderConsumos();
+    });
 
     content.querySelector('#btn-nuevo-consumo')?.addEventListener('click', function() {
       showRegistrarConsumo(db, session);
