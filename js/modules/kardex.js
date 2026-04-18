@@ -128,9 +128,7 @@ function renderShell(container, session) {
     <button data-tab="inventario" class="ktab flex-1 py-2 text-xs font-medium rounded-lg transition-colors">Inventario</button>
     <button data-tab="historial"  class="ktab flex-1 py-2 text-xs font-medium rounded-lg transition-colors">Historial</button>
     <button data-tab="usuarios"   class="ktab flex-1 py-2 text-xs font-medium rounded-lg transition-colors">Usuarios</button>
-    <button data-tab="solicitudes" class="ktab flex-1 py-2 text-xs font-medium rounded-lg transition-colors relative">
-      Pedidos<span id="badge-pedidos" class="hidden absolute -top-1 -right-1 w-4 h-4 rounded-full text-white text-xs font-black flex items-center justify-center" style="background:#C62828;font-size:9px;line-height:1"></span>
-    </button>`;
+    <button data-tab="solicitudes" class="ktab flex-1 py-2 text-xs font-medium rounded-lg transition-colors">Pedidos</button>`;
 
   const tabsCampo = `
     <button data-tab="dashboard"    class="ktab flex-1 py-2 text-xs font-medium rounded-lg transition-colors">Inicio</button>
@@ -153,7 +151,16 @@ function renderShell(container, session) {
           '<h1 class="text-xl font-semibold text-gray-900">Kardex</h1>' +
           '<p class="text-xs text-gray-400 mt-0.5">Control de materiales</p>' +
         '</div>' +
-        (canEdit ? '<button id="btn-nueva-salida" class="inline-flex items-center gap-1.5 text-white text-sm font-medium px-3.5 py-2 rounded-lg" style="background:#1B4F8A"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Nueva salida</button>' : '') +
+        '<div class="flex items-center gap-2">' +
+          (canEdit ?
+            // Global bell — clearly outside area context
+            '<button id="btn-pedidos-global" data-tab="solicitudes" class="ktab relative p-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition-colors" title="Solicitudes globales">' +
+              '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>' +
+              '<span id="badge-pedidos" class="hidden absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full text-white font-black flex items-center justify-center" style="background:#C62828;font-size:9px;line-height:1"></span>' +
+            '</button>'
+          : '') +
+          (canEdit ? '<button id="btn-nueva-salida" class="inline-flex items-center gap-1.5 text-white text-sm font-medium px-3.5 py-2 rounded-lg" style="background:#1B4F8A"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Nueva salida</button>' : '') +
+        '</div>' +
       '</div>' +
       // Fila 2: selector de área (solo admin) — ancho completo
       (canEdit ? (
@@ -199,7 +206,7 @@ function bindNav(db, session) {
   });
   document.getElementById('btn-nueva-salida')?.addEventListener('click', () => showFormSalida(db, session));
 
-  // Load pending solicitudes count for badge
+  // Load pending solicitudes count for global bell badge
   (async function() {
     try {
       const snap = await getDocs(collection(db, 'solicitudes_material'));
@@ -208,6 +215,7 @@ function bindNav(db, session) {
       if (badge && count > 0) {
         badge.textContent = count > 9 ? '9+' : count;
         badge.classList.remove('hidden');
+        badge.style.display = 'flex';
       }
     } catch(e) {}
   })();
