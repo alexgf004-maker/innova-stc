@@ -53,15 +53,33 @@ const EMPRESAS_CONTRATISTAS = [
 ];
 
 // ─────────────────────────────────────────
+// HELPERS DE SESIÓN CAMPO
+// ─────────────────────────────────────────
+function getDestinoField(session) {
+  // Nueva arquitectura
+  if (session.asignacionActual?.destino) return session.asignacionActual.destino;
+  // Compatibilidad temporal
+  return session.usuarioOperativoAsignado || null;
+}
+
+function getAreaField(session) {
+  if (session.asignacionActual?.area) return session.asignacionActual.area;
+  if (session.usuarioOperativoAsignado) return 'OTC';
+  return null;
+}
+
+// ─────────────────────────────────────────
 // BADGE USUARIO OPERATIVO
 // Aparece en todas las vistas de campo
 // ─────────────────────────────────────────
 function badgeUsuarioOperativo(session) {
-  const u = session.usuarioOperativoAsignado;
-  if (!u) return '';
-  return '<div class="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold text-white" style="background:#1B4F8A">' +
+  const destino = getDestinoField(session);
+  const area    = getAreaField(session);
+  if (!destino) return '';
+  const color = area === 'CAMBIOS' ? '#0F766E' : '#1B4F8A';
+  return '<div class="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold text-white" style="background:' + color + '">' +
     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>' +
-    'Trabajando con: ' + u +
+    (area ? area + ' · ' : '') + destino +
   '</div>';
 }
 
@@ -73,8 +91,24 @@ export async function initKardex(session) {
   if (!container) return;
   const db = window.__firebase.db;
 
+  // Detect route context for campo
+  const currentPath = window.location.hash.slice(1) || '/';
+  if (session.role === 'campo' && currentPath === '/cm') {
+    container.innerHTML =
+      '<div class="flex flex-col items-center justify-center min-h-64 px-6 text-center space-y-4">' +
+        '<div class="w-16 h-16 rounded-2xl flex items-center justify-center" style="background:#F0FDFA">' +
+          '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#0F766E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3"/></svg>' +
+        '</div>' +
+        '<div>' +
+          '<p class="font-bold text-gray-900 text-lg">Cambio de Medidores</p>' +
+          '<p class="text-sm text-gray-500 mt-1">Esta sección estará disponible próximamente.</p>' +
+        '</div>' +
+      '</div>';
+    return;
+  }
+
   // Campo sin asignación operativa — bloquear acceso
-  if (session.role === 'campo' && !session.usuarioOperativoAsignado) {
+  if (session.role === 'campo' && !getDestinoField(session)) {
     container.innerHTML =
       '<div class="flex flex-col items-center justify-center min-h-64 px-6 text-center space-y-4">' +
         '<div class="w-16 h-16 rounded-2xl flex items-center justify-center" style="background:#FEF2F2">' +
@@ -411,7 +445,8 @@ function statCard(val, label, color) {
 async function showDashboardCampo(db, session) {
   const content = document.getElementById('kardex-content');
   content.innerHTML = loading();
-  const usuario = session.usuarioOperativoAsignado;
+  const usuario = getDestinoField(session);
+  const areaCampo = getAreaField(session);
 
   try {
     // Stock del usuario operativo desde movimientos
@@ -493,8 +528,9 @@ async function showDashboardCampo(db, session) {
     let html = '<div class="space-y-4">';
 
     // Badge usuario operativo — prominente
-    html += '<div class="rounded-2xl p-4 text-white" style="background:#1B4F8A">' +
-      '<p class="text-xs font-medium opacity-80 uppercase tracking-wider">Trabajando con</p>' +
+    const campoBadgeColor = areaCampo === 'CAMBIOS' ? '#0F766E' : '#1B4F8A';
+    html += '<div class="rounded-2xl p-4 text-white" style="background:' + campoBadgeColor + '">' +
+      '<p class="text-xs font-medium opacity-80 uppercase tracking-wider">' + (areaCampo || 'OTC') + ' · Trabajando con</p>' +
       '<p class="text-2xl font-black mt-1">' + usuario + '</p>' +
       '<p class="text-xs opacity-70 mt-0.5">' + misItems.length + ' material' + (misItems.length !== 1 ? 'es' : '') + ' asignados</p>' +
     '</div>';
@@ -3451,7 +3487,8 @@ const TIPOS_TRABAJO = [
 ];
 
 function showRegistrarConsumo(db, session) {
-  const usuario = session.usuarioOperativoAsignado;
+  const usuario = getDestinoField(session);
+  const areaCampo = getAreaField(session);
   if (!usuario) { showToast('Sin usuario operativo asignado.', 'error'); return; }
 
   const stockU  = window.__kardexStockUsuario?.[usuario] || {};
@@ -3761,6 +3798,7 @@ function showRegistrarConsumo(db, session) {
       });
       await addDoc(collection(db, 'kardex/movimientos/consumos'), {
         wo: woVal, tipoTrabajo: tipoFinal,
+        area: areaCampo || 'OTC',
         usuarioOperativo: usuario,
         registradoPor: session.uid, registradoPorNombre: session.displayName,
         items: consumoItems, fecha: serverTimestamp(),
@@ -3791,7 +3829,7 @@ async function showMisConsumos(db, session) {
   setTab('consumo');
   const content = document.getElementById('kardex-content');
   content.innerHTML = loading();
-  const usuario = session.usuarioOperativoAsignado;
+  const usuario = getDestinoField(session);
 
   try {
     const snap = await getDocs(query(
