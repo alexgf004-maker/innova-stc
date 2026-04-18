@@ -4102,7 +4102,8 @@ async function showSolicitarMaterial(db, session) {
           usuarioUid:              session.uid,
           usuarioNombre:           session.displayName,
           usuarioRole:             session.role,
-          usuarioOperativo:        session.usuarioOperativoAsignado || null,
+          usuarioOperativo:        getDestinoField(session),
+          area:                    getAreaField(session),
           materiales: sel.map(function(s) {
             return { itemId:s.itemId, nombre:s.name, unit:s.unit, cantidad:s.cantidad };
           }),
