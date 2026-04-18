@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>INNOVA STC — Acceso</title>
+  <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -14,137 +15,136 @@
     body {
       font-family: 'Inter', sans-serif;
       min-height: 100vh;
-      background: #0C0E12;
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 1.25rem;
-      overflow: hidden;
       position: relative;
+      overflow: hidden;
+      background: #1B4F8A;
     }
 
-    /* Orbs de fondo */
-    .orb {
+    /* Gradiente de fondo sutil */
+    .bg-layer {
       position: fixed;
-      border-radius: 50%;
+      inset: 0;
+      background:
+        radial-gradient(ellipse at 20% 20%, rgba(255,255,255,0.07) 0%, transparent 55%),
+        radial-gradient(ellipse at 80% 80%, rgba(0,0,0,0.18) 0%, transparent 55%),
+        linear-gradient(145deg, #1E5CA0 0%, #1B4F8A 45%, #143D6E 100%);
       pointer-events: none;
-      filter: blur(90px);
-      opacity: 1;
-    }
-    .orb-1 {
-      width: 560px; height: 560px;
-      top: -20%; left: -15%;
-      background: radial-gradient(circle, rgba(30,80,200,0.30) 0%, transparent 65%);
-    }
-    .orb-2 {
-      width: 480px; height: 480px;
-      bottom: -15%; right: -10%;
-      background: radial-gradient(circle, rgba(30,80,200,0.22) 0%, transparent 65%);
-    }
-    .orb-3 {
-      width: 320px; height: 320px;
-      top: 55%; left: 55%;
-      background: radial-gradient(circle, rgba(100,160,255,0.10) 0%, transparent 65%);
     }
 
-    /* Card principal */
-    .card {
+    /* Patrón de puntos muy sutil */
+    .bg-dots {
+      position: fixed;
+      inset: 0;
+      background-image: radial-gradient(rgba(255,255,255,0.06) 1px, transparent 1px);
+      background-size: 28px 28px;
+      pointer-events: none;
+    }
+
+    .card-wrap {
       width: 100%;
-      max-width: 368px;
+      max-width: 360px;
       position: relative;
       z-index: 10;
-      border-radius: 24px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 20px;
       overflow: hidden;
-      background: rgba(18, 21, 28, 0.72);
-      border: 1px solid rgba(255,255,255,0.09);
       box-shadow:
-        0 32px 80px rgba(0,0,0,0.55),
-        0 0 0 1px rgba(255,255,255,0.04) inset;
-      backdrop-filter: blur(28px);
-      -webkit-backdrop-filter: blur(28px);
+        0 24px 60px rgba(0,0,0,0.25),
+        0 4px 16px rgba(0,0,0,0.12),
+        0 0 0 1px rgba(255,255,255,0.15);
     }
 
-    /* Línea superior de acento */
-    .card-accent-line {
-      height: 2px;
-      background: linear-gradient(90deg, transparent 0%, #1B4F8A 35%, #4A90E2 65%, transparent 100%);
-    }
-
-    /* Header del card */
+    /* Header azul del card */
     .card-header {
-      padding: 2rem 2.25rem 1.75rem;
+      background: linear-gradient(135deg, #1B4F8A 0%, #1A5299 100%);
+      padding: 2rem 2rem 1.75rem;
       text-align: center;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
       position: relative;
+      overflow: hidden;
+    }
+
+    .card-header::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
     }
 
     .logo-wrap {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 60px; height: 60px;
+      width: 58px; height: 58px;
       border-radius: 16px;
-      background: rgba(27,79,138,0.25);
-      border: 1px solid rgba(74,144,226,0.25);
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.18);
       margin-bottom: 1rem;
-      box-shadow: 0 0 24px rgba(27,79,138,0.3);
     }
 
     .card-title {
-      color: #F0F4FF;
-      font-size: 1.125rem;
+      color: #fff;
+      font-size: 1.15rem;
       font-weight: 800;
-      letter-spacing: 0.12em;
+      letter-spacing: 0.1em;
     }
     .card-sub {
-      color: rgba(255,255,255,0.28);
+      color: rgba(255,255,255,0.55);
       font-size: 0.72rem;
       margin-top: 0.3rem;
-      letter-spacing: 0.02em;
+      letter-spacing: 0.01em;
     }
 
     /* Body */
-    .card-body { padding: 1.875rem 2.25rem 2.25rem; }
+    .card-body { padding: 1.875rem 2rem 2rem; }
 
     .step-title {
-      color: #E8EEFF;
+      color: #1a202c;
       font-size: 0.95rem;
-      font-weight: 600;
-      margin-bottom: 0.25rem;
+      font-weight: 700;
+      margin-bottom: 0.2rem;
     }
     .step-sub {
-      color: rgba(255,255,255,0.28);
+      color: #718096;
       font-size: 0.78rem;
-      margin-bottom: 1.625rem;
+      margin-bottom: 1.5rem;
     }
 
     label {
       display: block;
-      color: rgba(255,255,255,0.32);
-      font-size: 0.68rem;
+      color: #4A5568;
+      font-size: 0.72rem;
       font-weight: 600;
-      margin-bottom: 0.5rem;
-      letter-spacing: 0.1em;
+      margin-bottom: 0.45rem;
+      letter-spacing: 0.06em;
       text-transform: uppercase;
     }
 
-    input {
+    input[type="text"],
+    input[type="password"] {
       width: 100%;
-      background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(255,255,255,0.09);
-      border-radius: 12px;
-      padding: 0.8rem 1rem;
-      color: #E8EEFF;
+      background: #F7FAFC;
+      border: 1.5px solid #E2E8F0;
+      border-radius: 10px;
+      padding: 0.75rem 1rem;
+      color: #1a202c;
       font-size: 0.875rem;
       font-family: 'Inter', sans-serif;
       outline: none;
       transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
     }
-    input::placeholder { color: rgba(255,255,255,0.16); }
+    input::placeholder { color: #A0AEC0; }
     input:focus {
-      border-color: rgba(74,144,226,0.6);
-      background: rgba(27,79,138,0.12);
-      box-shadow: 0 0 0 3px rgba(27,79,138,0.15);
+      border-color: #1B4F8A;
+      background: #fff;
+      box-shadow: 0 0 0 3px rgba(27,79,138,0.1);
     }
 
     #input-pin {
@@ -152,34 +152,37 @@
       font-size: 1.875rem;
       letter-spacing: 0.45em;
       font-family: 'IBM Plex Mono', monospace;
-      padding: 0.9rem 1rem;
+      padding: 0.875rem 1rem;
     }
 
     .btn-primary {
       width: 100%;
-      background: linear-gradient(135deg, #1B4F8A 0%, #2563EB 100%);
+      background: #1B4F8A;
       color: #fff;
       font-weight: 600;
       font-size: 0.875rem;
       border: none;
-      border-radius: 12px;
-      padding: 0.9rem;
+      border-radius: 10px;
+      padding: 0.875rem;
       cursor: pointer;
       margin-top: 1.125rem;
-      letter-spacing: 0.03em;
-      transition: opacity 0.15s, transform 0.1s;
-      box-shadow: 0 4px 20px rgba(27,79,138,0.4);
+      letter-spacing: 0.02em;
+      transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+      box-shadow: 0 2px 8px rgba(27,79,138,0.35);
     }
-    .btn-primary:hover { opacity: 0.88; }
+    .btn-primary:hover {
+      background: #1a5299;
+      box-shadow: 0 4px 14px rgba(27,79,138,0.4);
+    }
     .btn-primary:active { transform: scale(0.98); }
-    .btn-primary:disabled { opacity: 0.35; cursor: not-allowed; }
+    .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
 
     .error-box {
-      background: rgba(220,38,38,0.1);
-      border: 1px solid rgba(220,38,38,0.25);
-      border-radius: 10px;
-      padding: 0.7rem 0.9rem;
-      color: #FCA5A5;
+      background: #FFF5F5;
+      border: 1px solid #FED7D7;
+      border-radius: 8px;
+      padding: 0.65rem 0.875rem;
+      color: #C53030;
       font-size: 0.78rem;
       margin-top: 0.75rem;
     }
@@ -187,7 +190,7 @@
     .back-btn {
       background: none;
       border: none;
-      color: rgba(255,255,255,0.3);
+      color: #A0AEC0;
       cursor: pointer;
       padding: 0.2rem 0;
       display: flex;
@@ -195,15 +198,15 @@
       gap: 0.4rem;
       font-size: 0.75rem;
       font-family: 'Inter', sans-serif;
-      margin-bottom: 1.375rem;
+      margin-bottom: 1.25rem;
       transition: color 0.15s;
     }
-    .back-btn:hover { color: rgba(255,255,255,0.65); }
+    .back-btn:hover { color: #4A5568; }
 
     .spinner {
       width: 22px; height: 22px;
-      border: 2px solid rgba(255,255,255,0.08);
-      border-top-color: #4A90E2;
+      border: 2.5px solid #E2E8F0;
+      border-top-color: #1B4F8A;
       border-radius: 50%;
       animation: spin 0.7s linear infinite;
       margin: 0 auto;
@@ -212,32 +215,28 @@
 
     .footer-text {
       text-align: center;
-      color: rgba(255,255,255,0.1);
+      color: rgba(255,255,255,0.2);
       font-size: 0.68rem;
       margin-top: 1.5rem;
       letter-spacing: 0.08em;
-      position: relative;
-      z-index: 10;
     }
 
-    .space-y > * + * { margin-top: 0.9rem; }
+    .space-y > * + * { margin-top: 0.875rem; }
     .hidden { display: none !important; }
   </style>
 </head>
 <body>
 
-  <div class="orb orb-1"></div>
-  <div class="orb orb-2"></div>
-  <div class="orb orb-3"></div>
+  <div class="bg-layer"></div>
+  <div class="bg-dots"></div>
 
-  <div style="width:100%;max-width:368px;position:relative;z-index:10;">
+  <div class="card-wrap">
     <div class="card">
-      <div class="card-accent-line"></div>
 
       <div class="card-header">
         <div class="logo-wrap">
-          <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
-            <path d="M4 8h6v16H4zM13 8h6l6 16h-6zM19 8h6" stroke="#4A90E2" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <svg width="26" height="26" viewBox="0 0 32 32" fill="none">
+            <path d="M4 8h6v16H4zM13 8h6l6 16h-6zM19 8h6" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </div>
         <div class="card-title">INNOVA STC</div>
@@ -248,8 +247,8 @@
 
         <!-- Paso 1 -->
         <div id="step-username">
-          <p class="step-title">Bienvenido</p>
-          <p class="step-sub">Ingresa tu nombre de usuario para continuar</p>
+          <p class="step-title">Iniciar sesión</p>
+          <p class="step-sub">Ingresa tu nombre de usuario</p>
           <div class="space-y">
             <div>
               <label>Usuario</label>
@@ -282,7 +281,7 @@
         <!-- Loading -->
         <div id="step-loading" class="hidden" style="text-align:center;padding:2rem 0;">
           <div class="spinner"></div>
-          <p style="color:rgba(255,255,255,0.25);font-size:0.78rem;margin-top:0.875rem;letter-spacing:0.04em;">Verificando...</p>
+          <p style="color:#A0AEC0;font-size:0.78rem;margin-top:0.875rem;">Verificando...</p>
         </div>
 
       </div>
@@ -403,8 +402,6 @@
     if (existing) window.location.href = 'index.html';
     inputUsername.focus();
   </script>
-
-
 
 </body>
 </html>
