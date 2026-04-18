@@ -1,475 +1,413 @@
-/**
- * admin.js
- * Módulo de administración de usuarios.
- * Solo accesible con rol "admin".
- */
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>INNOVA STC — Acceso</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/base.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-import { getFirestore, collection, getDocs, doc, setDoc,
-         updateDoc, serverTimestamp, query, where }
-  from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
-import { getAuth, createUserWithEmailAndPassword, updatePassword }
-  from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-import { showToast, showModal, showInputModal,
-         roleBadge, activeBadge, setButtonLoading }
-  from '../ui.js';
-import { generateSalt, hashPin, derivePassword } from '../crypto.js';
-import { SEED } from '../firebase-config.js';
-
-// ─────────────────────────────────────────
-// INIT — llamado por router.js al cargar la vista
-// ─────────────────────────────────────────
-export async function initAdmin(session) {
-  if (session.role !== 'admin') return;
-
-  const db   = window.__firebase.db;
-  const auth = window.__firebase.auth;
-
-  await renderUserList(db);
-  bindAdminEvents(db, auth, session);
-}
-
-// ─────────────────────────────────────────
-// RENDERIZADO DE LISTA
-// ─────────────────────────────────────────
-async function renderUserList(db) {
-  const container = document.getElementById('user-list-container');
-  if (!container) return;
-
-  container.innerHTML = loadingRow();
-
-  try {
-    const snap  = await getDocs(collection(db, 'users'));
-    const users = snap.docs.map(d => d.data());
-
-    if (users.length === 0) {
-      container.innerHTML = emptyRow('No hay usuarios registrados.');
-      return;
+    body {
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.25rem;
+      position: relative;
+      overflow: hidden;
+      background: #1B4F8A;
     }
 
-    container.innerHTML = users.map(u => userRow(u)).join('');
+    /* Gradiente de fondo sutil */
+    .bg-layer {
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse at 20% 20%, rgba(255,255,255,0.07) 0%, transparent 55%),
+        radial-gradient(ellipse at 80% 80%, rgba(0,0,0,0.18) 0%, transparent 55%),
+        linear-gradient(145deg, #1E5CA0 0%, #1B4F8A 45%, #143D6E 100%);
+      pointer-events: none;
+    }
 
-  } catch (err) {
-    container.innerHTML = emptyRow('Error al cargar usuarios.');
-    console.error(err);
-  }
-}
+    /* Patrón de puntos muy sutil */
+    .bg-dots {
+      position: fixed;
+      inset: 0;
+      background-image: radial-gradient(rgba(255,255,255,0.06) 1px, transparent 1px);
+      background-size: 28px 28px;
+      pointer-events: none;
+    }
 
-const AREAS_DESTINOS = {
-  OTC:     ['NALVAR', 'JPEREZ', 'RGONZA'],
-  CAMBIOS: [],
-};
+    .card-wrap {
+      width: 100%;
+      max-width: 360px;
+      position: relative;
+      z-index: 10;
+    }
 
-function usuarioOperativoBadge(asignacionActual, legacyAsignado) {
-  if (asignacionActual && asignacionActual.area) {
-    return '<span class="text-xs font-bold px-2 py-0.5 rounded-full text-white" style="background:#1B4F8A">' +
-      asignacionActual.area + ' · ' + asignacionActual.destino + '</span>';
-  }
-  if (legacyAsignado) {
-    return '<span class="text-xs font-bold px-2 py-0.5 rounded-full text-white" style="background:#1B4F8A">OTC · ' + legacyAsignado + '</span>';
-  }
-  return '<span class="text-xs text-gray-400">Sin asignación</span>';
-}
+    .card {
+      background: #fff;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow:
+        0 24px 60px rgba(0,0,0,0.25),
+        0 4px 16px rgba(0,0,0,0.12),
+        0 0 0 1px rgba(255,255,255,0.15);
+    }
 
-function userRow(u) {
-  const showAsignacion = u.role === 'campo';
-  return `
-    <tr class="hover:bg-gray-50 transition-colors">
-      <td class="px-4 py-3">
-        <div class="font-medium text-gray-900 text-sm">${u.displayName}</div>
-        <div class="text-xs text-gray-400 font-mono">${u.username}</div>
-        ${showAsignacion ? '<div class="mt-1">' + usuarioOperativoBadge(u.asignacionActual, u.usuarioOperativoAsignado) + '</div>' : ''}
-      </td>
-      <td class="px-4 py-3 hidden sm:table-cell">${roleBadge(u.role)}</td>
-      <td class="px-4 py-3">${activeBadge(u.active)}</td>
-      <td class="px-4 py-3 text-right">
-        <div class="flex items-center justify-end gap-2">
-          ${showAsignacion ? `
-          <button data-action="asignar" data-uid="${u.uid}" data-name="${u.displayName}" data-asignacion='${JSON.stringify(u.asignacionActual || null)}' data-legacy="${u.usuarioOperativoAsignado || ''}"
-            title="Asignar usuario operativo"
-            class="p-1.5 text-gray-400 hover:text-accent transition-colors rounded">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
-              <circle cx="9" cy="7" r="4"/>
-              <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
-            </svg>
-          </button>` : ''}
-          <button data-action="reset-pin" data-uid="${u.uid}" data-name="${u.displayName}"
-            title="Resetear PIN"
-            class="p-1.5 text-gray-400 hover:text-accent transition-colors rounded">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="23 4 23 10 17 10"/>
-              <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/>
-            </svg>
-          </button>
-          ${u.active ? `
-          <button data-action="deactivate" data-uid="${u.uid}" data-name="${u.displayName}"
-            title="Desactivar usuario"
-            class="p-1.5 text-gray-400 hover:text-danger transition-colors rounded">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
-            </svg>
-          </button>` : `
-          <button data-action="activate" data-uid="${u.uid}" data-name="${u.displayName}"
-            title="Activar usuario"
-            class="p-1.5 text-gray-400 hover:text-success transition-colors rounded">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-          </button>`}
-        </div>
-      </td>
-    </tr>
-  `;
-}
+    /* Header azul del card */
+    .card-header {
+      background: linear-gradient(135deg, #1B4F8A 0%, #1A5299 100%);
+      padding: 2rem 2rem 1.75rem;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
 
-function loadingRow() {
-  return `<tr><td colspan="4" class="px-4 py-8 text-center text-gray-400 text-sm">
-    <div class="flex items-center justify-center gap-2">
-      <svg class="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-      </svg>
-      Cargando usuarios...
-    </div>
-  </td></tr>`;
-}
+    .card-header::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    }
 
-function emptyRow(msg) {
-  return `<tr><td colspan="4" class="px-4 py-8 text-center text-gray-400 text-sm">${msg}</td></tr>`;
-}
+    .logo-wrap {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 58px; height: 58px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.18);
+      margin-bottom: 1rem;
+    }
 
-// ─────────────────────────────────────────
-// EVENTOS
-// ─────────────────────────────────────────
-function bindAdminEvents(db, auth, session) {
-  // Botón "Nuevo usuario"
-  const btnNew = document.getElementById('btn-new-user');
-  if (btnNew) btnNew.addEventListener('click', () => showUserForm(db, auth, session));
+    .card-title {
+      color: #fff;
+      font-size: 1.15rem;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+    }
+    .card-sub {
+      color: rgba(255,255,255,0.55);
+      font-size: 0.72rem;
+      margin-top: 0.3rem;
+      letter-spacing: 0.01em;
+    }
 
-  // Acciones en la tabla (delegación de eventos)
-  const tableBody = document.getElementById('user-list-container');
-  if (tableBody) {
-    tableBody.addEventListener('click', async (e) => {
-      const btn = e.target.closest('[data-action]');
-      if (!btn) return;
+    /* Body */
+    .card-body { padding: 1.875rem 2rem 2rem; }
 
-      const { action, uid, name } = btn.dataset;
+    .step-title {
+      color: #1a202c;
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-bottom: 0.2rem;
+    }
+    .step-sub {
+      color: #718096;
+      font-size: 0.78rem;
+      margin-bottom: 1.5rem;
+    }
 
-      if (action === 'reset-pin')  await handleResetPin(db, uid, name);
-      if (action === 'deactivate') await handleSetActive(db, uid, name, false);
-      if (action === 'activate')   await handleSetActive(db, uid, name, true);
-      if (action === 'asignar')    await handleAsignarOperativo(db, uid, name, btn.dataset.asignacion, btn.dataset.legacy);
+    label {
+      display: block;
+      color: #4A5568;
+      font-size: 0.72rem;
+      font-weight: 600;
+      margin-bottom: 0.45rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
 
-      await renderUserList(db);
-    });
-  }
-}
+    input[type="text"],
+    input[type="password"] {
+      width: 100%;
+      background: #F7FAFC;
+      border: 1.5px solid #E2E8F0;
+      border-radius: 10px;
+      padding: 0.75rem 1rem;
+      color: #1a202c;
+      font-size: 0.875rem;
+      font-family: 'Inter', sans-serif;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+    }
+    input::placeholder { color: #A0AEC0; }
+    input:focus {
+      border-color: #1B4F8A;
+      background: #fff;
+      box-shadow: 0 0 0 3px rgba(27,79,138,0.1);
+    }
 
-// ─────────────────────────────────────────
-// ACCIONES
-// ─────────────────────────────────────────
-async function handleResetPin(db, uid, name) {
-  const newPin = await showInputModal({
-    title:       `Resetear PIN — ${name}`,
-    message:     'Ingresa el nuevo PIN (mínimo 4 dígitos numéricos).',
-    placeholder: 'Nuevo PIN',
-    inputType:   'password',
-    inputMode:   'numeric',
-  });
+    #input-pin {
+      text-align: center;
+      font-size: 1.875rem;
+      letter-spacing: 0.45em;
+      font-family: 'IBM Plex Mono', monospace;
+      padding: 0.875rem 1rem;
+    }
 
-  if (!newPin) return;
-  const cleaned = newPin.replace(/\D/g, '');
-  if (cleaned.length < 4) { showToast('El PIN debe tener al menos 4 dígitos.', 'error'); return; }
+    .btn-primary {
+      width: 100%;
+      background: #1B4F8A;
+      color: #fff;
+      font-weight: 600;
+      font-size: 0.875rem;
+      border: none;
+      border-radius: 10px;
+      padding: 0.875rem;
+      cursor: pointer;
+      margin-top: 1.125rem;
+      letter-spacing: 0.02em;
+      transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+      box-shadow: 0 2px 8px rgba(27,79,138,0.35);
+    }
+    .btn-primary:hover {
+      background: #1a5299;
+      box-shadow: 0 4px 14px rgba(27,79,138,0.4);
+    }
+    .btn-primary:active { transform: scale(0.98); }
+    .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
 
-  try {
-    const salt    = generateSalt();
-    const pinHash = await hashPin(salt, cleaned);
-    await updateDoc(doc(db, 'users', uid), { pinHash, pinSalt: salt });
-    showToast(`PIN de ${name} reseteado correctamente.`, 'success');
-  } catch (err) {
-    showToast('Error al resetear el PIN.', 'error');
-    console.error(err);
-  }
-}
+    .error-box {
+      background: #FFF5F5;
+      border: 1px solid #FED7D7;
+      border-radius: 8px;
+      padding: 0.65rem 0.875rem;
+      color: #C53030;
+      font-size: 0.78rem;
+      margin-top: 0.75rem;
+    }
 
-async function handleSetActive(db, uid, name, active) {
-  const action = active ? 'activar' : 'desactivar';
-  const confirmed = await showModal({
-    title:        `${active ? 'Activar' : 'Desactivar'} usuario`,
-    message:      `¿Confirmas que deseas ${action} a ${name}?`,
-    confirmLabel: active ? 'Activar' : 'Desactivar',
-    confirmType:  active ? 'primary' : 'danger',
-  });
+    .back-btn {
+      background: none;
+      border: none;
+      color: #A0AEC0;
+      cursor: pointer;
+      padding: 0.2rem 0;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.75rem;
+      font-family: 'Inter', sans-serif;
+      margin-bottom: 1.25rem;
+      transition: color 0.15s;
+    }
+    .back-btn:hover { color: #4A5568; }
 
-  if (!confirmed) return;
+    .spinner {
+      width: 22px; height: 22px;
+      border: 2.5px solid #E2E8F0;
+      border-top-color: #1B4F8A;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 0 auto;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
-  try {
-    await updateDoc(doc(db, 'users', uid), { active });
-    showToast(`${name} ha sido ${active ? 'activado' : 'desactivado'}.`, active ? 'success' : 'info');
-  } catch (err) {
-    showToast('Error al actualizar el usuario.', 'error');
-    console.error(err);
-  }
-}
+    .footer-text {
+      text-align: center;
+      color: rgba(255,255,255,0.2);
+      font-size: 0.68rem;
+      margin-top: 1.5rem;
+      letter-spacing: 0.08em;
+    }
 
-// ─────────────────────────────────────────
-// ASIGNAR USUARIO OPERATIVO — nueva arquitectura
-// ─────────────────────────────────────────
-async function handleAsignarOperativo(db, uid, name, asignacionJSON, legacyAsignado) {
-  let asignacionActual = null;
-  try { asignacionActual = asignacionJSON && asignacionJSON !== 'null' ? JSON.parse(asignacionJSON) : null; } catch(e) {}
-  if (!asignacionActual && legacyAsignado) {
-    asignacionActual = { area: 'OTC', destino: legacyAsignado };
-  }
+    .space-y > * + * { margin-top: 0.875rem; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
 
-  const areaActual    = asignacionActual?.area    || null;
-  const destinoActual = asignacionActual?.destino || null;
-  let areaSeleccionada = areaActual || 'OTC';
+  <div class="bg-layer"></div>
+  <div class="bg-dots"></div>
 
-  function buildHTML() {
-    const destinos = AREAS_DESTINOS[areaSeleccionada] || [];
-    return (
-      '<div class="bg-white rounded-2xl shadow-xl w-full max-w-sm">' +
-        '<div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">' +
-          '<h2 class="font-semibold text-gray-900">Asignación operativa</h2>' +
-          '<button id="ao-close" class="text-gray-400 hover:text-gray-700">✕</button>' +
-        '</div>' +
-        '<div class="px-5 py-4 space-y-4">' +
-          '<p class="text-sm text-gray-600">Asignando a <strong>' + name + '</strong></p>' +
-          '<div>' +
-            '<p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Área operativa</p>' +
-            '<div class="flex gap-2">' +
-              Object.keys(AREAS_DESTINOS).map(function(area) {
-                const activa = area === areaSeleccionada;
-                return '<button data-area="' + area + '" class="flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all ' +
-                  (activa ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-500') + '">' + area + '</button>';
-              }).join('') +
-            '</div>' +
-          '</div>' +
-          '<div>' +
-            '<p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Destino</p>' +
-            '<div class="space-y-2">' +
-              (destinos.length === 0
-                ? '<p class="text-xs text-gray-400 px-3 py-2">Sin destinos configurados aún.</p>'
-                : destinos.map(function(d) {
-                    const sel = d === destinoActual && areaSeleccionada === areaActual;
-                    return '<button data-destino="' + d + '" class="w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 transition-all ' +
-                      (sel ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300') + '">' +
-                      '<span class="font-semibold text-gray-900">' + d + '</span>' +
-                      (sel ? '<span class="text-xs font-bold text-blue-600">✓ Actual</span>' : '') +
-                    '</button>';
-                  }).join('')
-              ) +
-              '<button data-destino="" class="w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 transition-all ' +
-                (!asignacionActual ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-white hover:border-gray-300') + '">' +
-                '<span class="font-medium text-gray-500">Sin asignación</span>' +
-                (!asignacionActual ? '<span class="text-xs font-bold text-red-600">✓ Actual</span>' : '') +
-              '</button>' +
-            '</div>' +
-          '</div>' +
-        '</div>' +
-      '</div>'
-    );
-  }
+  <div class="card-wrap">
+    <div class="card">
 
-  const overlay = document.createElement('div');
-  overlay.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4';
-  overlay.innerHTML = buildHTML();
-  document.body.appendChild(overlay);
-
-  function rebind() {
-    overlay.querySelector('#ao-close').onclick = () => overlay.remove();
-    overlay.querySelectorAll('[data-area]').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        areaSeleccionada = btn.dataset.area;
-        overlay.innerHTML = buildHTML();
-        rebind();
-      });
-    });
-    overlay.querySelectorAll('[data-destino]').forEach(function(btn) {
-      btn.addEventListener('click', async function() {
-        const destino = btn.dataset.destino || null;
-        const nuevaAsignacion = destino ? { area: areaSeleccionada, destino } : null;
-        try {
-          await updateDoc(doc(db, 'users', uid), {
-            asignacionActual: nuevaAsignacion,
-            usuarioOperativoAsignado: (nuevaAsignacion?.area === 'OTC' ? nuevaAsignacion.destino : null) || null,
-          });
-          showToast(nuevaAsignacion
-            ? name + ' → ' + nuevaAsignacion.area + ' · ' + nuevaAsignacion.destino
-            : name + ' sin asignación.', 'success');
-          overlay.remove();
-          await renderUserList(db);
-        } catch(e) {
-          showToast('Error al actualizar.', 'error');
-          console.error(e);
-        }
-      });
-    });
-  }
-  rebind();
-}
-
-// ─────────────────────────────────────────
-// FORMULARIO DE NUEVO USUARIO
-// ─────────────────────────────────────────
-function showUserForm(db, auth, session) {
-  const overlay = document.createElement('div');
-  overlay.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto';
-  overlay.innerHTML = `
-    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md my-4">
-      <div class="flex items-center justify-between px-6 py-5 border-b border-gray-100">
-        <h2 class="font-semibold text-gray-900">Nuevo usuario</h2>
-        <button id="close-form" class="text-gray-400 hover:text-gray-700 transition-colors">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      <div class="card-header">
+        <div class="logo-wrap">
+          <svg width="26" height="26" viewBox="0 0 32 32" fill="none">
+            <path d="M4 8h6v16H4zM13 8h6l6 16h-6zM19 8h6" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
-        </button>
-      </div>
-      <div class="px-6 py-5 space-y-4">
-        ${formField('displayName', 'Nombre completo', 'text', 'Ej. Bryan Francia')}
-        ${formField('username', 'Usuario', 'text', 'Ej. bfrancia')}
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1.5">Rol</label>
-          <select id="field-role"
-            class="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent">
-            <option value="campo">Campo</option>
-            <option value="coordinadora">Coordinadora</option>
-            <option value="admin">Administrador</option>
-          </select>
         </div>
-        ${formField('pin', 'PIN inicial', 'password', 'Mínimo 4 dígitos', 'numeric')}
-        <div id="form-error" class="hidden text-sm text-danger bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5"></div>
+        <div class="card-title">INNOVA STC</div>
+        <div class="card-sub">Servicios Técnicos y Comerciales</div>
       </div>
-      <div class="px-6 py-4 border-t border-gray-100 flex gap-3">
-        <button id="cancel-form"
-          class="flex-1 border border-gray-300 text-gray-700 font-medium rounded-lg py-2.5 text-sm hover:bg-gray-50 transition-colors">
-          Cancelar
-        </button>
-        <button id="submit-form"
-          class="flex-1 bg-primary hover:bg-accent text-white font-medium rounded-lg py-2.5 text-sm transition-colors">
-          Crear usuario
-        </button>
+
+      <div class="card-body">
+
+        <!-- Paso 1 -->
+        <div id="step-username">
+          <p class="step-title">Iniciar sesión</p>
+          <p class="step-sub">Ingresa tu nombre de usuario</p>
+          <div class="space-y">
+            <div>
+              <label>Usuario</label>
+              <input id="input-username" type="text" autocomplete="username"
+                autocapitalize="none" spellcheck="false" placeholder="ej. juan.perez"/>
+            </div>
+            <div id="error-username" class="error-box hidden"></div>
+            <button id="btn-username" class="btn-primary">Continuar →</button>
+          </div>
+        </div>
+
+        <!-- Paso 2 -->
+        <div id="step-pin" class="hidden">
+          <button id="btn-back" class="back-btn">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+            Volver
+          </button>
+          <p class="step-title">Ingresa tu PIN</p>
+          <p class="step-sub" id="pin-username-label"></p>
+          <div class="space-y">
+            <div>
+              <label>PIN</label>
+              <input id="input-pin" type="password" inputmode="numeric" maxlength="8" placeholder="••••"/>
+            </div>
+            <div id="error-pin" class="error-box hidden"></div>
+            <button id="btn-pin" class="btn-primary">Entrar</button>
+          </div>
+        </div>
+
+        <!-- Loading -->
+        <div id="step-loading" class="hidden" style="text-align:center;padding:2rem 0;">
+          <div class="spinner"></div>
+          <p style="color:#A0AEC0;font-size:0.78rem;margin-top:0.875rem;">Verificando...</p>
+        </div>
+
       </div>
     </div>
-  `;
+    <p class="footer-text">INNOVA STC &nbsp;·&nbsp; Uso interno</p>
+  </div>
 
-  document.body.appendChild(overlay);
+  <!-- Firebase CDN -->
+  <script type="module">
+    import { initializeApp }               from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+    import { getAuth, signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+    import { getFirestore, collection, query, where, getDocs, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+    import { FIREBASE_CONFIG, SEED } from './js/firebase-config.js';
+    import { hashPin, derivePassword } from './js/crypto.js';
 
-  overlay.querySelector('#close-form').addEventListener('click',  () => overlay.remove());
-  overlay.querySelector('#cancel-form').addEventListener('click', () => overlay.remove());
+    const app  = initializeApp(FIREBASE_CONFIG);
+    const auth = getAuth(app);
+    const db   = getFirestore(app);
 
-  // Solo dígitos en PIN
-  overlay.querySelector('#field-pin').addEventListener('input', (e) => {
-    e.target.value = e.target.value.replace(/\D/g, '').slice(0, 8);
-  });
+    let currentUser = null;
 
-  overlay.querySelector('#submit-form').addEventListener('click', async () => {
-    await handleCreateUser(db, auth, overlay, session);
-  });
-}
+    const stepUsername  = document.getElementById('step-username');
+    const stepPin       = document.getElementById('step-pin');
+    const stepLoading   = document.getElementById('step-loading');
+    const inputUsername = document.getElementById('input-username');
+    const inputPin      = document.getElementById('input-pin');
+    const btnUsername   = document.getElementById('btn-username');
+    const btnPin        = document.getElementById('btn-pin');
+    const btnBack       = document.getElementById('btn-back');
+    const errorUsername = document.getElementById('error-username');
+    const errorPin      = document.getElementById('error-pin');
+    const pinLabel      = document.getElementById('pin-username-label');
 
-function formField(id, label, type, placeholder, inputMode = '') {
-  return `
-    <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1.5">${label}</label>
-      <input id="field-${id}" type="${type}" placeholder="${placeholder}"
-        ${inputMode ? `inputmode="${inputMode}"` : ''}
-        class="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent" />
-    </div>
-  `;
-}
-
-async function handleCreateUser(db, auth, overlay, session) {
-  const displayName = overlay.querySelector('#field-displayName').value.trim();
-  const username    = overlay.querySelector('#field-username').value.trim().toLowerCase();
-  const role        = overlay.querySelector('#field-role').value;
-  const pin         = overlay.querySelector('#field-pin').value.replace(/\D/g, '');
-  const errorEl     = overlay.querySelector('#form-error');
-  const submitBtn   = overlay.querySelector('#submit-form');
-
-  errorEl.classList.add('hidden');
-
-  // Validaciones básicas
-  if (!displayName || !username || !pin) {
-    errorEl.textContent = 'Todos los campos son obligatorios.';
-    errorEl.classList.remove('hidden');
-    return;
-  }
-  if (pin.length < 4) {
-    errorEl.textContent = 'El PIN debe tener al menos 4 dígitos.';
-    errorEl.classList.remove('hidden');
-    return;
-  }
-  if (!/^[a-z0-9._]+$/.test(username)) {
-    errorEl.textContent = 'El usuario solo puede contener letras, números, puntos y guiones bajos.';
-    errorEl.classList.remove('hidden');
-    return;
-  }
-
-  // Verificar que el username no exista ya
-  try {
-    const q    = query(collection(db, 'users'), where('username', '==', username));
-    const snap = await getDocs(q);
-    if (!snap.empty) {
-      errorEl.textContent = 'Ese nombre de usuario ya está en uso.';
-      errorEl.classList.remove('hidden');
-      return;
+    function showStep(step) {
+      [stepUsername, stepPin, stepLoading].forEach(s => s.classList.add('hidden'));
+      step.classList.remove('hidden');
     }
-  } catch (err) {
-    errorEl.textContent = 'Error al verificar el usuario.';
-    errorEl.classList.remove('hidden');
-    return;
-  }
+    function showError(el, msg) { el.textContent = msg; el.classList.remove('hidden'); }
+    function hideError(el) { el.classList.add('hidden'); }
 
-  submitBtn.disabled = true;
-  submitBtn.innerHTML = `<svg class="animate-spin w-4 h-4 mx-auto" viewBox="0 0 24 24" fill="none">
-    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-  </svg>`;
+    async function handleUsername() {
+      const username = inputUsername.value.trim().toLowerCase();
+      if (!username) return;
+      hideError(errorUsername);
+      btnUsername.disabled = true;
+      showStep(stepLoading);
+      try {
+        const q    = query(collection(db, 'users'), where('username', '==', username));
+        const snap = await getDocs(q);
+        if (snap.empty) { showStep(stepUsername); showError(errorUsername, 'Usuario no encontrado.'); btnUsername.disabled = false; return; }
+        const data = snap.docs[0].data();
+        if (!data.active) { showStep(stepUsername); showError(errorUsername, 'Usuario inactivo. Contacta al administrador.'); btnUsername.disabled = false; return; }
+        currentUser = { uid: data.uid, internalEmail: data.internalEmail, username: data.username };
+        pinLabel.textContent = '@' + username;
+        showStep(stepPin);
+        inputPin.focus();
+      } catch (err) {
+        showStep(stepUsername);
+        showError(errorUsername, 'Error al conectar. Intenta de nuevo.');
+        btnUsername.disabled = false;
+        console.error(err);
+      }
+    }
 
-  try {
-    const internalEmail = `${username}@innova-stc.internal`;
+    async function handlePin() {
+      const pinInput = inputPin.value.replace(/\D/g, '');
+      if (pinInput.length < 4) return;
+      hideError(errorPin);
+      btnPin.disabled = true;
+      showStep(stepLoading);
+      try {
+        const internalPass = await derivePassword(currentUser.uid, SEED);
+        await signInWithEmailAndPassword(auth, currentUser.internalEmail, internalPass);
+        const snap = await getDoc(doc(db, 'users', currentUser.uid));
+        if (!snap.exists()) throw new Error('Perfil no encontrado.');
+        const profile = snap.data();
+        if (!profile.active) { await signOut(auth); showStep(stepPin); showError(errorPin, 'Usuario inactivo.'); btnPin.disabled = false; return; }
+        const computed = await hashPin(profile.pinSalt, pinInput);
+        if (computed !== profile.pinHash) {
+          await signOut(auth);
+          inputPin.value = '';
+          showStep(stepPin);
+          showError(errorPin, 'PIN incorrecto.');
+          btnPin.disabled = false;
+          return;
+        }
+        sessionStorage.setItem('innova_session', JSON.stringify({
+          uid:                      profile.uid,
+          username:                 profile.username,
+          displayName:              profile.displayName,
+          role:                     profile.role,
+          // Nueva arquitectura
+          asignacionActual:         profile.asignacionActual || null,
+          // Compatibilidad temporal
+          usuarioOperativoAsignado: profile.usuarioOperativoAsignado || null,
+          pinVerified:              true,
+        }));
+        window.location.href = 'index.html';
+      } catch (err) {
+        await signOut(auth).catch(() => {});
+        inputPin.value = '';
+        showStep(stepPin);
+        showError(errorPin, 'Error de autenticación. Intenta de nuevo.');
+        btnPin.disabled = false;
+        console.error(err);
+      }
+    }
 
-    // 1. Crear en Firebase Auth con contraseña temporal
-    const cred = await createUserWithEmailAndPassword(auth, internalEmail, 'TEMP_PASS_placeholder');
-    const uid  = cred.user.uid;
-
-    // 2. Derivar contraseña única real y actualizarla
-    const realPass = await derivePassword(uid, SEED);
-    await updatePassword(cred.user, realPass);
-
-    // 3. Hashear PIN
-    const salt    = generateSalt();
-    const pinHash = await hashPin(salt, pin);
-
-    // 4. Guardar perfil en Firestore
-    await setDoc(doc(db, 'users', uid), {
-      uid,
-      username,
-      displayName,
-      role,
-      internalEmail,
-      pinHash,
-      pinSalt:   salt,
-      active:    true,
-      createdAt: serverTimestamp(),
-      createdBy: session.uid,
+    btnUsername.addEventListener('click', handleUsername);
+    inputUsername.addEventListener('keydown', e => { if (e.key === 'Enter') handleUsername(); });
+    btnPin.addEventListener('click', handlePin);
+    inputPin.addEventListener('keydown', e => { if (e.key === 'Enter') handlePin(); });
+    inputPin.addEventListener('input', e => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 8); });
+    btnBack.addEventListener('click', () => {
+      currentUser = null;
+      inputPin.value = '';
+      hideError(errorPin);
+      showStep(stepUsername);
+      btnUsername.disabled = false;
+      inputUsername.focus();
     });
 
-    overlay.remove();
-    showToast(`Usuario ${displayName} creado correctamente.`, 'success');
+    const existing = sessionStorage.getItem('innova_session');
+    if (existing) window.location.href = 'index.html';
+    inputUsername.focus();
+  </script>
 
-    // Refrescar lista
-    await renderUserList(db);
-
-  } catch (err) {
-    submitBtn.disabled = false;
-    submitBtn.textContent = 'Crear usuario';
-    errorEl.textContent = err.message?.includes('email-already-in-use')
-      ? 'Ese nombre de usuario ya está registrado en el sistema.'
-      : 'Error al crear el usuario. Intenta de nuevo.';
-    errorEl.classList.remove('hidden');
-    console.error(err);
-  }
-}
+</body>
+</html>
