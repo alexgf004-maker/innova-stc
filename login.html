@@ -3,157 +3,212 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>INNOVA STC — Preview</title>
+  <title>INNOVA STC — Acceso</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/base.css" />
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
       font-family: 'Inter', sans-serif;
       min-height: 100vh;
-      background: #111214;
+      background: #0C0E12;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 1rem;
-      position: relative;
+      padding: 1.25rem;
       overflow: hidden;
+      position: relative;
     }
 
-    /* Textura sutil */
-    /* Orbs pronunciados para que el blur tenga efecto */
+    /* Orbs de fondo */
     .orb {
       position: fixed;
       border-radius: 50%;
       pointer-events: none;
-      filter: blur(80px);
+      filter: blur(90px);
+      opacity: 1;
     }
     .orb-1 {
-      width: 500px; height: 500px;
-      top: -15%; left: -10%;
-      background: radial-gradient(circle, rgba(52,211,153,0.18) 0%, transparent 70%);
+      width: 560px; height: 560px;
+      top: -20%; left: -15%;
+      background: radial-gradient(circle, rgba(30,80,200,0.30) 0%, transparent 65%);
     }
     .orb-2 {
-      width: 400px; height: 400px;
-      bottom: -10%; right: -5%;
-      background: radial-gradient(circle, rgba(30,80,160,0.25) 0%, transparent 70%);
+      width: 480px; height: 480px;
+      bottom: -15%; right: -10%;
+      background: radial-gradient(circle, rgba(30,80,200,0.22) 0%, transparent 65%);
     }
     .orb-3 {
-      width: 300px; height: 300px;
-      top: 40%; left: 50%;
-      transform: translateX(-50%);
-      background: radial-gradient(circle, rgba(52,211,153,0.08) 0%, transparent 70%);
+      width: 320px; height: 320px;
+      top: 55%; left: 55%;
+      background: radial-gradient(circle, rgba(100,160,255,0.10) 0%, transparent 65%);
     }
 
+    /* Card principal */
     .card {
       width: 100%;
-      max-width: 360px;
-      background: rgba(20,22,26,0.75);
-      border: 1px solid rgba(255,255,255,0.09);
-      border-radius: 20px;
-      overflow: hidden;
+      max-width: 368px;
       position: relative;
-      z-index: 1;
-      box-shadow: 0 24px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04);
-      backdrop-filter: blur(24px);
-      -webkit-backdrop-filter: blur(24px);
+      z-index: 10;
+      border-radius: 24px;
+      overflow: hidden;
+      background: rgba(18, 21, 28, 0.72);
+      border: 1px solid rgba(255,255,255,0.09);
+      box-shadow:
+        0 32px 80px rgba(0,0,0,0.55),
+        0 0 0 1px rgba(255,255,255,0.04) inset;
+      backdrop-filter: blur(28px);
+      -webkit-backdrop-filter: blur(28px);
     }
 
-    /* Línea de acento arriba */
-    .card::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0;
+    /* Línea superior de acento */
+    .card-accent-line {
       height: 2px;
-      background: linear-gradient(90deg, transparent, #34D399, transparent);
+      background: linear-gradient(90deg, transparent 0%, #1B4F8A 35%, #4A90E2 65%, transparent 100%);
     }
 
+    /* Header del card */
     .card-header {
-      padding: 2rem 2rem 1.5rem;
+      padding: 2rem 2.25rem 1.75rem;
       text-align: center;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      position: relative;
     }
 
-    .logo-ring {
-      width: 56px;
-      height: 56px;
-      margin: 0 auto 1rem;
-      border-radius: 14px;
-      background: #242628;
-      border: 1px solid rgba(255,255,255,0.08);
-      display: flex;
+    .logo-wrap {
+      display: inline-flex;
       align-items: center;
       justify-content: center;
+      width: 60px; height: 60px;
+      border-radius: 16px;
+      background: rgba(27,79,138,0.25);
+      border: 1px solid rgba(74,144,226,0.25);
+      margin-bottom: 1rem;
+      box-shadow: 0 0 24px rgba(27,79,138,0.3);
     }
 
     .card-title {
-      color: #F1F3F5;
-      font-size: 1.1rem;
-      font-weight: 700;
-      letter-spacing: 0.1em;
+      color: #F0F4FF;
+      font-size: 1.125rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
     }
     .card-sub {
-      color: rgba(255,255,255,0.3);
+      color: rgba(255,255,255,0.28);
       font-size: 0.72rem;
       margin-top: 0.3rem;
+      letter-spacing: 0.02em;
     }
 
-    .card-body { padding: 1.75rem 2rem 2rem; }
+    /* Body */
+    .card-body { padding: 1.875rem 2.25rem 2.25rem; }
 
     .step-title {
-      color: #F1F3F5;
+      color: #E8EEFF;
       font-size: 0.95rem;
       font-weight: 600;
-      margin-bottom: 0.2rem;
+      margin-bottom: 0.25rem;
     }
     .step-sub {
-      color: rgba(255,255,255,0.3);
+      color: rgba(255,255,255,0.28);
       font-size: 0.78rem;
-      margin-bottom: 1.5rem;
+      margin-bottom: 1.625rem;
     }
 
     label {
       display: block;
-      color: rgba(255,255,255,0.35);
-      font-size: 0.7rem;
+      color: rgba(255,255,255,0.32);
+      font-size: 0.68rem;
       font-weight: 600;
       margin-bottom: 0.5rem;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.1em;
       text-transform: uppercase;
     }
 
     input {
       width: 100%;
-      background: #111214;
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 10px;
-      padding: 0.75rem 1rem;
-      color: #F1F3F5;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 12px;
+      padding: 0.8rem 1rem;
+      color: #E8EEFF;
       font-size: 0.875rem;
+      font-family: 'Inter', sans-serif;
       outline: none;
-      transition: border-color 0.2s, box-shadow 0.2s;
+      transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
     }
-    input::placeholder { color: rgba(255,255,255,0.15); }
+    input::placeholder { color: rgba(255,255,255,0.16); }
     input:focus {
-      border-color: #34D399;
-      box-shadow: 0 0 0 3px rgba(52,211,153,0.08);
+      border-color: rgba(74,144,226,0.6);
+      background: rgba(27,79,138,0.12);
+      box-shadow: 0 0 0 3px rgba(27,79,138,0.15);
+    }
+
+    #input-pin {
+      text-align: center;
+      font-size: 1.875rem;
+      letter-spacing: 0.45em;
+      font-family: 'IBM Plex Mono', monospace;
+      padding: 0.9rem 1rem;
     }
 
     .btn-primary {
       width: 100%;
-      background: #34D399;
-      color: #0D1F0D;
-      font-weight: 700;
+      background: linear-gradient(135deg, #1B4F8A 0%, #2563EB 100%);
+      color: #fff;
+      font-weight: 600;
       font-size: 0.875rem;
       border: none;
-      border-radius: 10px;
-      padding: 0.875rem;
+      border-radius: 12px;
+      padding: 0.9rem;
       cursor: pointer;
-      margin-top: 1rem;
-      letter-spacing: 0.02em;
+      margin-top: 1.125rem;
+      letter-spacing: 0.03em;
       transition: opacity 0.15s, transform 0.1s;
+      box-shadow: 0 4px 20px rgba(27,79,138,0.4);
     }
-    .btn-primary:hover { opacity: 0.9; }
+    .btn-primary:hover { opacity: 0.88; }
     .btn-primary:active { transform: scale(0.98); }
+    .btn-primary:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    .error-box {
+      background: rgba(220,38,38,0.1);
+      border: 1px solid rgba(220,38,38,0.25);
+      border-radius: 10px;
+      padding: 0.7rem 0.9rem;
+      color: #FCA5A5;
+      font-size: 0.78rem;
+      margin-top: 0.75rem;
+    }
+
+    .back-btn {
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.3);
+      cursor: pointer;
+      padding: 0.2rem 0;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.75rem;
+      font-family: 'Inter', sans-serif;
+      margin-bottom: 1.375rem;
+      transition: color 0.15s;
+    }
+    .back-btn:hover { color: rgba(255,255,255,0.65); }
+
+    .spinner {
+      width: 22px; height: 22px;
+      border: 2px solid rgba(255,255,255,0.08);
+      border-top-color: #4A90E2;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 0 auto;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
     .footer-text {
       text-align: center;
@@ -161,35 +216,40 @@
       font-size: 0.68rem;
       margin-top: 1.5rem;
       letter-spacing: 0.08em;
+      position: relative;
+      z-index: 10;
     }
 
-    .space-y > * + * { margin-top: 0.875rem; }
-    .error-box { background:rgba(220,38,38,0.12);border:1px solid rgba(220,38,38,0.3);border-radius:10px;padding:0.65rem 0.875rem;color:#FCA5A5;font-size:0.78rem; }
-    .back-btn { background:none;border:none;color:rgba(255,255,255,0.35);cursor:pointer;padding:0.2rem;display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;margin-bottom:1.25rem;transition:color 0.2s;font-family:'Inter',sans-serif; }
-    .back-btn:hover { color:rgba(255,255,255,0.7); }
-    .hidden { display:none !important; }
+    .space-y > * + * { margin-top: 0.9rem; }
+    .hidden { display: none !important; }
   </style>
 </head>
 <body>
 
-  <div class="orb orb-1"></div><div class="orb orb-2"></div><div class="orb orb-3"></div>
-  <div style="width:100%;max-width:360px;position:relative;z-index:1;">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+
+  <div style="width:100%;max-width:368px;position:relative;z-index:10;">
     <div class="card">
+      <div class="card-accent-line"></div>
+
       <div class="card-header">
-        <div class="logo-ring">
-          <svg width="26" height="26" viewBox="0 0 32 32" fill="none">
-            <path d="M4 8h6v16H4zM13 8h6l6 16h-6zM19 8h6" stroke="#34D399" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <div class="logo-wrap">
+          <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
+            <path d="M4 8h6v16H4zM13 8h6l6 16h-6zM19 8h6" stroke="#4A90E2" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </div>
         <div class="card-title">INNOVA STC</div>
         <div class="card-sub">Servicios Técnicos y Comerciales</div>
       </div>
+
       <div class="card-body">
 
-        <!-- Paso 1: Username -->
+        <!-- Paso 1 -->
         <div id="step-username">
           <p class="step-title">Bienvenido</p>
-          <p class="step-sub">Ingresa tu nombre de usuario</p>
+          <p class="step-sub">Ingresa tu nombre de usuario para continuar</p>
           <div class="space-y">
             <div>
               <label>Usuario</label>
@@ -201,18 +261,18 @@
           </div>
         </div>
 
-        <!-- Paso 2: PIN -->
+        <!-- Paso 2 -->
         <div id="step-pin" class="hidden">
           <button id="btn-back" class="back-btn">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
             Volver
           </button>
           <p class="step-title">Ingresa tu PIN</p>
-          <p class="step-sub" id="pin-username-label" style="color:rgba(255,255,255,0.5)"></p>
+          <p class="step-sub" id="pin-username-label"></p>
           <div class="space-y">
             <div>
               <label>PIN</label>
-              <input id="input-pin" type="password" inputmode="numeric" maxlength="8" placeholder="••••" style="text-align:center;font-size:1.75rem;letter-spacing:0.4em;font-family:'IBM Plex Mono',monospace;padding:0.875rem 1rem;"/>
+              <input id="input-pin" type="password" inputmode="numeric" maxlength="8" placeholder="••••"/>
             </div>
             <div id="error-pin" class="error-box hidden"></div>
             <button id="btn-pin" class="btn-primary">Entrar</button>
@@ -220,14 +280,14 @@
         </div>
 
         <!-- Loading -->
-        <div id="step-loading" class="hidden" style="text-align:center;padding:1.5rem 0">
-          <div style="width:20px;height:20px;border:2px solid rgba(255,255,255,0.1);border-top-color:#34D399;border-radius:50%;animation:spin 0.7s linear infinite;margin:0 auto;"></div>
-          <p style="color:rgba(255,255,255,0.3);font-size:0.8rem;margin-top:0.75rem">Verificando...</p>
+        <div id="step-loading" class="hidden" style="text-align:center;padding:2rem 0;">
+          <div class="spinner"></div>
+          <p style="color:rgba(255,255,255,0.25);font-size:0.78rem;margin-top:0.875rem;letter-spacing:0.04em;">Verificando...</p>
         </div>
 
       </div>
     </div>
-    <p class="footer-text">INNOVA STC · Uso interno</p>
+    <p class="footer-text">INNOVA STC &nbsp;·&nbsp; Uso interno</p>
   </div>
 
   <!-- Firebase CDN -->
@@ -343,6 +403,7 @@
     if (existing) window.location.href = 'index.html';
     inputUsername.focus();
   </script>
+
 
 
 </body>
