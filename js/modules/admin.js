@@ -54,11 +54,20 @@ async function renderUserList(db) {
   }
 }
 
-const USUARIOS_OPERATIVOS = ['NALVAR', 'RGONZA', 'JPEREZ'];
+const AREAS_DESTINOS = {
+  OTC:     ['NALVAR', 'JPEREZ', 'RGONZA'],
+  CAMBIOS: [],
+};
 
-function usuarioOperativoBadge(asignado) {
-  if (!asignado) return '<span class="text-xs text-gray-400">Sin asignación</span>';
-  return '<span class="text-xs font-bold px-2 py-0.5 rounded-full text-white" style="background:#1B4F8A">' + asignado + '</span>';
+function usuarioOperativoBadge(asignacionActual, legacyAsignado) {
+  if (asignacionActual && asignacionActual.area) {
+    return '<span class="text-xs font-bold px-2 py-0.5 rounded-full text-white" style="background:#1B4F8A">' +
+      asignacionActual.area + ' · ' + asignacionActual.destino + '</span>';
+  }
+  if (legacyAsignado) {
+    return '<span class="text-xs font-bold px-2 py-0.5 rounded-full text-white" style="background:#1B4F8A">OTC · ' + legacyAsignado + '</span>';
+  }
+  return '<span class="text-xs text-gray-400">Sin asignación</span>';
 }
 
 function userRow(u) {
@@ -68,14 +77,14 @@ function userRow(u) {
       <td class="px-4 py-3">
         <div class="font-medium text-gray-900 text-sm">${u.displayName}</div>
         <div class="text-xs text-gray-400 font-mono">${u.username}</div>
-        ${showAsignacion ? '<div class="mt-1">' + usuarioOperativoBadge(u.usuarioOperativoAsignado) + '</div>' : ''}
+        ${showAsignacion ? '<div class="mt-1">' + usuarioOperativoBadge(u.asignacionActual, u.usuarioOperativoAsignado) + '</div>' : ''}
       </td>
       <td class="px-4 py-3 hidden sm:table-cell">${roleBadge(u.role)}</td>
       <td class="px-4 py-3">${activeBadge(u.active)}</td>
       <td class="px-4 py-3 text-right">
         <div class="flex items-center justify-end gap-2">
           ${showAsignacion ? `
-          <button data-action="asignar" data-uid="${u.uid}" data-name="${u.displayName}" data-asignado="${u.usuarioOperativoAsignado || ''}"
+          <button data-action="asignar" data-uid="${u.uid}" data-name="${u.displayName}" data-asignacion='${JSON.stringify(u.asignacionActual || null)}' data-legacy="${u.usuarioOperativoAsignado || ''}"
             title="Asignar usuario operativo"
             class="p-1.5 text-gray-400 hover:text-accent transition-colors rounded">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -149,7 +158,7 @@ function bindAdminEvents(db, auth, session) {
       if (action === 'reset-pin')  await handleResetPin(db, uid, name);
       if (action === 'deactivate') await handleSetActive(db, uid, name, false);
       if (action === 'activate')   await handleSetActive(db, uid, name, true);
-      if (action === 'asignar')    await handleAsignarOperativo(db, uid, name, btn.dataset.asignado);
+      if (action === 'asignar')    await handleAsignarOperativo(db, uid, name, btn.dataset.asignacion, btn.dataset.legacy);
 
       await renderUserList(db);
     });
@@ -204,57 +213,101 @@ async function handleSetActive(db, uid, name, active) {
 }
 
 // ─────────────────────────────────────────
-// ASIGNAR USUARIO OPERATIVO
+// ASIGNAR USUARIO OPERATIVO — nueva arquitectura
 // ─────────────────────────────────────────
-async function handleAsignarOperativo(db, uid, name, actual) {
+async function handleAsignarOperativo(db, uid, name, asignacionJSON, legacyAsignado) {
+  let asignacionActual = null;
+  try { asignacionActual = asignacionJSON && asignacionJSON !== 'null' ? JSON.parse(asignacionJSON) : null; } catch(e) {}
+  if (!asignacionActual && legacyAsignado) {
+    asignacionActual = { area: 'OTC', destino: legacyAsignado };
+  }
+
+  const areaActual    = asignacionActual?.area    || null;
+  const destinoActual = asignacionActual?.destino || null;
+  let areaSeleccionada = areaActual || 'OTC';
+
+  function buildHTML() {
+    const destinos = AREAS_DESTINOS[areaSeleccionada] || [];
+    return (
+      '<div class="bg-white rounded-2xl shadow-xl w-full max-w-sm">' +
+        '<div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">' +
+          '<h2 class="font-semibold text-gray-900">Asignación operativa</h2>' +
+          '<button id="ao-close" class="text-gray-400 hover:text-gray-700">✕</button>' +
+        '</div>' +
+        '<div class="px-5 py-4 space-y-4">' +
+          '<p class="text-sm text-gray-600">Asignando a <strong>' + name + '</strong></p>' +
+          '<div>' +
+            '<p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Área operativa</p>' +
+            '<div class="flex gap-2">' +
+              Object.keys(AREAS_DESTINOS).map(function(area) {
+                const activa = area === areaSeleccionada;
+                return '<button data-area="' + area + '" class="flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all ' +
+                  (activa ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-500') + '">' + area + '</button>';
+              }).join('') +
+            '</div>' +
+          '</div>' +
+          '<div>' +
+            '<p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Destino</p>' +
+            '<div class="space-y-2">' +
+              (destinos.length === 0
+                ? '<p class="text-xs text-gray-400 px-3 py-2">Sin destinos configurados aún.</p>'
+                : destinos.map(function(d) {
+                    const sel = d === destinoActual && areaSeleccionada === areaActual;
+                    return '<button data-destino="' + d + '" class="w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 transition-all ' +
+                      (sel ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300') + '">' +
+                      '<span class="font-semibold text-gray-900">' + d + '</span>' +
+                      (sel ? '<span class="text-xs font-bold text-blue-600">✓ Actual</span>' : '') +
+                    '</button>';
+                  }).join('')
+              ) +
+              '<button data-destino="" class="w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 transition-all ' +
+                (!asignacionActual ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-white hover:border-gray-300') + '">' +
+                '<span class="font-medium text-gray-500">Sin asignación</span>' +
+                (!asignacionActual ? '<span class="text-xs font-bold text-red-600">✓ Actual</span>' : '') +
+              '</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
   const overlay = document.createElement('div');
   overlay.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4';
-  overlay.innerHTML =
-    '<div class="bg-white rounded-2xl shadow-xl w-full max-w-sm">' +
-      '<div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">' +
-        '<h2 class="font-semibold text-gray-900">Asignación operativa</h2>' +
-        '<button id="ao-close" class="text-gray-400 hover:text-gray-700">✕</button>' +
-      '</div>' +
-      '<div class="px-5 py-4 space-y-3">' +
-        '<p class="text-sm text-gray-600">Asignar usuario operativo a <strong>' + name + '</strong></p>' +
-        '<p class="text-xs text-gray-400">El técnico solo tendrá acceso al Kardex cuando tenga una asignación activa.</p>' +
-        '<div class="space-y-2">' +
-          USUARIOS_OPERATIVOS.map(function(u) {
-            const sel = actual === u;
-            return '<button data-op="' + u + '" class="w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 transition-all ' +
-              (sel ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300') + '">' +
-              '<span class="font-semibold text-gray-900">' + u + '</span>' +
-              (sel ? '<span class="text-xs font-bold text-blue-600">✓ Asignado</span>' : '') +
-            '</button>';
-          }).join('') +
-          '<button data-op="" class="w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 transition-all ' +
-            (!actual ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-white hover:border-gray-300') + '">' +
-            '<span class="font-medium text-gray-600">Sin asignación (bloquear acceso)</span>' +
-            (!actual ? '<span class="text-xs font-bold text-red-600">✓ Actual</span>' : '') +
-          '</button>' +
-        '</div>' +
-      '</div>' +
-    '</div>';
-
+  overlay.innerHTML = buildHTML();
   document.body.appendChild(overlay);
-  overlay.querySelector('#ao-close').onclick = () => overlay.remove();
 
-  overlay.querySelectorAll('[data-op]').forEach(function(btn) {
-    btn.addEventListener('click', async function() {
-      const val = btn.dataset.op || null;
-      try {
-        await updateDoc(doc(db, 'users', uid), { usuarioOperativoAsignado: val });
-        showToast(val
-          ? name + ' asignado a ' + val
-          : name + ' sin asignación activa.', 'success');
-        overlay.remove();
-        await renderUserList(db);
-      } catch(e) {
-        showToast('Error al actualizar.', 'error');
-        console.error(e);
-      }
+  function rebind() {
+    overlay.querySelector('#ao-close').onclick = () => overlay.remove();
+    overlay.querySelectorAll('[data-area]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        areaSeleccionada = btn.dataset.area;
+        overlay.innerHTML = buildHTML();
+        rebind();
+      });
     });
-  });
+    overlay.querySelectorAll('[data-destino]').forEach(function(btn) {
+      btn.addEventListener('click', async function() {
+        const destino = btn.dataset.destino || null;
+        const nuevaAsignacion = destino ? { area: areaSeleccionada, destino } : null;
+        try {
+          await updateDoc(doc(db, 'users', uid), {
+            asignacionActual: nuevaAsignacion,
+            usuarioOperativoAsignado: (nuevaAsignacion?.area === 'OTC' ? nuevaAsignacion.destino : null) || null,
+          });
+          showToast(nuevaAsignacion
+            ? name + ' → ' + nuevaAsignacion.area + ' · ' + nuevaAsignacion.destino
+            : name + ' sin asignación.', 'success');
+          overlay.remove();
+          await renderUserList(db);
+        } catch(e) {
+          showToast('Error al actualizar.', 'error');
+          console.error(e);
+        }
+      });
+    });
+  }
+  rebind();
 }
 
 // ─────────────────────────────────────────
