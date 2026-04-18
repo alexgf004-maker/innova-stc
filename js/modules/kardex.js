@@ -128,7 +128,9 @@ function renderShell(container, session) {
     <button data-tab="inventario" class="ktab flex-1 py-2 text-xs font-medium rounded-lg transition-colors">Inventario</button>
     <button data-tab="historial"  class="ktab flex-1 py-2 text-xs font-medium rounded-lg transition-colors">Historial</button>
     <button data-tab="usuarios"   class="ktab flex-1 py-2 text-xs font-medium rounded-lg transition-colors">Usuarios</button>
-    <button data-tab="solicitudes" class="ktab flex-1 py-2 text-xs font-medium rounded-lg transition-colors">Pedidos</button>`;
+    <button data-tab="solicitudes" class="ktab flex-1 py-2 text-xs font-medium rounded-lg transition-colors relative">
+      Pedidos<span id="badge-pedidos" class="hidden absolute -top-1 -right-1 w-4 h-4 rounded-full text-white text-xs font-black flex items-center justify-center" style="background:#C62828;font-size:9px;line-height:1"></span>
+    </button>`;
 
   const tabsCampo = `
     <button data-tab="dashboard"    class="ktab flex-1 py-2 text-xs font-medium rounded-lg transition-colors">Inicio</button>
@@ -196,6 +198,19 @@ function bindNav(db, session) {
     });
   });
   document.getElementById('btn-nueva-salida')?.addEventListener('click', () => showFormSalida(db, session));
+
+  // Load pending solicitudes count for badge
+  (async function() {
+    try {
+      const snap = await getDocs(collection(db, 'solicitudes_material'));
+      const count = snap.docs.filter(function(d) { return d.data().estado === 'pendiente'; }).length;
+      const badge = document.getElementById('badge-pedidos');
+      if (badge && count > 0) {
+        badge.textContent = count > 9 ? '9+' : count;
+        badge.classList.remove('hidden');
+      }
+    } catch(e) {}
+  })();
 
   // Área selector
   document.querySelectorAll('.karea-btn').forEach(function(btn) {
@@ -4120,6 +4135,12 @@ async function showSolicitudes(db, session) {
     function buildRows() {
       return solicitudes.map(function(s) {
         const badge = ESTADO_BADGE[s.estado] || ESTADO_BADGE.pendiente;
+        // Area badge from solicitud or from user's asignacion
+        const areaLabel = s.area || (s.usuarioArea) || null;
+        const areaBadge = areaLabel
+          ? '<span class="text-xs font-bold px-2 py-0.5 rounded-full mr-1.5" style="background:' +
+            (areaLabel === 'OTC' ? '#EFF6FF;color:#1D4ED8' : '#F0FDF4;color:#166534') + '">' + areaLabel + '</span>'
+          : '';
         const mats = (s.materiales || []).map(function(m) {
           return '<div class="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">' +
             '<p class="text-sm text-gray-800">' + tc(m.nombre) + '</p>' +
