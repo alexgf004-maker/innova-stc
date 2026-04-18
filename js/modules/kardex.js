@@ -3461,8 +3461,31 @@ function showRegistrarConsumo(db, session) {
 
     lista.querySelectorAll('.rc-serial-buscar').forEach(function(inp) {
       inp.addEventListener('input', function() {
-        busqSerial[inp.dataset.iid] = inp.value;
-        renderLista();
+        const iid = inp.dataset.iid;
+        busqSerial[iid] = inp.value;
+        // Only update badges container, don't re-render entire list
+        const badgesContainer = inp.nextElementSibling;
+        if (!badgesContainer || !serialesDisp[iid]) return;
+        const q = (busqSerial[iid]||'').toLowerCase();
+        const filtered = serialesDisp[iid].filter(function(ser) {
+          return !q || ser.toLowerCase().includes(q);
+        });
+        const sd = selConsumo[iid] || { serial: '' };
+        badgesContainer.innerHTML = filtered.map(function(ser) {
+          const activo = sd.serial === ser;
+          return '<button class="rc-serial-badge px-2.5 py-1 rounded-lg text-xs font-mono border-2 ' +
+            (activo ? 'border-green-500 bg-green-100 text-green-700 font-bold' : 'border-gray-200 bg-white text-gray-600') +
+            '" data-iid="' + iid + '" data-ser="' + ser + '">' + ser + '</button>';
+        }).join('');
+        // Rewire badge clicks
+        badgesContainer.querySelectorAll('.rc-serial-badge').forEach(function(b) {
+          b.addEventListener('click', function() {
+            if (selConsumo[b.dataset.iid]) {
+              selConsumo[b.dataset.iid].serial = selConsumo[b.dataset.iid].serial === b.dataset.ser ? '' : b.dataset.ser;
+            }
+            renderLista(); renderResumen();
+          });
+        });
       });
     });
     lista.querySelectorAll('.rc-serial-badge').forEach(function(b) {
