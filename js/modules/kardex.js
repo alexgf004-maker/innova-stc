@@ -539,11 +539,15 @@ async function showInventario(db, session) {
   try {
     const area = getArea();
     const snap = await getDocs(collection(db, 'kardex/inventario/items'));
-    // Backfill: assign area OTC to items without area field
-    await backfillArea(db, snap.docs, 'OTC');
+    // Backfill: assign area OTC to items without area field, then re-fetch
+    const needsBackfill = snap.docs.some(function(d) { return !d.data().area; });
+    if (needsBackfill) {
+      await backfillArea(db, snap.docs, 'OTC');
+    }
+    // Filter in JS using data (backfill already applied in Firestore)
     const allItems = snap.docs
-      .map(d => normalizeItem({ id: d.id, ...d.data() }))
-      .filter(function(i) { return esValido(i) && (i.area || 'OTC') === area; })
+      .map(d => normalizeItem({ id: d.id, ...d.data(), area: d.data().area || 'OTC' }))
+      .filter(function(i) { return esValido(i) && i.area === area; })
       .sort((a,b) => safeStr(a.name).localeCompare(safeStr(b.name)));
 
     content.innerHTML = `
@@ -2191,11 +2195,11 @@ async function showHistorial(db, session) {
     // Backfill area on salidas
     await backfillArea(db, snapSalidas.docs, 'OTC');
     const salidas = snapSalidas.docs
-      .map(d => ({ id: d.id, _tipo:'salida', ...d.data() }))
-      .filter(function(s) { return (s.area || 'OTC') === area; });
+      .map(d => ({ id: d.id, _tipo:'salida', ...d.data(), area: d.data().area || 'OTC' }))
+      .filter(function(s) { return s.area === area; });
     const devs = snapDev.docs
-      .map(d => ({ id: d.id, _tipo:'devolucion', ...d.data() }))
-      .filter(function(d) { return (d.area || 'OTC') === area; });
+      .map(d => ({ id: d.id, _tipo:'devolucion', ...d.data(), area: d.data().area || 'OTC' }))
+      .filter(function(d) { return d.area === area; });
 
     // Merge and sort by fecha desc
     const todos = [...salidas, ...devs].sort((a, b) => {
