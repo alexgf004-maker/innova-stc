@@ -30,6 +30,26 @@
       }
     }
   </script>
+  <style>
+    .avatar-btn {
+      width: 32px;
+      height: 32px;
+      min-width: 32px;
+      min-height: 32px;
+      border-radius: 50%;
+      background-color: #1B4F8A;
+      color: white;
+      font-size: 11px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      border: none;
+      flex-shrink: 0;
+    }
+    .avatar-btn:hover { opacity: 0.85; }
+  </style>
 </head>
 <body class="bg-surface font-sans text-gray-900">
 
@@ -37,8 +57,6 @@
 
     <!-- ── SIDEBAR (desktop) ── -->
     <aside id="sidebar" class="hidden md:flex flex-col w-60 bg-primary text-white shrink-0 overflow-y-auto">
-
-      <!-- Logo -->
       <div class="px-5 py-5 border-b border-white/10">
         <div class="flex items-center gap-3">
           <div class="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
@@ -52,13 +70,7 @@
           </div>
         </div>
       </div>
-
-      <!-- Navegación -->
-      <nav id="sidebar-nav" class="flex-1 py-3 px-2 space-y-0.5">
-        <!-- Generado por router.js -->
-      </nav>
-
-      <!-- Footer del sidebar -->
+      <nav id="sidebar-nav" class="flex-1 py-3 px-2 space-y-0.5"></nav>
       <div class="px-4 py-4 border-t border-white/10">
         <p id="sidebar-username" class="text-white/60 text-xs mb-1 truncate"></p>
         <p id="sidebar-role" class="text-white/40 text-xs mb-3 capitalize"></p>
@@ -76,27 +88,32 @@
     <div class="flex flex-col flex-1 min-w-0 overflow-hidden">
 
       <!-- Topbar -->
-      <header id="topbar" class="h-14 bg-white border-b border-gray-200 flex items-center px-4 shrink-0 z-10 gap-3">
-        <div class="flex items-center gap-2 flex-1">
-          <div class="w-7 h-7 rounded flex items-center justify-center md:hidden" style="background-color:#1B4F8A">
+      <header id="topbar" class="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4 shrink-0 z-10">
+
+        <!-- Logo móvil -->
+        <div class="flex items-center gap-2 md:hidden">
+          <div class="w-7 h-7 rounded flex items-center justify-center" style="background-color:#1B4F8A">
             <svg width="14" height="14" viewBox="0 0 32 32" fill="none">
               <path d="M4 8h6v16H4zM13 8h6l6 16h-6z" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </div>
-          <span class="font-semibold text-sm text-gray-900 md:hidden">INNOVA STC</span>
+          <span class="font-semibold text-sm text-gray-900">INNOVA STC</span>
         </div>
-        <div class="hidden md:block" />
-        <div class="flex items-center gap-3 shrink-0">
+
+        <!-- Spacer desktop -->
+        <div class="hidden md:block"></div>
+
+        <!-- Usuario + Avatar -->
+        <div class="flex items-center gap-3">
           <div class="text-right hidden sm:block">
             <p id="topbar-name" class="text-sm font-medium text-gray-800 leading-tight"></p>
             <p id="topbar-role" class="text-xs text-gray-400 capitalize"></p>
           </div>
-          <div class="relative">
-            <button id="topbar-avatar"
-              class="w-8 h-8 rounded-full text-white text-xs font-bold flex items-center justify-center shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
-              style="background-color:#1B4F8A; min-width:2rem; min-height:2rem;">
-            </button>
-            <div id="avatar-menu" class="hidden absolute right-0 top-10 bg-white border border-gray-200 rounded-xl shadow-lg py-1 z-50 w-44">
+
+          <!-- Avatar con menú -->
+          <div class="relative" id="avatar-wrapper">
+            <button class="avatar-btn" id="topbar-avatar">AD</button>
+            <div id="avatar-menu" class="hidden absolute right-0 top-10 bg-white border border-gray-200 rounded-xl shadow-lg py-1 z-50 w-48">
               <div id="avatar-menu-name" class="px-4 py-2 text-xs text-gray-400 border-b border-gray-100 truncate"></div>
               <button id="btn-logout-menu" class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -107,11 +124,11 @@
             </div>
           </div>
         </div>
+
       </header>
 
       <!-- Contenido principal -->
       <main id="content-area" class="flex-1 overflow-y-auto p-4 pb-20 md:pb-6">
-        <!-- Las vistas se inyectan aquí por router.js -->
         <div class="flex items-center justify-center h-full">
           <div class="flex items-center gap-3 text-gray-400 text-sm">
             <svg class="animate-spin w-5 h-5" viewBox="0 0 24 24" fill="none">
@@ -127,7 +144,6 @@
     <!-- ── BOTTOM NAV (móvil) ── -->
     <nav id="bottom-nav"
       class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around items-center px-2 py-1 z-50 safe-area-bottom">
-      <!-- Generado por router.js -->
     </nav>
 
   </div>
@@ -142,16 +158,14 @@
     import { getFirestore }   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
     import { FIREBASE_CONFIG } from './js/firebase-config.js';
     import { initRouter }      from './js/router.js';
-    import { initUI, showToast } from './js/ui.js';
+    import { initUI }          from './js/ui.js';
 
     const app  = initializeApp(FIREBASE_CONFIG);
     const auth = getAuth(app);
     const db   = getFirestore(app);
 
-    // Exponer instancias globalmente para los módulos
     window.__firebase = { app, auth, db };
 
-    // Verificar sesión
     const sessionRaw = sessionStorage.getItem('innova_session');
     if (!sessionRaw) {
       window.location.href = 'login.html';
@@ -166,53 +180,41 @@
     }
 
     function initApp(session) {
-      // Poblar datos del usuario en UI
+      // Iniciales del avatar
+      const initials = session.displayName
+        .split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+
       document.getElementById('sidebar-username').textContent = session.displayName;
       document.getElementById('sidebar-role').textContent     = session.role;
       document.getElementById('topbar-name').textContent      = session.displayName;
       document.getElementById('topbar-role').textContent      = session.role;
-      document.getElementById('topbar-avatar').textContent    =
-        session.displayName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+      document.getElementById('topbar-avatar').textContent    = initials;
+      document.getElementById('avatar-menu-name').textContent = session.displayName;
 
-      // Inicializar UI helpers y router
       initUI();
       initRouter(session);
 
-      // Mostrar shell
-      const shell = document.getElementById('app-shell');
-      shell.classList.remove('opacity-0');
+      document.getElementById('app-shell').classList.remove('opacity-0');
 
-      // Logout
       async function handleLogout() {
-        try {
-          await signOut(auth);
-        } catch (_) {}
+        try { await signOut(auth); } catch (_) {}
         sessionStorage.removeItem('innova_session');
         window.location.href = 'login.html';
       }
 
       document.getElementById('btn-logout-sidebar').addEventListener('click', handleLogout);
-
-      const avatar        = document.getElementById('topbar-avatar');
-      const avatarMenu    = document.getElementById('avatar-menu');
-      const avatarMenuName = document.getElementById('avatar-menu-name');
-
-      avatarMenuName.textContent = session.displayName;
-
-      avatar.addEventListener('click', (e) => {
-        e.stopPropagation();
-        avatarMenu.classList.toggle('hidden');
-      });
-
-      document.addEventListener('click', (e) => {
-        if (!avatarMenu.contains(e.target)) {
-          avatarMenu.classList.add('hidden');
-        }
-      });
-
       document.getElementById('btn-logout-menu').addEventListener('click', handleLogout);
 
-      // Verificar que Firebase Auth sigue activo
+      // Abrir/cerrar menú del avatar
+      document.getElementById('topbar-avatar').addEventListener('click', (e) => {
+        e.stopPropagation();
+        document.getElementById('avatar-menu').classList.toggle('hidden');
+      });
+
+      document.addEventListener('click', () => {
+        document.getElementById('avatar-menu').classList.add('hidden');
+      });
+
       onAuthStateChanged(auth, (user) => {
         if (!user) {
           sessionStorage.removeItem('innova_session');
