@@ -252,15 +252,21 @@ async function showDashboardAdmin(db, session) {
   const content = document.getElementById('kardex-content');
   content.innerHTML = loading();
   try {
+    const area  = getArea();
     const snap  = await getDocs(collection(db, 'kardex/inventario/items'));
-    const items = snap.docs.map(d => normalizeItem({ id: d.id, ...d.data() })).filter(esValido);
+    const items = snap.docs
+      .map(d => normalizeItem({ id: d.id, ...d.data(), area: d.data().area || 'OTC' }))
+      .filter(function(i) { return esValido(i) && i.area === area; });
     const total    = items.length;
     const sinStock = items.filter(i => safeNum(i.stock) <= 0).length;
     const alertas  = items.filter(i => safeNum(i.stock) <= safeNum(i.minStock || 5));
 
     const qS      = query(collection(db, 'kardex/movimientos/salidas'), orderBy('fecha', 'desc'));
     const snapS   = await getDocs(qS);
-    const ultimas = snapS.docs.slice(0, 5).map(d => ({ id: d.id, ...d.data() }));
+    const ultimas = snapS.docs
+      .map(d => ({ id: d.id, ...d.data(), area: d.data().area || 'OTC' }))
+      .filter(function(s) { return s.area === area; })
+      .slice(0, 5);
 
     content.innerHTML = `
       <div class="space-y-4">
@@ -538,10 +544,7 @@ async function showInventario(db, session) {
 
   try {
     const area = getArea();
-    console.log('[Kardex] Area activa:', area, '| __kardexArea:', window.__kardexArea, '| localStorage:', localStorage.getItem('kardex_area'));
     const snap = await getDocs(collection(db, 'kardex/inventario/items'));
-    console.log('[Kardex] Total items Firestore:', snap.docs.length);
-    snap.docs.slice(0,3).forEach(function(d) { console.log('  item area:', d.data().area, '| nombre:', d.data().name); });
     const needsBackfill = snap.docs.some(function(d) { return !d.data().area; });
     if (needsBackfill) {
       await backfillArea(db, snap.docs, 'OTC');
@@ -3179,15 +3182,17 @@ async function showStockUsuarios(db, session) {
       getDocs(collection(db, 'kardex/inventario/items')),
     ]);
 
+    const area = getArea();
     const itemMap = {};
     snapItems.docs.forEach(d => {
-      const item = normalizeItem({ id: d.id, ...d.data() });
-      if (esValido(item)) itemMap[d.id] = item;
+      const item = normalizeItem({ id: d.id, ...d.data(), area: d.data().area || 'OTC' });
+      if (esValido(item) && item.area === area) itemMap[d.id] = item;
     });
 
     const stockUsuario = {};
     snapSalidas.docs.forEach(d => {
       const salida  = d.data();
+      if ((salida.area || 'OTC') !== area) return;
       const usuario = safeStr(salida.usuarioResponsable || salida.tecnicoNombre, '');
       if (!usuario || usuario === '—') return;
       if (!stockUsuario[usuario]) stockUsuario[usuario] = {};
