@@ -120,35 +120,30 @@ function renderShell(container, session) {
     window.__kardexArea = localStorage.getItem('kardex_area') || 'OTC';
   }
 
-  const areaSelector = canEdit ? (
-    '<div class="flex gap-2 items-center">' +
-      '<span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Área</span>' +
-      '<div class="flex gap-1 bg-gray-100 rounded-lg p-0.5">' +
-        ['OTC','CAMBIOS'].map(function(a) {
-          const activa = window.__kardexArea === a;
-          return '<button class="karea-btn px-3 py-1.5 rounded-md text-xs font-bold transition-all ' +
-            (activa ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600') +
-            '" data-area="' + a + '">' + a + '</button>';
-        }).join('') +
-      '</div>' +
-    '</div>'
-  ) : '';
+
 
   container.innerHTML =
-    '<div class="space-y-4">' +
+    '<div class="space-y-3">' +
+      // Fila 1: título + botón nueva salida
       '<div class="flex items-center justify-between">' +
         '<div>' +
           '<h1 class="text-xl font-semibold text-gray-900">Kardex</h1>' +
-          (canEdit
-            ? '<p class="text-xs text-gray-400 mt-0.5">Área: <span id="kardex-area-label" class="font-semibold text-gray-600">' + (window.__kardexArea||'OTC') + '</span></p>'
-            : '<p class="text-sm text-gray-500 mt-0.5">Control de materiales</p>'
-          ) +
+          '<p class="text-xs text-gray-400 mt-0.5">Control de materiales</p>' +
         '</div>' +
-        '<div class="flex items-center gap-2">' +
-          areaSelector +
-          (canEdit ? '<button id="btn-nueva-salida" class="inline-flex items-center gap-1.5 text-white text-xs font-medium px-3 py-2 rounded-lg" style="background:#1B4F8A"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Nueva salida</button>' : '') +
-        '</div>' +
+        (canEdit ? '<button id="btn-nueva-salida" class="inline-flex items-center gap-1.5 text-white text-sm font-medium px-3.5 py-2 rounded-lg" style="background:#1B4F8A"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Nueva salida</button>' : '') +
       '</div>' +
+      // Fila 2: selector de área (solo admin) — ancho completo
+      (canEdit ? (
+        '<div class="flex gap-1 bg-gray-100 rounded-xl p-1">' +
+          ['OTC','CAMBIOS'].map(function(a) {
+            const activa = window.__kardexArea === a;
+            return '<button class="karea-btn flex-1 py-2 rounded-lg text-sm font-bold transition-all ' +
+              (activa ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400') +
+              '" data-area="' + a + '">' + a + '</button>';
+          }).join('') +
+        '</div>'
+      ) : '') +
+      // Fila 3: tabs de navegación
       '<div class="flex gap-1 bg-gray-100 rounded-xl p-1">' +
         (isCampo ? tabsCampo : tabsAdmin) +
       '</div>' +
