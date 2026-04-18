@@ -94,6 +94,27 @@ export async function initKardex(session) {
   bindNav(db, session);
 }
 
+
+// ─────────────────────────────────────────
+// AREA HELPERS
+// ─────────────────────────────────────────
+function getArea() {
+  return window.__kardexArea || localStorage.getItem('kardex_area') || 'OTC';
+}
+
+async function backfillArea(db, docs, area) {
+  // Silently add area field to docs that don't have it
+  const batch = [];
+  docs.forEach(function(d) {
+    if (!d.data().area) {
+      batch.push(updateDoc(doc(db, d.ref.path), { area: area }));
+    }
+  });
+  if (batch.length) {
+    await Promise.all(batch).catch(function(e) { console.warn('backfill area:', e); });
+  }
+}
+
 // ─────────────────────────────────────────
 // SHELL
 // ─────────────────────────────────────────
@@ -516,8 +537,13 @@ async function showInventario(db, session) {
   let seleccionados = new Set();
 
   try {
-    const snap     = await getDocs(collection(db, 'kardex/inventario/items'));
-    const allItems = snap.docs.map(d => normalizeItem({ id: d.id, ...d.data() })).filter(esValido)
+    const area = getArea();
+    const snap = await getDocs(collection(db, 'kardex/inventario/items'));
+    // Backfill: assign area OTC to items without area field
+    await backfillArea(db, snap.docs, 'OTC');
+    const allItems = snap.docs
+      .map(d => normalizeItem({ id: d.id, ...d.data() }))
+      .filter(function(i) { return esValido(i) && (i.area || 'OTC') === area; })
       .sort((a,b) => safeStr(a.name).localeCompare(safeStr(b.name)));
 
     content.innerHTML = `
@@ -1839,6 +1865,7 @@ async function showFormSalida(db, session) {
     const placa = hdr.placaSel==='__otro__' ? hdr.placaOtro : hdr.placaSel;
     try {
       const ref = await addDoc(collection(db, 'kardex/movimientos/salidas'), {
+        area:                  getArea(),
         usuarioResponsableUid: hdr.responsable,
         usuarioResponsable:    hdr.responsable,
         empresaContratista:    hdr.contratista,
@@ -2129,6 +2156,7 @@ async function showFormDevolucion(db, session, salida) {
       // 3. Register movement
       await addDoc(collection(db, 'kardex/movimientos/ajustes'), {
         tipo: 'devolucion',
+        area: getArea(),
         salidaOrigen: salida.id,
         usuarioResponsable: safeStr(salida.usuarioResponsable),
         items: devItems,
@@ -2155,12 +2183,19 @@ async function showHistorial(db, session) {
   const content = document.getElementById('kardex-content');
   content.innerHTML = loading();
   try {
+    const area = getArea();
     const [snapSalidas, snapDev] = await Promise.all([
       getDocs(query(collection(db, 'kardex/movimientos/salidas'), orderBy('fecha', 'desc'))),
       getDocs(query(collection(db, 'kardex/movimientos/ajustes'), where('tipo','==','devolucion'))),
     ]);
-    const salidas = snapSalidas.docs.map(d => ({ id: d.id, _tipo:'salida', ...d.data() }));
-    const devs    = snapDev.docs.map(d => ({ id: d.id, _tipo:'devolucion', ...d.data() }));
+    // Backfill area on salidas
+    await backfillArea(db, snapSalidas.docs, 'OTC');
+    const salidas = snapSalidas.docs
+      .map(d => ({ id: d.id, _tipo:'salida', ...d.data() }))
+      .filter(function(s) { return (s.area || 'OTC') === area; });
+    const devs = snapDev.docs
+      .map(d => ({ id: d.id, _tipo:'devolucion', ...d.data() }))
+      .filter(function(d) { return (d.area || 'OTC') === area; });
 
     // Merge and sort by fecha desc
     const todos = [...salidas, ...devs].sort((a, b) => {
