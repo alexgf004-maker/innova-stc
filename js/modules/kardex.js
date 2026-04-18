@@ -3313,8 +3313,8 @@ function showRegistrarConsumo(db, session) {
     .sort(function(a, b) { return safeStr(a.item.name).localeCompare(safeStr(b.item.name)); });
 
   let selConsumo    = {}; // itemId -> { cantidad, serial }
-  let wos           = [];
   let busqMat       = '';
+  let busqSerial    = {}; // itemId -> busqueda serial
   let serialesDisp  = {}; // itemId -> [serial, serial, ...]  — seriales del usuario
 
   const ov = mkOverlay(
@@ -3325,12 +3325,8 @@ function showRegistrarConsumo(db, session) {
     '</div>' +
     '<div class="flex-1 overflow-y-auto px-5 py-4 space-y-4">' +
       '<div>' +
-        '<label class="block text-sm font-medium text-gray-700 mb-1.5">&#211;rdenes de trabajo <span class="text-red-500">*</span></label>' +
-        '<div class="flex gap-2 mb-2">' +
-          '<input id="rc-wo-input" type="text" inputmode="numeric" placeholder="Ej. 802335101" class="flex-1 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>' +
-          '<button id="rc-wo-add" class="px-4 py-2.5 rounded-xl text-sm font-semibold text-white shrink-0" style="background:#1B4F8A">Agregar</button>' +
-        '</div>' +
-        '<div id="rc-wo-badges" class="flex flex-wrap gap-2 min-h-4"></div>' +
+        '<label class="block text-sm font-medium text-gray-700 mb-1.5">Orden de trabajo <span class="text-red-500">*</span></label>' +
+        '<input id="rc-wo-input" type="text" inputmode="numeric" placeholder="Ej. 802335101" class="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>' +
       '</div>' +
       '<div>' +
         '<label class="block text-sm font-medium text-gray-700 mb-1.5">Tipo de trabajo <span class="text-red-500">*</span></label>' +
@@ -3384,34 +3380,7 @@ function showRegistrarConsumo(db, session) {
   });
   renderTipos();
 
-  function renderWoBadges() {
-    const cont = ov.querySelector('#rc-wo-badges');
-    if (!cont) return;
-    cont.innerHTML = wos.map(function(wo) {
-      return '<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-mono font-semibold" style="background:#EFF6FF;color:#1B4F8A">' +
-        wo + '<button class="rc-wo-rm font-bold" data-wo="' + wo + '" style="color:#93C5FD;margin-left:2px">&#x2715;</button></span>';
-    }).join('');
-    cont.querySelectorAll('.rc-wo-rm').forEach(function(b) {
-      b.addEventListener('click', function() {
-        wos = wos.filter(function(w) { return w !== b.dataset.wo; });
-        renderWoBadges();
-      });
-    });
-  }
 
-  function addWo() {
-    const inp = ov.querySelector('#rc-wo-input');
-    const val = inp.value.trim();
-    if (!val) return;
-    if (!wos.includes(val)) wos.push(val);
-    inp.value = '';
-    renderWoBadges();
-  }
-
-  ov.querySelector('#rc-wo-add').addEventListener('click', addWo);
-  ov.querySelector('#rc-wo-input').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') { e.preventDefault(); addWo(); }
-  });
 
   function renderLista() {
     const lista = ov.querySelector('#rc-lista');
@@ -3451,21 +3420,26 @@ function showRegistrarConsumo(db, session) {
             '</div>'
           ) +
         '</div>' +
-        // Serial selector — solo si es serializable y está seleccionado
         (esSer && sel > 0 ?
           '<div class="mt-2 space-y-1.5">' +
             '<p class="text-xs text-gray-500 font-medium">Selecciona el serial:</p>' +
             (serialesDisp[e.id] && serialesDisp[e.id].length ?
-              '<div class="flex flex-wrap gap-1.5">' +
-                serialesDisp[e.id].map(function(ser) {
-                  const activo = sd.serial === ser;
-                  return '<button class="rc-serial-badge px-2.5 py-1 rounded-lg text-xs font-mono border-2 ' +
-                    (activo ? 'border-green-500 bg-green-100 text-green-700 font-bold' : 'border-gray-200 bg-white text-gray-600') +
-                    '" data-iid="' + e.id + '" data-ser="' + ser + '">' + ser + '</button>';
-                }).join('') +
+              '<div>' +
+                '<input type="text" class="rc-serial-buscar w-full border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono mb-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400" placeholder="Buscar serial..." data-iid="' + e.id + '" value="' + (busqSerial[e.id]||'') + '"/>' +
+                '<div class="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">' +
+                  serialesDisp[e.id].filter(function(ser) {
+                    const q = (busqSerial[e.id]||'').toLowerCase();
+                    return !q || ser.toLowerCase().includes(q);
+                  }).map(function(ser) {
+                    const activo = sd.serial === ser;
+                    return '<button class="rc-serial-badge px-2.5 py-1 rounded-lg text-xs font-mono border-2 ' +
+                      (activo ? 'border-green-500 bg-green-100 text-green-700 font-bold' : 'border-gray-200 bg-white text-gray-600') +
+                      '" data-iid="' + e.id + '" data-ser="' + ser + '">' + ser + '</button>';
+                  }).join('') +
+                '</div>' +
               '</div>'
             :
-              '<p class="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">Sin seriales asignados cargados aún</p>'
+              '<p class="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">Sin seriales asignados aún</p>'
             ) +
           '</div>'
         : '') +
@@ -3485,6 +3459,12 @@ function showRegistrarConsumo(db, session) {
       });
     });
 
+    lista.querySelectorAll('.rc-serial-buscar').forEach(function(inp) {
+      inp.addEventListener('input', function() {
+        busqSerial[inp.dataset.iid] = inp.value;
+        renderLista();
+      });
+    });
     lista.querySelectorAll('.rc-serial-badge').forEach(function(b) {
       b.addEventListener('click', function() {
         const iid = b.dataset.iid;
@@ -3583,7 +3563,8 @@ function showRegistrarConsumo(db, session) {
     const tipoFinal = tipoSeleccionado === 'Otro' ? (otro || 'Otro') : tipoSeleccionado;
     errEl.classList.add('hidden');
 
-    if (!wos.length) { errEl.textContent = 'Agrega al menos una OT.'; errEl.classList.remove('hidden'); return; }
+    const woVal = (ov.querySelector('#rc-wo-input')?.value || '').trim();
+    if (!woVal) { errEl.textContent = 'Ingresa el número de OT.'; errEl.classList.remove('hidden'); return; }
     const items = Object.entries(selConsumo).filter(function(e) { return (typeof e[1] === 'object' ? e[1].cantidad : e[1]) > 0; });
     if (!items.length) { errEl.textContent = 'Selecciona al menos un material.'; errEl.classList.remove('hidden'); return; }
 
@@ -3607,7 +3588,7 @@ function showRegistrarConsumo(db, session) {
         return { itemId: e[0], nombre: safeStr(itData?.item.name), unit: safeStr(itData?.item.unit,''), sapCode: safeStr(itData?.item.sapCode,''), cantidad: sd.cantidad, serial: sd.serial || '' };
       });
       await addDoc(collection(db, 'kardex/movimientos/consumos'), {
-        wo: wos.join(', '), wos: wos, tipoTrabajo: tipoFinal,
+        wo: woVal, tipoTrabajo: tipoFinal,
         usuarioOperativo: usuario,
         registradoPor: session.uid, registradoPorNombre: session.displayName,
         items: consumoItems, fecha: serverTimestamp(),
