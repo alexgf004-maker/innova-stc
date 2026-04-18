@@ -538,17 +538,19 @@ async function showInventario(db, session) {
 
   try {
     const area = getArea();
+    console.log('[Kardex] Area activa:', area, '| __kardexArea:', window.__kardexArea, '| localStorage:', localStorage.getItem('kardex_area'));
     const snap = await getDocs(collection(db, 'kardex/inventario/items'));
-    // Backfill: assign area OTC to items without area field, then re-fetch
+    console.log('[Kardex] Total items Firestore:', snap.docs.length);
+    snap.docs.slice(0,3).forEach(function(d) { console.log('  item area:', d.data().area, '| nombre:', d.data().name); });
     const needsBackfill = snap.docs.some(function(d) { return !d.data().area; });
     if (needsBackfill) {
       await backfillArea(db, snap.docs, 'OTC');
     }
-    // Filter in JS using data (backfill already applied in Firestore)
     const allItems = snap.docs
       .map(d => normalizeItem({ id: d.id, ...d.data(), area: d.data().area || 'OTC' }))
       .filter(function(i) { return esValido(i) && i.area === area; })
       .sort((a,b) => safeStr(a.name).localeCompare(safeStr(b.name)));
+    console.log('[Kardex] Items después de filtro:', allItems.length);
 
     content.innerHTML = `
       <div class="space-y-3">
