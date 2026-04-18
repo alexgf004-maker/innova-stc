@@ -1,3 +1,4 @@
+
 /**
  * kardex.js — Fase 1 (v4)
  * Formato de despacho alineado al documento físico real de DELSUR/INNOVA.
@@ -310,7 +311,7 @@ async function showDashboardCampo(db, session) {
     // Descontar consumos del usuario
     try {
       const snapConsumos = await getDocs(query(
-        collection(db, 'kardex/consumos'),
+        collection(db, 'kardex/movimientos/consumos'),
         where('usuarioOperativo', '==', usuario)
       ));
       snapConsumos.docs.forEach(function(d) {
@@ -3606,7 +3607,7 @@ function showRegistrarConsumo(db, session) {
         const sd = typeof e[1] === 'object' ? e[1] : { cantidad: e[1], serial: '' };
         return { itemId: e[0], nombre: safeStr(itData?.item.name), unit: safeStr(itData?.item.unit,''), sapCode: safeStr(itData?.item.sapCode,''), cantidad: sd.cantidad, serial: sd.serial || '' };
       });
-      await addDoc(collection(db, 'kardex/consumos'), {
+      await addDoc(collection(db, 'kardex/movimientos/consumos'), {
         wo: wos.join(', '), wos: wos, tipoTrabajo: tipoFinal,
         usuarioOperativo: usuario,
         registradoPor: session.uid, registradoPorNombre: session.displayName,
@@ -3642,7 +3643,7 @@ async function showMisConsumos(db, session) {
 
   try {
     const snap = await getDocs(query(
-      collection(db, 'kardex/consumos'),
+      collection(db, 'kardex/movimientos/consumos'),
       where('usuarioOperativo', '==', usuario)
     ));
     const consumos = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
