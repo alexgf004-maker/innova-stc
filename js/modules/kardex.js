@@ -59,7 +59,7 @@ const EMPRESAS_CONTRATISTAS = [
 function badgeUsuarioOperativo(session) {
   const u = session.usuarioOperativoAsignado;
   if (!u) return '';
-  return '<div class="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold text-white" style="background:#34D399;color:#0A1A0A">' +
+  return '<div class="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold text-white" style="background:#1B4F8A">' +
     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>' +
     'Trabajando con: ' + u +
   '</div>';
@@ -122,9 +122,9 @@ function renderShell(container, session) {
           '<h1 class="text-xl font-semibold text-gray-900">Kardex</h1>' +
           '<p class="text-sm text-gray-500 mt-0.5">Control de materiales</p>' +
         '</div>' +
-        (canEdit ? '<button id="btn-nueva-salida" class="inline-flex items-center gap-2 text-white text-sm font-medium px-4 py-2.5 rounded-lg" style="background:#34D399;color:#0A1A0A"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Nueva salida</button>' : '') +
+        (canEdit ? '<button id="btn-nueva-salida" class="inline-flex items-center gap-2 text-white text-sm font-medium px-4 py-2.5 rounded-lg" style="background:#1B4F8A"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Nueva salida</button>' : '') +
       '</div>' +
-      '<div class="flex gap-1 rounded-xl p-1" style="background:rgba(255,255,255,0.06);">' +
+      '<div class="flex gap-1 bg-gray-100 rounded-xl p-1">' +
         (isCampo ? tabsCampo : tabsAdmin) +
       '</div>' +
       '<div id="kardex-content"></div>' +
@@ -134,9 +134,9 @@ function renderShell(container, session) {
 function setTab(tab) {
   document.querySelectorAll('.ktab').forEach(b => {
     const a = b.dataset.tab === tab;
-    b.style.backgroundColor = a ? 'rgba(52,211,153,0.12)' : 'transparent';
-    b.style.color            = a ? '#34D399' : 'rgba(255,255,255,0.4)';
-    b.style.boxShadow        = a ? 'none' : 'none';
+    b.style.backgroundColor = a ? 'white' : 'transparent';
+    b.style.color            = a ? '#1B4F8A' : '#6B7280';
+    b.style.boxShadow        = a ? '0 1px 3px rgba(0,0,0,0.1)' : 'none';
   });
 }
 
@@ -363,7 +363,7 @@ async function showDashboardCampo(db, session) {
     let html = '<div class="space-y-4">';
 
     // Badge usuario operativo — prominente
-    html += '<div class="rounded-2xl p-4 text-white" style="background:#34D399;color:#0A1A0A">' +
+    html += '<div class="rounded-2xl p-4 text-white" style="background:#1B4F8A">' +
       '<p class="text-xs font-medium opacity-80 uppercase tracking-wider">Trabajando con</p>' +
       '<p class="text-2xl font-black mt-1">' + usuario + '</p>' +
       '<p class="text-xs opacity-70 mt-0.5">' + misItems.length + ' material' + (misItems.length !== 1 ? 'es' : '') + ' asignados</p>' +
@@ -401,7 +401,7 @@ async function showDashboardCampo(db, session) {
           return '<div class="flex items-center gap-3 px-3 py-3 rounded-xl bg-gray-50">' +
             // Cantidad — destacada a la izquierda
             '<div class="shrink-0 w-14 text-center">' +
-              '<p class="text-2xl font-black leading-none" style="color:#34D399">' + e.cant + '</p>' +
+              '<p class="text-2xl font-black leading-none" style="color:#1B4F8A">' + e.cant + '</p>' +
               '<p class="text-xs text-gray-400 mt-0.5">' + unit + '</p>' +
             '</div>' +
             // Separador vertical
@@ -503,7 +503,7 @@ async function showInventario(db, session) {
           ${canEdit ? `
           <button id="btn-nuevo-item"
             class="inline-flex items-center gap-2 text-white text-sm font-medium px-3 py-2 rounded-lg"
-            style="background:#34D399;color:#0A1A0A">
+            style="background:#1B4F8A">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
@@ -652,7 +652,7 @@ function itemRow(item, canEdit, selMode = false, isSelected = false) {
   return `
     <tr class="hover:bg-gray-50 transition-colors">
       ${selMode ? `<td class="px-3 py-3">
-        <input type="checkbox" data-sel="${item.id}" class="w-4 h-4 rounded border-gray-300 cursor-pointer" style="accent-color:#34D399" ${isSelected ? 'checked' : ''}/>
+        <input type="checkbox" data-sel="${item.id}" class="w-4 h-4 rounded border-gray-300 cursor-pointer" style="accent-color:#1B4F8A" ${isSelected ? 'checked' : ''}/>
       </td>` : ''}
       <td class="px-4 py-3">
         <div class="flex items-start gap-2">
@@ -849,7 +849,7 @@ function showFormItem(db, session, item) {
         </div>
       </div>
       <label class="flex items-center gap-2 cursor-pointer">
-        <input id="fi-serial" type="checkbox" ${item?.requiereSerial ? 'checked' : ''} class="w-4 h-4 rounded" style="accent-color:#34D399"/>
+        <input id="fi-serial" type="checkbox" ${item?.requiereSerial ? 'checked' : ''} class="w-4 h-4 rounded" style="accent-color:#1B4F8A"/>
         <span class="text-sm text-gray-700">Requiere registro de seriales / sellos</span>
       </label>
       ${esNuevo ? `
@@ -863,7 +863,7 @@ function showFormItem(db, session, item) {
     </div>
     <div class="px-5 py-4 border-t border-gray-100 flex gap-3">
       <button id="fi-cancel" class="flex-1 border border-gray-300 text-gray-700 font-medium rounded-lg py-2.5 text-sm hover:bg-gray-50">Cancelar</button>
-      <button id="fi-submit" class="flex-1 text-white font-medium rounded-lg py-2.5 text-sm" style="background:#34D399;color:#0A1A0A">
+      <button id="fi-submit" class="flex-1 text-white font-medium rounded-lg py-2.5 text-sm" style="background:#1B4F8A">
         ${esNuevo ? 'Agregar' : 'Guardar cambios'}
       </button>
     </div>`);
@@ -1203,7 +1203,7 @@ async function showFormSalida(db, session) {
         </div>
         <!-- Indicador de pasos -->
         <div class="flex gap-1.5">
-          <div class="w-6 h-1.5 rounded-full" style="background:#34D399;color:#0A1A0A"></div>
+          <div class="w-6 h-1.5 rounded-full" style="background:#1B4F8A"></div>
           <div class="w-6 h-1.5 rounded-full bg-gray-200"></div>
         </div>
       </div>
@@ -1221,7 +1221,7 @@ async function showFormSalida(db, session) {
                 ${hdr.responsable===u
                   ? 'border-blue-500 text-white'
                   : 'border-gray-200 text-gray-700 bg-white'}"
-              style="${hdr.responsable===u ? 'background:#34D399;color:#0A1A0A' : ''}">
+              style="${hdr.responsable===u ? 'background:#1B4F8A' : ''}">
               ${u}
             </button>`).join('')}
           </div>
@@ -1282,7 +1282,7 @@ async function showFormSalida(db, session) {
         <div id="s1-err" class="hidden text-sm text-red-600 text-center mb-3"></div>
         <button id="s1-next"
           class="w-full font-bold rounded-2xl py-4 text-white flex items-center justify-center gap-2"
-          style="background:#34D399;color:#0A1A0A">
+          style="background:#1B4F8A">
           Continuar — Agregar materiales
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
         </button>
@@ -1347,7 +1347,7 @@ async function showFormSalida(db, session) {
         </div>
         <div class="flex gap-1.5">
           <div class="w-6 h-1.5 rounded-full bg-gray-200"></div>
-          <div class="w-6 h-1.5 rounded-full" style="background:#34D399;color:#0A1A0A"></div>
+          <div class="w-6 h-1.5 rounded-full" style="background:#1B4F8A"></div>
         </div>
       </div>
 
@@ -1356,7 +1356,7 @@ async function showFormSalida(db, session) {
       <div class="px-4 pt-3 pb-1 shrink-0 bg-white border-b border-gray-100">
         <div class="flex items-center justify-between mb-2">
           <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">En el despacho</p>
-          <span class="text-xs font-bold px-2 py-0.5 rounded-full text-white" style="background:#34D399;color:#0A1A0A">${totalSel}</span>
+          <span class="text-xs font-bold px-2 py-0.5 rounded-full text-white" style="background:#1B4F8A">${totalSel}</span>
         </div>
         <div class="space-y-2 pb-1">
           ${sel.map((s,idx) => {
@@ -1900,7 +1900,7 @@ async function showFormDevolucion(db, session, salida) {
         '<div class="flex items-center justify-between gap-2">' +
           '<p class="text-sm font-medium text-gray-900 flex-1 leading-tight">' + safeStr(it.nombre||it.name) + '</p>' +
           '<label class="flex items-center gap-1.5 shrink-0">' +
-            '<input type="checkbox" class="dev-chk w-4 h-4 rounded" style="accent-color:#34D399" data-iid="' + it.itemId + '" ' + (sd.cantidad > 0 ? 'checked' : '') + '/>' +
+            '<input type="checkbox" class="dev-chk w-4 h-4 rounded" style="accent-color:#1B4F8A" data-iid="' + it.itemId + '" ' + (sd.cantidad > 0 ? 'checked' : '') + '/>' +
             '<span class="text-xs text-gray-500">Devolver</span>' +
           '</label>' +
         '</div>' +
@@ -2142,7 +2142,7 @@ async function showHistorial(db, session) {
             (s.empresaContratista ? '<p class="text-xs text-gray-400">' + s.empresaContratista + '</p>' : '') +
           '</div>' +
           '<div class="flex gap-1.5 shrink-0">' +
-            '<button data-smemo="' + s.id + '" class="text-xs font-medium px-2 py-1 rounded-lg" style="color:#34D399;background:rgba(52,211,153,0.1)">Memo</button>' +
+            '<button data-smemo="' + s.id + '" class="text-xs font-medium px-2 py-1 rounded-lg" style="color:#1B4F8A;background:#EFF6FF">Memo</button>' +
             '<button data-sdev="' + s.id + '" class="text-xs font-medium px-2 py-1 rounded-lg" style="color:#B45309;background:#FEF3C7">Devolver</button>' +
           '</div>' +
         '</div>' +
@@ -2381,7 +2381,7 @@ function showMemo(s) {
     </div>
     <div class="px-5 py-4 border-t border-gray-100 flex gap-3">
       <button id="fm-cancel" class="flex-1 border border-gray-300 text-gray-700 font-medium rounded-lg py-2.5 text-sm hover:bg-gray-50">Cerrar</button>
-      <button id="fm-print"  class="flex-1 text-white font-medium rounded-lg py-2.5 text-sm" style="background:#34D399;color:#0A1A0A">🖨️ Imprimir memo</button>
+      <button id="fm-print"  class="flex-1 text-white font-medium rounded-lg py-2.5 text-sm" style="background:#1B4F8A">🖨️ Imprimir memo</button>
     </div>`);
 
   ov.querySelector('#fm-close').onclick = ov.querySelector('#fm-cancel').onclick = () => ov.remove();
@@ -2807,7 +2807,7 @@ async function showImportExcel(db, session, existingItems, refreshFn) {
       <div id="ix-err" class="hidden text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2"></div>
       <div class="flex gap-3 pt-1">
         <button id="ix-back" class="flex-1 border border-gray-300 text-gray-700 font-medium rounded-lg py-2.5 text-sm">← Volver</button>
-        <button id="ix-submit" class="flex-1 text-white font-medium rounded-lg py-2.5 text-sm" style="background:#34D399;color:#0A1A0A">Importar</button>
+        <button id="ix-submit" class="flex-1 text-white font-medium rounded-lg py-2.5 text-sm" style="background:#1B4F8A">Importar</button>
       </div>
     </div>
     <div id="ix-step-result" class="hidden px-5 py-6 text-center space-y-3">
@@ -2816,7 +2816,7 @@ async function showImportExcel(db, session, existingItems, refreshFn) {
       </div>
       <p class="font-semibold text-gray-900">Importación completada</p>
       <div id="ix-result-txt" class="space-y-1"></div>
-      <button id="ix-done" class="text-white font-medium rounded-lg px-6 py-2.5 text-sm" style="background:#34D399;color:#0A1A0A">Cerrar</button>
+      <button id="ix-done" class="text-white font-medium rounded-lg px-6 py-2.5 text-sm" style="background:#1B4F8A">Cerrar</button>
     </div>`);
 
   ov.querySelector('#ix-close').onclick = () => ov.remove();
@@ -3162,7 +3162,7 @@ async function showStockUsuarios(db, session) {
       ];
       return '<div class="flex gap-2">' + btns.map(f => {
         const active = filtro === f.key;
-        const style  = active ? 'background:#34D399;color:#0A1A0A' : '';
+        const style  = active ? 'background:#1B4F8A' : '';
         const cls    = active
           ? 'px-3 py-1.5 rounded-xl text-xs font-semibold border border-transparent text-white'
           : 'px-3 py-1.5 rounded-xl text-xs font-semibold border border-gray-200 bg-white text-gray-600';
@@ -3232,7 +3232,7 @@ async function showStockUsuarios(db, session) {
       return '<div class="bg-white rounded-xl border border-gray-200 overflow-hidden">' +
         '<button data-toggle="' + usuario + '" class="w-full flex items-center justify-between px-4 py-3.5 text-left">' +
           '<div class="flex items-center gap-3">' +
-            '<div class="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm text-white shrink-0" style="background:#34D399;color:#0A1A0A">' + usuario.slice(0,2) + '</div>' +
+            '<div class="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm text-white shrink-0" style="background:#1B4F8A">' + usuario.slice(0,2) + '</div>' +
             '<div>' +
               '<p class="font-bold text-gray-900 text-base">' + usuario + '</p>' +
               '<p class="text-xs font-semibold" style="color:' + alertaColor + '">' + alertaTexto + '</p>' +
@@ -3760,7 +3760,7 @@ async function showSolicitarMaterial(db, session) {
           '<div>' +
             '<div class="flex items-center justify-between mb-2">' +
               '<p class="text-sm font-semibold text-gray-700">Tu pedido</p>' +
-              (sel.length > 0 ? '<span class="text-xs font-bold px-2 py-0.5 rounded-full text-white" style="background:#34D399;color:#0A1A0A">' + sel.length + '</span>' : '') +
+              (sel.length > 0 ? '<span class="text-xs font-bold px-2 py-0.5 rounded-full text-white" style="background:#1B4F8A">' + sel.length + '</span>' : '') +
             '</div>' +
             (sel.length === 0
               ? '<div class="border-2 border-dashed border-gray-200 rounded-2xl py-6 text-center"><p class="text-sm text-gray-400">Busca materiales abajo y tócalos para agregar</p></div>'
@@ -3880,7 +3880,7 @@ async function showSolicitarMaterial(db, session) {
             '<button id="mcs-inc" class="w-16 h-16 rounded-2xl border-2 border-blue-300 bg-blue-50 text-3xl font-bold text-blue-600 flex items-center justify-center">+</button>' +
           '</div>' +
           '<div id="mcs-err" class="hidden text-sm text-red-500 text-center"></div>' +
-          '<button id="mcs-add" class="w-full text-white font-bold rounded-2xl py-4" style="background:#34D399;color:#0A1A0A">Agregar al pedido</button>' +
+          '<button id="mcs-add" class="w-full text-white font-bold rounded-2xl py-4" style="background:#1B4F8A">Agregar al pedido</button>' +
         '</div>';
       document.body.appendChild(modal);
 
@@ -4047,7 +4047,7 @@ async function showSolicitudes(db, session) {
           acciones =
             '<div class="flex gap-2 mt-3">' +
               '<button data-rechazar="' + s.id + '" class="flex-1 border border-red-200 text-red-600 font-medium rounded-xl py-2.5 text-sm bg-red-50">Rechazar</button>' +
-              '<button data-revisar="' + s.id + '" class="flex-1 text-white font-semibold rounded-xl py-2.5 text-sm" style="background:#34D399;color:#0A1A0A">Revisar y aprobar →</button>' +
+              '<button data-revisar="' + s.id + '" class="flex-1 text-white font-semibold rounded-xl py-2.5 text-sm" style="background:#1B4F8A">Revisar y aprobar →</button>' +
             '</div>';
         } else if (s.estado === 'listo_para_despacho') {
           acciones =
@@ -4350,14 +4350,14 @@ async function showFormSalidaConPreset(db, session, selInicial, hdrPreset) {
       '<div class="flex items-center gap-3 px-4 py-3 border-b border-gray-100 shrink-0">' +
         '<button id="s1-close" class="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center shrink-0"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' +
         '<div class="flex-1"><p class="font-semibold text-gray-900">Despacho de solicitud</p><p class="text-xs text-gray-400">Paso 1 de 2 — Encabezado</p></div>' +
-        '<div class="flex gap-1.5"><div class="w-6 h-1.5 rounded-full" style="background:#34D399;color:#0A1A0A"></div><div class="w-6 h-1.5 rounded-full bg-gray-200"></div></div>' +
+        '<div class="flex gap-1.5"><div class="w-6 h-1.5 rounded-full" style="background:#1B4F8A"></div><div class="w-6 h-1.5 rounded-full bg-gray-200"></div></div>' +
       '</div>' +
       '<div class="flex-1 overflow-y-auto px-4 py-5 space-y-4">' +
         '<div>' +
           '<label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Usuario responsable *</label>' +
           '<div class="grid grid-cols-3 gap-2">' +
           USUARIOS_RESPONSABLES.map(u =>
-            '<button data-resp="' + u + '" class="py-3.5 rounded-2xl border-2 text-sm font-bold transition-all ' + (hdr.responsable===u ? 'text-white border-transparent' : 'border-gray-200 text-gray-700 bg-white') + '" style="' + (hdr.responsable===u ? 'background:#34D399;color:#0A1A0A' : '') + '">' + u + '</button>'
+            '<button data-resp="' + u + '" class="py-3.5 rounded-2xl border-2 text-sm font-bold transition-all ' + (hdr.responsable===u ? 'text-white border-transparent' : 'border-gray-200 text-gray-700 bg-white') + '" style="' + (hdr.responsable===u ? 'background:#1B4F8A' : '') + '">' + u + '</button>'
           ).join('') +
           '</div>' +
         '</div>' +
@@ -4388,7 +4388,7 @@ async function showFormSalidaConPreset(db, session, selInicial, hdrPreset) {
       '</div>' +
       '<div class="px-4 py-4 border-t border-gray-100 shrink-0" style="padding-bottom:max(16px,env(safe-area-inset-bottom))">' +
         '<div id="s1-err" class="hidden text-sm text-red-600 text-center mb-3"></div>' +
-        '<button id="s1-next" class="w-full font-bold rounded-2xl py-4 text-white flex items-center justify-center gap-2" style="background:#34D399;color:#0A1A0A">Continuar — Materiales <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>' +
+        '<button id="s1-next" class="w-full font-bold rounded-2xl py-4 text-white flex items-center justify-center gap-2" style="background:#1B4F8A">Continuar — Materiales <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>' +
       '</div>' +
     '</div>';
 
@@ -4424,11 +4424,11 @@ async function showFormSalidaConPreset(db, session, selInicial, hdrPreset) {
       '<div class="flex items-center gap-3 px-4 py-3 border-b border-gray-100 bg-white shrink-0">' +
         '<button id="s2-back" class="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center shrink-0"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></button>' +
         '<div class="flex-1 min-w-0"><p class="font-semibold text-gray-900">Materiales</p><p class="text-xs text-gray-400 truncate">' + hdr.responsable + (hdr.instalador ? ' · ' + hdr.instalador : '') + (placa ? ' · ' + placa : '') + '</p></div>' +
-        '<div class="flex gap-1.5"><div class="w-6 h-1.5 rounded-full bg-gray-200"></div><div class="w-6 h-1.5 rounded-full" style="background:#34D399;color:#0A1A0A"></div></div>' +
+        '<div class="flex gap-1.5"><div class="w-6 h-1.5 rounded-full bg-gray-200"></div><div class="w-6 h-1.5 rounded-full" style="background:#1B4F8A"></div></div>' +
       '</div>' +
       (totalSel > 0 ?
         '<div class="px-4 pt-3 pb-1 shrink-0 bg-white border-b border-gray-100">' +
-          '<div class="flex items-center justify-between mb-2"><p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">En el despacho</p><span class="text-xs font-bold px-2 py-0.5 rounded-full text-white" style="background:#34D399;color:#0A1A0A">' + totalSel + '</span></div>' +
+          '<div class="flex items-center justify-between mb-2"><p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">En el despacho</p><span class="text-xs font-bold px-2 py-0.5 rounded-full text-white" style="background:#1B4F8A">' + totalSel + '</span></div>' +
           '<div class="space-y-2 pb-1">' +
           sel.map(function(s, idx) {
             const restante  = s.stock - s.cantidad;
@@ -4503,7 +4503,7 @@ async function showFormSalidaConPreset(db, session, selInicial, hdrPreset) {
         '<button id="mc2-inc" class="w-16 h-16 rounded-2xl border-2 border-blue-300 bg-blue-50 text-3xl font-bold text-blue-600 flex items-center justify-center">+</button>' +
       '</div>' +
       '<div id="mc2-err" class="hidden text-sm text-red-500 text-center"></div>' +
-      '<button id="mc2-add" class="w-full text-white font-bold rounded-2xl py-4" style="background:#34D399;color:#0A1A0A">Agregar al despacho</button>' +
+      '<button id="mc2-add" class="w-full text-white font-bold rounded-2xl py-4" style="background:#1B4F8A">Agregar al despacho</button>' +
     '</div>';
     document.body.appendChild(m);
     const cantEl = m.querySelector('#mc2-cant');
