@@ -50,6 +50,7 @@ const NAV_ITEMS = [
     path:  '/otc',
     label: 'OTC',
     roles: ['campo'],
+    area:  'OTC',
     icon:  `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
             </svg>`,
@@ -58,6 +59,7 @@ const NAV_ITEMS = [
     path:  '/cm',
     label: 'CM',
     roles: ['campo'],
+    area:  'CAMBIOS',
     icon:  `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>
             </svg>`,
@@ -117,6 +119,12 @@ export function navigate(path, session, replace = false) {
     loadView('/', _session);
     return;
   }
+  // Verificar área para campo
+  if (_session.role === 'campo') {
+    const sArea = _session.asignacionActual?.area || (_session.usuarioOperativoAsignado ? 'OTC' : null);
+    if (path === '/otc' && sArea !== 'OTC') { loadView('/', _session); return; }
+    if (path === '/cm'  && sArea !== 'CAMBIOS' && !['admin','coordinadora'].includes(_session.role)) { loadView('/', _session); return; }
+  }
 
   if (!replace) {
     history.pushState({ path }, '', '#' + path);
@@ -170,7 +178,13 @@ function buildNav(session) {
   const sidebarNav = document.getElementById('sidebar-nav');
   const bottomNav  = document.getElementById('bottom-nav');
 
-  const visible = NAV_ITEMS.filter(item => item.roles.includes(session.role));
+  const sessionArea = session.asignacionActual?.area || (session.usuarioOperativoAsignado ? 'OTC' : null);
+  const visible = NAV_ITEMS.filter(function(item) {
+    if (!item.roles.includes(session.role)) return false;
+    // For campo: if item has area restriction, only show if matches assigned area
+    if (item.area && session.role === 'campo') return item.area === sessionArea;
+    return true;
+  });
 
   // Sidebar (desktop) — todos los items visibles
   sidebarNav.innerHTML = visible.map(item => `
