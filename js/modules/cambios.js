@@ -430,7 +430,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
   const map = new G.Map(contenedor, {
     zoom: 13,
     center: { lat: safeNum(ordenes[0].latitud), lng: safeNum(ordenes[0].longitud) },
-    mapTypeId: 'satellite',
+    mapTypeId: 'hybrid',
     mapTypeControl: false,
     fullscreenControl: false,
     streetViewControl: false,
