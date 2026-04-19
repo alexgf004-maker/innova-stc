@@ -355,6 +355,19 @@ async function showListado(db, session, isCampo, destino) {
 // ─────────────────────────────────────────
 // MAPA
 // ─────────────────────────────────────────
+const GMAPS_KEY = 'AIzaSyAjaEXeu_4PDedaZhLfrwWvatu5RN9q1SU';
+
+function loadGoogleMaps() {
+  return new Promise(function(resolve) {
+    if (window.google && window.google.maps) { resolve(); return; }
+    window.__gmapsCallback = resolve;
+    const s = document.createElement('script');
+    s.src = 'https://maps.googleapis.com/maps/api/js?key=' + GMAPS_KEY + '&callback=__gmapsCallback&libraries=places';
+    s.async = true;
+    document.head.appendChild(s);
+  });
+}
+
 async function showMapa(db, session, isCampo, destino) {
   const content = document.getElementById('cambios-content');
   if (!content) return;
@@ -372,26 +385,28 @@ async function showMapa(db, session, isCampo, destino) {
     }
     const conCoords = ordenes.filter(function(o) { return o.latitud && o.longitud; });
 
+    if (!conCoords.length) {
+      content.innerHTML =
+        '<div class="text-center py-12 space-y-2">' +
+          '<p class="text-gray-400 text-sm">Sin coordenadas disponibles</p>' +
+          '<p class="text-xs text-gray-300">Incluye columnas Latitud y Longitud en el Excel de órdenes</p>' +
+        '</div>';
+      return;
+    }
+
     content.innerHTML =
-      '<div class="space-y-3">' +
-        '<p class="text-xs text-gray-400">' + conCoords.length + ' órdenes con coordenadas' + (isCampo ? ' · ' + (destino || '') : '') + '</p>' +
-        '<div id="mapa-contenedor" class="w-full rounded-xl border border-gray-200 overflow-hidden" style="height:400px;background:#f5f5f5">' +
-          '<div class="flex items-center justify-center h-full text-gray-400 text-sm">Cargando mapa...</div>' +
-        '</div>' +
-        '<div class="space-y-1">' +
-          conCoords.map(function(o) {
-            const bloqueada = esBloqueada(o, calendarioMap);
-            return '<div class="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-gray-100 text-xs cursor-pointer" data-lat="' + o.latitud + '" data-lng="' + o.longitud + '">' +
-              '<span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:' + (bloqueada ? '#9CA3AF' : '#0F766E') + '"></span>' +
-              '<span class="font-mono text-gray-400 shrink-0">' + safeStr(o.wo) + '</span>' +
-              '<span class="text-gray-700 truncate">' + safeStr(o.cliente) + '</span>' +
-            '</div>';
-          }).join('') +
+      '<div class="space-y-2">' +
+        '<p class="text-xs text-gray-400">' + conCoords.length + ' órdenes · Toca un marcador para ver opciones</p>' +
+        '<div id="mapa-contenedor" class="w-full rounded-xl border border-gray-200 overflow-hidden" style="height:calc(100vh - 260px);min-height:350px;">' +
+          '<div class="flex items-center justify-center h-full text-gray-400 text-sm gap-2">' +
+            '<svg class="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>' +
+            'Cargando mapa...' +
+          '</div>' +
         '</div>' +
       '</div>';
 
-    // Load Google Maps
-    initMapaCambios(conCoords, calendarioMap);
+    await loadGoogleMaps();
+    initMapaCambios(conCoords, calendarioMap, session, isCampo);
 
   } catch(e) { content.innerHTML = errHtml(); console.error(e); }
 }
