@@ -975,9 +975,12 @@ function showDetalleOrden(db, session, orden, isCampo, calendarioMap) {
           '<button id="btn-hecha" class="flex-1 text-white font-semibold rounded-xl py-2.5 text-sm" style="background:#0F766E">✓ Realizada</button>' +
         '</div>'
       : '') +
-      // Admin — asignar pareja
+      // Admin — asignar pareja + aprobar
       (isAdmin && !isCampo ?
         '<button id="btn-asignar-1" class="w-full border border-gray-300 text-gray-600 font-medium rounded-xl py-2.5 text-sm hover:bg-gray-50">Asignar pareja</button>'
+      : '') +
+      (isAdmin && !isCampo && orden.estadoCampo === 'hecha' ?
+        '<button id="btn-aprobar" class="w-full text-white font-semibold rounded-xl py-2.5 text-sm" style="background:#166534">✓ Aprobar y eliminar del mapa</button>'
       : '') +
     '</div>'
   );
@@ -999,6 +1002,33 @@ function showDetalleOrden(db, session, orden, isCampo, calendarioMap) {
     btnVisita.onclick = function() {
       ov.remove();
       showRegistrarVisita(db, session, orden);
+    };
+  }
+
+  // Admin aprobar
+  const btnAprobar = ov.querySelector('#btn-aprobar');
+  if (btnAprobar) {
+    btnAprobar.onclick = async function() {
+      btnAprobar.textContent = 'Aprobando...';
+      btnAprobar.disabled = true;
+      try {
+        let ref;
+        if (orden.id) { ref = doc(db, COL_ORDENES, orden.id); }
+        else {
+          const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo', '==', orden.wo)));
+          if (snap.empty) throw new Error('No encontrada');
+          ref = snap.docs[0].ref;
+        }
+        await updateDoc(ref, { estadoCampo: 'aprobada', aprobadoPor: session.displayName, fechaAprobacion: serverTimestamp() });
+        ov.remove();
+        showToast('Orden aprobada. Punto eliminado del mapa.', 'success');
+        showListado(db, session, false, null);
+      } catch(e) {
+        showToast('Error al aprobar.', 'error');
+        btnAprobar.textContent = '✓ Aprobar y eliminar del mapa';
+        btnAprobar.disabled = false;
+        console.error(e);
+      }
     };
   }
 
