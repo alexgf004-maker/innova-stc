@@ -839,3 +839,477 @@ async function parseExcelCalendario(file) {
     reader.readAsArrayBuffer(file);
   });
 }
+
+// ─────────────────────────────────────────
+// MAPA
+// ─────────────────────────────────────────
+const GMAPS_KEY = 'AIzaSyAjaEXeu_4PDedaZhLfrwWvatu5RN9q1SU';
+
+function loadGoogleMaps() {
+  return new Promise(function(resolve) {
+    if (window.google && window.google.maps) { resolve(); return; }
+    window.__gmapsCallback = resolve;
+    const s = document.createElement('script');
+    s.src = 'https://maps.googleapis.com/maps/api/js?key=' + GMAPS_KEY + '&callback=__gmapsCallback&libraries=places,geometry,drawing';
+    s.async = true;
+    document.head.appendChild(s);
+  });
+}
+
+async function showMapa(db, session, isCampo, destino) {
+  const content = document.getElementById('cambios-content');
+  if (!content) return;
+  content.innerHTML = loading();
+
+  try {
+    const [snapOrdenes, calendarioMap] = await Promise.all([
+      getDocs(collection(db, COL_ORDENES)),
+      getCalendarioMap(db),
+    ]);
+
+    let ordenes = snapOrdenes.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+    if (isCampo) {
+      ordenes = ordenes.filter(function(o) { return o.pareja === destino && o.estadoCampo !== 'hecha' && o.estadoCampo !== 'aprobada'; });
+    }
+    const conCoords = ordenes.filter(function(o) { return o.latitud && o.longitud && o.estadoCampo !== 'aprobada'; });
+
+    if (!conCoords.length) {
+      content.innerHTML = '<div class="text-center py-12 space-y-2"><p class="text-gray-400 text-sm">Sin coordenadas disponibles</p><p class="text-xs text-gray-300">Incluye columnas Latitud y Longitud en el Excel</p></div>';
+      return;
+    }
+
+    if (!document.getElementById('cambios-spin-style')) {
+      const s = document.createElement('style'); s.id = 'cambios-spin-style';
+      s.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
+      document.head.appendChild(s);
+    }
+
+    content.innerHTML =
+      '<div style="position:relative;width:100%;height:calc(100vh - 220px);min-height:400px;">' +
+        '<div id="mapa-contenedor" style="width:100%;height:100%;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">' +
+          '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#9ca3af;font-size:14px;gap:8px">' +
+            '<svg style="width:16px;height:16px;animation:spin 1s linear infinite" viewBox="0 0 24 24" fill="none"><circle opacity=".25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path opacity=".75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>Cargando mapa...' +
+          '</div>' +
+        '</div>' +
+        '<div id="mapa-sheet" style="position:absolute;bottom:0;left:0;right:0;background:white;border-radius:16px 16px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,0.15);transform:translateY(100%);transition:transform 0.3s ease;z-index:10;max-height:70%;overflow-y:auto;">' +
+          '<div style="display:flex;justify-content:center;padding:10px 0 4px"><div style="width:36px;height:4px;background:#e5e7eb;border-radius:2px"></div></div>' +
+          '<div id="mapa-sheet-content" style="padding:0 16px 24px"></div>' +
+        '</div>' +
+      '</div>';
+
+    await loadGoogleMaps();
+    initMapaCambios(conCoords, calendarioMap, session, isCampo, db);
+
+  } catch(e) { content.innerHTML = errHtml(); console.error(e); }
+}
+
+function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
+  const contenedor = document.getElementById('mapa-contenedor');
+  const sheet      = document.getElementById('mapa-sheet');
+  const sheetBody  = document.getElementById('mapa-sheet-content');
+  if (!contenedor) return;
+
+  const G   = google.maps;
+  const map = new G.Map(contenedor, {
+    zoom: 13,
+    center: { lat: safeNum(ordenes[0].latitud), lng: safeNum(ordenes[0].longitud) },
+    mapTypeId: 'hybrid',
+    mapTypeControl: false, fullscreenControl: false, streetViewControl: false,
+    zoomControlOptions: { position: G.ControlPosition.RIGHT_CENTER },
+  });
+
+  const directionsService  = new G.DirectionsService();
+  const directionsRenderer = new G.DirectionsRenderer({ map, suppressMarkers: true, polylineOptions: { strokeColor: '#0F766E', strokeWeight: 5, strokeOpacity: 0.85 } });
+
+  let userMarker = null, activeMarker = null, assignMode = false, selectedWOs = new Set(), drawnShapes = [], drawingMgr = null, routeActive = false;
+
+  map.addListener('click', function() { closeSheet(); });
+
+  function closeSheet() {
+    if (sheet) sheet.style.transform = 'translateY(100%)';
+    if (activeMarker) { activeMarker.setIcon(buildIcon(activeMarker.__color, false, assignMode)); activeMarker = null; }
+  }
+
+  function clearRoute() {
+    directionsRenderer.setDirections({ routes: [] }); routeActive = false;
+    const cb = document.getElementById('sheet-cancel-ruta'); if (cb) cb.style.display = 'none';
+    const rb = document.getElementById('sheet-ruta');
+    if (rb) { rb.disabled = false; rb.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>Trazar ruta'; }
+  }
+
+  function getMarkerColor(o) {
+    const bl = esBloqueada(o, calendarioMap);
+    if (bl) return '#9CA3AF';
+    if (o.estadoCampo === 'visita') return '#111827';
+    if (o.pareja && PAREJA_COLORS[o.pareja]) return PAREJA_COLORS[o.pareja];
+    return '#6B7280';
+  }
+
+  function buildIcon(color, selected, inAssign) {
+    return { path: G.SymbolPath.CIRCLE, scale: selected ? 13 : 10, fillColor: color, fillOpacity: 1, strokeColor: inAssign && selected ? '#FBBF24' : '#fff', strokeWeight: inAssign && selected ? 4 : selected ? 3 : 2 };
+  }
+
+  function openSheet(o, marker) {
+    if (!sheet || !sheetBody) return;
+    const bloqueada = esBloqueada(o, calendarioMap);
+    const hecha = o.estadoCampo === 'hecha' || o.estadoCampo === 'aprobada';
+    const isAdminUser = !isCampo;
+    const statusColor = bloqueada ? '#9CA3AF' : hecha ? '#166534' : o.estadoCampo === 'visita' ? '#374151' : '#0F766E';
+    const statusLabel = bloqueada ? '🔒 Bloqueada' : hecha ? '✓ Realizada' : o.estadoCampo === 'visita' ? '👁 Visita' : '● Disponible';
+
+    function chip(label, val) {
+      if (!val) return '';
+      return '<div style="background:#f3f4f6;border-radius:8px;padding:6px 10px"><p style="font-size:10px;color:#9ca3af;margin-bottom:2px">' + label + '</p><p style="font-size:12px;font-weight:600;color:#111827;word-break:break-word">' + safeStr(val) + '</p></div>';
+    }
+
+    sheetBody.innerHTML =
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:12px">' +
+        '<div style="flex:1;min-width:0"><p style="font-size:10px;color:#9ca3af;font-family:monospace">' + safeStr(o.wo) + '</p><p style="font-size:16px;font-weight:800;color:#111827;margin-top:2px;line-height:1.25">' + safeStr(o.cliente) + '</p></div>' +
+        '<span style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;background:' + statusColor + '18;color:' + statusColor + ';white-space:nowrap;flex-shrink:0">' + statusLabel + '</span>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;align-items:flex-start;background:#f9fafb;border-radius:10px;padding:9px 12px;margin-bottom:10px">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>' +
+        '<p style="font-size:12px;color:#374151;line-height:1.4">' + safeStr(o.direccion || '—') + '</p>' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px">' +
+        chip('Medidor', o.serie) + chip('DS', o.dsct) + chip('MRU', o.unidadLectura) + chip('Concepto', o.concepto) + chip('NC', o.nc) + chip('Teléfono', o.telefono) +
+        (o.pareja && isAdminUser ? chip('Pareja', o.pareja) : '') +
+        (o.observaciones ? '<div style="grid-column:1/-1;background:#f3f4f6;border-radius:8px;padding:6px 10px"><p style="font-size:10px;color:#9ca3af;margin-bottom:2px">Observaciones</p><p style="font-size:12px;color:#374151">' + safeStr(o.observaciones) + '</p></div>' : '') +
+        (o.observacion ? '<div style="grid-column:1/-1;background:#FEF3C7;border-radius:8px;padding:6px 10px"><p style="font-size:10px;color:#B45309;margin-bottom:2px">Nota visita</p><p style="font-size:12px;color:#374151">' + safeStr(o.observacion) + '</p></div>' : '') +
+      '</div>' +
+      (bloqueada ? '<div style="background:#F3F4F6;color:#6B7280;padding:12px;border-radius:10px;font-size:13px;font-weight:500;margin-bottom:10px;text-align:center">🔒 Orden en período de lectura<br><span style="font-size:11px;font-weight:400">No se puede ejecutar en este momento</span></div>' : '') +
+      '<div style="display:flex;flex-direction:column;gap:7px">' +
+        '<div style="display:flex;gap:7px">' +
+          '<button id="sheet-ruta" style="flex:1;padding:12px;background:#0F766E;color:white;border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>Trazar ruta</button>' +
+          '<a href="https://www.google.com/maps/dir/?api=1&destination=' + o.latitud + ',' + o.longitud + '" target="_blank" style="flex:1;padding:12px;border:1.5px solid #e5e7eb;border-radius:12px;font-size:13px;font-weight:500;color:#374151;text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center">↗ Maps</a>' +
+        '</div>' +
+        '<button id="sheet-cancel-ruta" style="width:100%;padding:9px;background:#FEF2F2;color:#C62828;border:1.5px solid #FECACA;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer;display:' + (routeActive ? 'flex' : 'none') + ';align-items:center;justify-content:center">✕ Cancelar ruta</button>' +
+        (!bloqueada && !hecha && isCampo ? '<div style="display:flex;gap:7px"><button id="sheet-visita" style="flex:1;padding:11px;border:2px solid #e5e7eb;border-radius:12px;font-size:13px;font-weight:600;color:#374151;background:white;cursor:pointer">Visita</button><button id="sheet-hecha" style="flex:1;padding:11px;background:#166534;color:white;border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer">✓ Realizada</button></div>' : '') +
+        (isAdminUser ? '<button id="sheet-asignar-1" style="width:100%;padding:10px;border:1.5px solid #e5e7eb;border-radius:12px;font-size:13px;font-weight:500;color:#374151;background:white;cursor:pointer">Asignar pareja</button>' : '') +
+        (isAdminUser && o.estadoCampo === 'hecha' ? '<button id="sheet-aprobar" style="width:100%;padding:11px;background:#166534;color:white;border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer">✓ Confirmar realizada</button>' : '') +
+      '</div>';
+
+    sheet.style.transform = 'translateY(0)';
+    if (activeMarker && activeMarker !== marker) { activeMarker.setIcon(buildIcon(activeMarker.__color, false, false)); }
+    marker.setIcon(buildIcon(marker.__color, true, false));
+    activeMarker = marker;
+    marker.__orden.__marker = marker;
+
+    document.getElementById('sheet-ruta')?.addEventListener('click', function() { trazarRuta(safeNum(o.latitud), safeNum(o.longitud)); });
+    document.getElementById('sheet-cancel-ruta')?.addEventListener('click', clearRoute);
+    document.getElementById('sheet-hecha')?.addEventListener('click', function() { closeSheet(); showConfirmarHecha(db, session, o); });
+    document.getElementById('sheet-visita')?.addEventListener('click', function() { closeSheet(); showRegistrarVisita(db, session, o); });
+    document.getElementById('sheet-asignar-1')?.addEventListener('click', function() { closeSheet(); showAsignarPareja(db, [o.wo], null); });
+    document.getElementById('sheet-aprobar')?.addEventListener('click', async function() {
+      const btn = document.getElementById('sheet-aprobar');
+      if (btn) { btn.textContent = 'Confirmando...'; btn.disabled = true; }
+      try {
+        let ref;
+        if (o.id) { ref = doc(db, COL_ORDENES, o.id); }
+        else { const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo','==',o.wo))); if (snap.empty) throw new Error('No encontrada'); ref = snap.docs[0].ref; }
+        await updateDoc(ref, { estadoCampo: 'aprobada', aprobadoPor: session.displayName, fechaAprobacion: serverTimestamp() });
+        closeSheet();
+        if (marker) marker.setMap(null);
+        showToast('Orden confirmada. Punto eliminado.', 'success');
+      } catch(e) { showToast('Error.','error'); if (btn) { btn.disabled=false; btn.textContent='✓ Confirmar realizada'; } }
+    });
+  }
+
+  const markers = ordenes.map(function(o) {
+    const color  = getMarkerColor(o);
+    const marker = new G.Marker({ position: { lat: safeNum(o.latitud), lng: safeNum(o.longitud) }, title: o.cliente, icon: buildIcon(color, false, false) });
+    marker.__color = color; marker.__orden = o; marker.__sel = false;
+    marker.addListener('click', function() { assignMode ? toggleSel(marker) : openSheet(o, marker); });
+    return marker;
+  });
+
+  markers.forEach(function(m) { m.setMap(map); });
+
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(function(pos) {
+      userMarker = new G.Marker({ position: { lat: pos.coords.latitude, lng: pos.coords.longitude }, map, title: 'Tu ubicación', zIndex: 999, icon: { path: G.SymbolPath.CIRCLE, scale: 9, fillColor: '#2563EB', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2.5 } });
+    }, function() {});
+  }
+
+  function toggleSel(marker) {
+    const wo = marker.__orden.wo;
+    if (selectedWOs.has(wo)) { selectedWOs.delete(wo); marker.__sel = false; } else { selectedWOs.add(wo); marker.__sel = true; }
+    marker.setIcon(buildIcon(marker.__color, marker.__sel, true));
+    updateAssignPanel();
+  }
+
+  function updateAssignPanel() {
+    const el = document.getElementById('assign-count');
+    if (el) el.textContent = selectedWOs.size + ' orden' + (selectedWOs.size !== 1 ? 'es' : '') + ' seleccionada' + (selectedWOs.size !== 1 ? 's' : '');
+  }
+
+  function clearSel() {
+    selectedWOs.clear(); drawnShapes.forEach(function(s) { s.setMap(null); }); drawnShapes = [];
+    markers.forEach(function(m) { m.__sel = false; m.setIcon(buildIcon(m.__color, false, assignMode)); });
+    if (drawingMgr) drawingMgr.setDrawingMode(null);
+    updateAssignPanel();
+  }
+
+  function enterAssignMode() {
+    assignMode = true; closeSheet();
+    const p = document.getElementById('assign-panel'); if (p) p.style.display = 'flex';
+    const btn = document.getElementById('btn-assign-mode'); if (btn) { btn.style.background = '#1B4F8A'; btn.style.color = 'white'; btn.textContent = '✕ Salir'; }
+    markers.forEach(function(m) { m.setIcon(buildIcon(m.__color, m.__sel, true)); });
+    if (!drawingMgr && G.drawing) {
+      drawingMgr = new G.drawing.DrawingManager({ drawingMode: null, drawingControl: false, rectangleOptions: { fillColor:'#FBBF24', fillOpacity:0.15, strokeColor:'#FBBF24', strokeWeight:2, clickable:false, editable:false }, polygonOptions: { fillColor:'#FBBF24', fillOpacity:0.15, strokeColor:'#FBBF24', strokeWeight:2, clickable:false, editable:false } });
+      drawingMgr.setMap(map);
+      G.event.addListener(drawingMgr, 'overlaycomplete', function(e) {
+        drawnShapes.push(e.overlay); drawingMgr.setDrawingMode(null);
+        markers.forEach(function(m) {
+          const pos = m.getPosition(); let inside = false;
+          if (e.type === 'rectangle') inside = e.overlay.getBounds().contains(pos);
+          else if (e.type === 'polygon' && G.geometry) inside = G.geometry.poly.containsLocation(pos, e.overlay);
+          if (inside) { selectedWOs.add(m.__orden.wo); m.__sel = true; m.setIcon(buildIcon(m.__color, true, true)); }
+        });
+        updateAssignPanel();
+      });
+    }
+  }
+
+  function exitAssignMode() {
+    assignMode = false; clearSel();
+    const p = document.getElementById('assign-panel'); if (p) p.style.display = 'none';
+    const btn = document.getElementById('btn-assign-mode'); if (btn) { btn.style.background = 'white'; btn.style.color = '#1B4F8A'; btn.textContent = '🗂 Asignar'; }
+    markers.forEach(function(m) { m.setIcon(buildIcon(m.__color, false, false)); });
+  }
+
+  async function doAssign(pareja) {
+    if (!selectedWOs.size) { showToast('Selecciona al menos una orden.','error'); return; }
+    const btn = document.getElementById('ap-btn-' + pareja.replace(' ','_'));
+    if (btn) { btn.textContent = '...'; btn.disabled = true; }
+    try {
+      const color = PAREJA_COLORS[pareja] || '#0F766E';
+      await Promise.all(Array.from(selectedWOs).map(async function(wo) {
+        const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo','==',wo)));
+        if (!snap.empty) await updateDoc(snap.docs[0].ref, { pareja, asignadoEn: serverTimestamp() });
+        const m = markers.find(function(mk) { return mk.__orden.wo === wo; });
+        if (m) { m.__orden.pareja = pareja; m.__color = color; m.__sel = false; m.setIcon(buildIcon(color, false, true)); }
+      }));
+      showToast(selectedWOs.size + ' órdenes → ' + pareja, 'success');
+      selectedWOs.clear(); updateAssignPanel();
+    } catch(e) { showToast('Error al asignar.','error'); console.error(e); }
+    if (btn) { btn.textContent = pareja; btn.disabled = false; }
+  }
+
+  const btnAssign = document.createElement('button');
+  btnAssign.id = 'btn-assign-mode';
+  btnAssign.textContent = '🗂 Asignar';
+  btnAssign.style.cssText = 'position:absolute;top:10px;left:10px;z-index:10;background:white;border:1.5px solid #e5e7eb;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;color:#1B4F8A;box-shadow:0 2px 8px rgba(0,0,0,0.15);cursor:pointer;';
+  contenedor.style.position = 'relative';
+  contenedor.appendChild(btnAssign);
+  btnAssign.addEventListener('click', function() { assignMode ? exitAssignMode() : enterAssignMode(); });
+
+  const wrapper = contenedor.parentElement;
+  const panelEl = document.createElement('div');
+  panelEl.id = 'assign-panel';
+  panelEl.style.cssText = 'display:none;flex-direction:column;gap:8px;background:white;border:1px solid #e5e7eb;border-radius:12px;padding:12px;margin-top:8px;';
+  panelEl.innerHTML =
+    '<div style="display:flex;align-items:center;justify-content:space-between"><p id="assign-count" style="font-size:13px;font-weight:600;color:#374151">0 órdenes seleccionadas</p><button id="assign-clear" style="font-size:12px;color:#6b7280;background:none;border:1px solid #e5e7eb;border-radius:8px;padding:4px 10px;cursor:pointer">Limpiar</button></div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">' + PAREJAS.map(function(p) { return '<button id="ap-btn-' + p.replace(' ','_') + '" data-pareja="' + p + '" style="padding:10px;background:' + PAREJA_COLORS[p] + ';color:white;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">' + p + '</button>'; }).join('') + '</div>' +
+    '<div style="display:flex;gap:6px"><button id="assign-rect" style="flex:1;padding:9px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:12px;color:#374151;background:white;cursor:pointer">⬜ Rectángulo</button><button id="assign-poly" style="flex:1;padding:9px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:12px;color:#374151;background:white;cursor:pointer">✏️ Polígono</button></div>';
+  wrapper.appendChild(panelEl);
+
+  document.getElementById('assign-clear').addEventListener('click', clearSel);
+  document.getElementById('assign-rect').addEventListener('click', function() { if (drawingMgr) drawingMgr.setDrawingMode(G.drawing.OverlayType.RECTANGLE); });
+  document.getElementById('assign-poly').addEventListener('click', function() { if (drawingMgr) drawingMgr.setDrawingMode(G.drawing.OverlayType.POLYGON); });
+  panelEl.querySelectorAll('[data-pareja]').forEach(function(btn) { btn.addEventListener('click', function() { doAssign(btn.dataset.pareja); }); });
+
+  if (isCampo) { btnAssign.style.display = 'none'; panelEl.style.display = 'none'; }
+
+  function trazarRuta(lat, lng) {
+    const btn = document.getElementById('sheet-ruta');
+    if (!navigator.geolocation) { window.open('https://www.google.com/maps/dir/?api=1&destination=' + lat + ',' + lng, '_blank'); return; }
+    if (btn) { btn.innerHTML = '<svg style="animation:spin .8s linear infinite;width:14px;height:14px" viewBox="0 0 24 24" fill="none"><circle opacity=".25" cx="12" cy="12" r="10" stroke="white" stroke-width="4"/><path opacity=".75" fill="white" d="M4 12a8 8 0 018-8v8z"/></svg> Calculando...'; btn.disabled = true; }
+    navigator.geolocation.getCurrentPosition(function(pos) {
+      const origin = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      const dest   = { lat: lat, lng: lng };
+      if (userMarker) userMarker.setPosition(origin);
+      directionsService.route({ origin, destination: dest, travelMode: G.TravelMode.DRIVING }, function(result, status) {
+        if (btn) btn.disabled = false;
+        if (status === 'OK') {
+          directionsRenderer.setDirections(result); routeActive = true;
+          const leg = result.routes[0].legs[0];
+          if (btn) btn.innerHTML = '✓ ' + leg.distance.text + ' · ' + leg.duration.text;
+          const cb = document.getElementById('sheet-cancel-ruta'); if (cb) cb.style.display = 'flex';
+          const bounds = new G.LatLngBounds(); result.routes[0].overview_path.forEach(function(p) { bounds.extend(p); }); map.fitBounds(bounds);
+        } else {
+          if (btn) btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>Trazar ruta';
+          window.open('https://www.google.com/maps/dir/?api=1&destination=' + lat + ',' + lng, '_blank');
+        }
+      });
+    }, function() {
+      if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>Trazar ruta'; }
+      window.open('https://www.google.com/maps/dir/?api=1&destination=' + lat + ',' + lng, '_blank');
+    });
+  }
+  window.__trazarRuta = trazarRuta;
+}
+
+// ─────────────────────────────────────────
+// DETALLE DE ORDEN (listado overlay)
+// ─────────────────────────────────────────
+function showDetalleOrden(db, session, orden, isCampo, calendarioMap) {
+  const bloqueada = esBloqueada(orden, calendarioMap);
+  const hecha     = orden.estadoCampo === 'hecha' || orden.estadoCampo === 'aprobada';
+  const isAdmin   = ['admin', 'coordinadora'].includes(session.role);
+
+  const mapsUrl = orden.latitud && orden.longitud
+    ? 'https://www.google.com/maps/dir/?api=1&destination=' + orden.latitud + ',' + orden.longitud
+    : 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(safeStr(orden.direccion));
+
+  const ov = mkOverlay(
+    '<div class="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">' +
+      '<div><p class="text-xs font-mono text-gray-400">' + safeStr(orden.wo) + '</p><h2 class="font-semibold text-gray-900 leading-tight">' + safeStr(orden.cliente) + '</h2></div>' +
+      '<button id="det-close" class="text-gray-400 hover:text-gray-700">✕</button>' +
+    '</div>' +
+    '<div class="flex-1 overflow-y-auto px-5 py-4 space-y-3 text-sm">' +
+      (bloqueada ? '<div class="rounded-xl px-4 py-3 font-medium text-center" style="background:#F3F4F6;color:#6B7280">🔒 Orden en período de lectura — no se puede ejecutar.</div>' : '') +
+      '<div class="space-y-1.5">' +
+        (orden.direccion ? '<div class="flex gap-2"><span class="text-gray-400 w-24 shrink-0">Dirección</span><span class="text-gray-900 font-medium">' + safeStr(orden.direccion) + '</span></div>' : '') +
+        (orden.serie ? '<div class="flex gap-2"><span class="text-gray-400 w-24 shrink-0">Medidor</span><span class="font-mono font-semibold text-gray-900">' + safeStr(orden.serie) + '</span></div>' : '') +
+        (orden.dsct ? '<div class="flex gap-2"><span class="text-gray-400 w-24 shrink-0">DS</span><span class="text-gray-900 font-medium">' + safeStr(orden.dsct) + '</span></div>' : '') +
+        (orden.unidadLectura ? '<div class="flex gap-2"><span class="text-gray-400 w-24 shrink-0">MRU</span><span class="text-gray-900 font-medium">' + safeStr(orden.unidadLectura) + '</span></div>' : '') +
+        (orden.concepto ? '<div class="flex gap-2"><span class="text-gray-400 w-24 shrink-0">Concepto</span><span class="text-gray-900 font-medium">' + safeStr(orden.concepto) + '</span></div>' : '') +
+        (orden.nc ? '<div class="flex gap-2"><span class="text-gray-400 w-24 shrink-0">NC</span><span class="text-gray-900 font-medium">' + safeStr(orden.nc) + '</span></div>' : '') +
+        (orden.telefono ? '<div class="flex gap-2"><span class="text-gray-400 w-24 shrink-0">Teléfono</span><span class="text-gray-900 font-medium">' + safeStr(orden.telefono) + '</span></div>' : '') +
+        (orden.pareja ? '<div class="flex gap-2"><span class="text-gray-400 w-24 shrink-0">Pareja</span><span class="font-bold" style="color:' + (PAREJA_COLORS[orden.pareja]||'#374151') + '">' + safeStr(orden.pareja) + '</span></div>' : '') +
+        (orden.estadoCampo ? '<div class="flex gap-2"><span class="text-gray-400 w-24 shrink-0">Estado</span><span class="text-gray-900 font-medium">' + safeStr(orden.estadoCampo) + (orden.actualizadaDelsur ? ' · Actualizada ✓' : orden.estadoCampo === 'hecha' ? ' · ⚠ Sin actualizar' : '') + '</span></div>' : '') +
+        (orden.observaciones ? '<div class="flex gap-2"><span class="text-gray-400 w-24 shrink-0">Observ.</span><span class="text-gray-600">' + safeStr(orden.observaciones) + '</span></div>' : '') +
+        (orden.observacion ? '<div class="flex gap-2"><span class="text-gray-400 w-24 shrink-0">Nota visita</span><span class="text-gray-600">' + safeStr(orden.observacion) + '</span></div>' : '') +
+        (orden.hechaPor ? '<div class="flex gap-2"><span class="text-gray-400 w-24 shrink-0">Realizada por</span><span class="text-gray-900">' + safeStr(orden.hechaPor) + '</span></div>' : '') +
+      '</div>' +
+    '</div>' +
+    '<div class="px-5 py-4 border-t border-gray-100 flex flex-col gap-2 shrink-0">' +
+      '<a href="' + mapsUrl + '" target="_blank" class="flex items-center justify-center gap-2 w-full border border-gray-300 text-gray-700 font-medium rounded-xl py-2.5 text-sm"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>Cómo llegar</a>' +
+      (!bloqueada && !hecha && isCampo ? '<div class="flex gap-2"><button id="btn-visita" class="flex-1 border-2 border-gray-300 text-gray-700 font-semibold rounded-xl py-2.5 text-sm">Visita</button><button id="btn-hecha" class="flex-1 text-white font-semibold rounded-xl py-2.5 text-sm" style="background:#0F766E">✓ Realizada</button></div>' : '') +
+      (isAdmin && !isCampo ? '<button id="btn-asignar-1" class="w-full border border-gray-300 text-gray-600 font-medium rounded-xl py-2.5 text-sm">Asignar pareja</button>' : '') +
+      (isAdmin && !isCampo && orden.estadoCampo === 'hecha' ? '<button id="btn-aprobar" class="w-full text-white font-semibold rounded-xl py-2.5 text-sm" style="background:#166534">✓ Confirmar realizada</button>' : '') +
+    '</div>'
+  );
+
+  ov.querySelector('#det-close').onclick = () => ov.remove();
+
+  ov.querySelector('#btn-hecha')?.addEventListener('click', function() { ov.remove(); showConfirmarHecha(db, session, orden); });
+  ov.querySelector('#btn-visita')?.addEventListener('click', function() { ov.remove(); showRegistrarVisita(db, session, orden); });
+  ov.querySelector('#btn-asignar-1')?.addEventListener('click', function() { ov.remove(); showAsignarPareja(db, [orden.wo], null); });
+  ov.querySelector('#btn-aprobar')?.addEventListener('click', async function() {
+    const btn = ov.querySelector('#btn-aprobar'); btn.textContent = 'Confirmando...'; btn.disabled = true;
+    try {
+      let ref;
+      if (orden.id) { ref = doc(db, COL_ORDENES, orden.id); }
+      else { const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo','==',orden.wo))); if (snap.empty) throw new Error('No encontrada'); ref = snap.docs[0].ref; }
+      await updateDoc(ref, { estadoCampo: 'aprobada', aprobadoPor: session.displayName, fechaAprobacion: serverTimestamp() });
+      ov.remove(); showToast('Orden confirmada.', 'success');
+      showSeguimiento(db, session);
+    } catch(e) { showToast('Error al confirmar.', 'error'); btn.textContent = '✓ Confirmar realizada'; btn.disabled = false; }
+  });
+}
+
+// ─────────────────────────────────────────
+// CONFIRMAR REALIZADA (campo)
+// ─────────────────────────────────────────
+function showConfirmarHecha(db, session, orden) {
+  const ov = mkOverlay(
+    '<div class="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">' +
+      '<h2 class="font-semibold text-gray-900">Marcar como realizada</h2>' +
+      '<button id="ch-close" class="text-gray-400 hover:text-gray-700">✕</button>' +
+    '</div>' +
+    '<div class="flex-1 overflow-y-auto px-5 py-4 space-y-4">' +
+      '<p class="text-sm text-gray-600">WO <strong>' + safeStr(orden.wo) + '</strong> · ' + safeStr(orden.cliente) + '</p>' +
+      '<div class="rounded-xl p-4 space-y-3" style="background:#F0FDFA">' +
+        '<p class="text-sm font-semibold text-gray-800">¿Ya está actualizada en Delsur?</p>' +
+        '<div class="flex gap-3">' +
+          '<button id="ch-si" class="flex-1 py-3 rounded-xl font-bold text-white text-sm" style="background:#0F766E">Sí</button>' +
+          '<button id="ch-no" class="flex-1 py-3 rounded-xl font-bold border-2 border-gray-300 text-gray-700 text-sm">No</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>'
+  );
+  ov.querySelector('#ch-close').onclick = () => ov.remove();
+
+  async function guardarHecha(actualizada) {
+    try {
+      let ref;
+      if (orden.id) { ref = doc(db, COL_ORDENES, orden.id); }
+      else { const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo','==',orden.wo))); if (snap.empty) throw new Error('No encontrada'); ref = snap.docs[0].ref; }
+      await updateDoc(ref, { estadoCampo: 'hecha', actualizadaDelsur: actualizada, fechaHecha: serverTimestamp(), hechaPor: session.displayName });
+      ov.remove();
+      showToast('Orden marcada como realizada.', 'success');
+      if (orden.__marker) { orden.__marker.setMap(null); }
+    } catch(e) { showToast('Error al guardar.', 'error'); console.error(e); }
+  }
+
+  ov.querySelector('#ch-si').onclick = () => guardarHecha(true);
+  ov.querySelector('#ch-no').onclick = () => guardarHecha(false);
+}
+
+// ─────────────────────────────────────────
+// REGISTRAR VISITA
+// ─────────────────────────────────────────
+function showRegistrarVisita(db, session, orden) {
+  const ov = mkOverlay(
+    '<div class="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">' +
+      '<h2 class="font-semibold text-gray-900">Registrar visita</h2>' +
+      '<button id="rv-close" class="text-gray-400 hover:text-gray-700">✕</button>' +
+    '</div>' +
+    '<div class="flex-1 overflow-y-auto px-5 py-4 space-y-3">' +
+      '<p class="text-sm text-gray-600">WO <strong>' + safeStr(orden.wo) + '</strong> · ' + safeStr(orden.cliente) + '</p>' +
+      '<div><label class="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wider">Motivo / Observación</label>' +
+      '<textarea id="rv-obs" rows="3" placeholder="Ej. Cliente ausente, medidor inaccesible..." class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2" style="--tw-ring-color:#0F766E"></textarea></div>' +
+    '</div>' +
+    '<div class="px-5 py-4 border-t border-gray-100 flex gap-2 shrink-0">' +
+      '<button id="rv-cancel" class="flex-1 border border-gray-200 text-gray-600 rounded-xl py-2.5 text-sm font-medium">Cancelar</button>' +
+      '<button id="rv-save" class="flex-1 text-white rounded-xl py-2.5 text-sm font-semibold" style="background:#0F766E">Guardar visita</button>' +
+    '</div>'
+  );
+  ov.querySelector('#rv-close').onclick = ov.querySelector('#rv-cancel').onclick = () => ov.remove();
+  ov.querySelector('#rv-save').onclick = async function() {
+    const obs = ov.querySelector('#rv-obs').value.trim();
+    try {
+      let ref;
+      if (orden.id) { ref = doc(db, COL_ORDENES, orden.id); }
+      else { const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo','==',orden.wo))); if (snap.empty) throw new Error('No encontrada'); ref = snap.docs[0].ref; }
+      await updateDoc(ref, { estadoCampo: 'visita', observacion: obs || 'Sin observación', fechaVisita: serverTimestamp(), visitadoPor: session.displayName });
+      ov.remove(); showToast('Visita registrada.', 'success');
+    } catch(e) { showToast('Error al guardar.', 'error'); console.error(e); }
+  };
+}
+
+// ─────────────────────────────────────────
+// ASIGNAR PAREJA
+// ─────────────────────────────────────────
+function showAsignarPareja(db, wos, onDone) {
+  const ov = mkOverlay(
+    '<div class="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">' +
+      '<div><h2 class="font-semibold text-gray-900">Asignar pareja</h2><p class="text-xs text-gray-400 mt-0.5">' + wos.length + ' orden(es)</p></div>' +
+      '<button id="ap-close" class="text-gray-400 hover:text-gray-700">✕</button>' +
+    '</div>' +
+    '<div class="flex-1 overflow-y-auto px-5 py-4 space-y-2">' +
+      PAREJAS.map(function(p) {
+        return '<button data-pareja="' + p + '" class="w-full flex items-center justify-between px-4 py-3.5 rounded-xl border-2 border-gray-200 text-left transition-all">' +
+          '<span class="font-semibold text-gray-900">' + p + '</span>' +
+          '<span style="width:12px;height:12px;border-radius:50%;background:' + PAREJA_COLORS[p] + ';display:inline-block"></span>' +
+        '</button>';
+      }).join('') +
+    '</div>'
+  );
+  ov.querySelector('#ap-close').onclick = () => ov.remove();
+  ov.querySelectorAll('[data-pareja]').forEach(function(btn) {
+    btn.addEventListener('click', async function() {
+      const pareja = btn.dataset.pareja; btn.textContent = 'Asignando...'; btn.disabled = true;
+      try {
+        await Promise.all(wos.map(async function(wo) {
+          const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo','==',wo)));
+          if (!snap.empty) await updateDoc(snap.docs[0].ref, { pareja, asignadoEn: serverTimestamp() });
+        }));
+        ov.remove(); showToast(wos.length + ' orden(es) → ' + pareja, 'success');
+        if (onDone) onDone();
+      } catch(e) { showToast('Error al asignar.','error'); console.error(e); }
+    });
+  });
+}
