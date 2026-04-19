@@ -313,11 +313,13 @@ async function showListado(db, session, isCampo, destino) {
         const visita    = o.estadoCampo === 'visita';
         const statusBadge = bloqueada
           ? '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:#f3f4f6;color:#9ca3af">🔒 Bloqueada</span>'
-          : realizada
-            ? '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:#DCFCE7;color:#166534">✓ Realizada' + (!o.actualizadaDelsur ? ' · ⚠' : '') + '</span>'
-            : visita
-              ? '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:#FEF3C7;color:#B45309">👁 Visita</span>'
-              : '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:#F0FDFA;color:#0F766E">Pendiente</span>';
+          : realizada && !o.actualizadaDelsur
+            ? '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:#FEF3C7;color:#B45309">✓ Realizada · Sin actualizar ⚠</span>'
+            : realizada
+              ? '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:#DCFCE7;color:#166534">✓ Realizada</span>'
+              : visita
+                ? '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:#111827;color:white">👁 Visita</span>'
+                : '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:#F0FDFA;color:#0F766E">Pendiente</span>';
 
         return '<div class="bg-white rounded-xl border border-gray-200 px-4 py-3 cursor-pointer active:bg-gray-50 ' + (bloqueada ? 'opacity-60' : '') + '" data-wo="' + o.wo + '">' +
           '<div class="flex items-start justify-between gap-2 mb-1">' +
@@ -550,11 +552,11 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
 
   // ── helpers ──
   function getMarkerColor(o) {
-    if (o.pareja && PAREJA_COLORS[o.pareja]) return PAREJA_COLORS[o.pareja];
     const bl = esBloqueada(o, calendarioMap);
-    if (bl) return '#9CA3AF';
-    if (o.estadoCampo === 'visita') return '#B45309';
-    if (o.estadoCampo === 'hecha')  return '#166534';
+    if (bl) return '#9CA3AF';                          // gris — bloqueada
+    if (o.estadoCampo === 'visita') return '#111827';  // negro — visita
+    // pareja color (includes realizadas for admin view)
+    if (o.pareja && PAREJA_COLORS[o.pareja]) return PAREJA_COLORS[o.pareja];
     return '#6B7280';
   }
 
@@ -592,7 +594,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
     const bloqueada   = esBloqueada(o, calendarioMap);
     const hecha       = o.estadoCampo === 'hecha';
     const isAdminUser = !isCampo;
-    const statusColor = bloqueada ? '#9CA3AF' : hecha ? '#166534' : o.estadoCampo === 'visita' ? '#B45309' : '#0F766E';
+    const statusColor = bloqueada ? '#9CA3AF' : hecha ? '#166534' : o.estadoCampo === 'visita' ? '#374151' : '#0F766E';
     const statusLabel = bloqueada ? '🔒 Bloqueada' : hecha ? '✓ Realizada' : o.estadoCampo === 'visita' ? '👁 Visita' : '● Disponible';
 
     function chip(label, val) {
