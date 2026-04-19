@@ -1,4 +1,3 @@
-
 /**
  * cambios.js — Módulo Cambio de Medidores
  * Fase 2: Gestión de órdenes, asignación por parejas, vista campo/admin
@@ -368,7 +367,7 @@ async function showListado(db, session, isCampo, destino) {
           : '') +
         '</div>';
 
-      // Wire card clicks
+      // Wire card clicks — campo
       content.querySelectorAll('[data-wo]').forEach(function(card) {
         card.addEventListener('click', function() {
           const orden = ordenes.find(function(o) { return o.wo === card.dataset.wo; });
@@ -378,12 +377,74 @@ async function showListado(db, session, isCampo, destino) {
 
     } else {
       // Admin listado
+        // Admin listado — restyled with review flow
+      const pendRevision = ordenes.filter(function(o) { return o.estadoCampo === 'hecha'; });
+      const sinActualizar = pendRevision.filter(function(o) { return !o.actualizadaDelsur; });
+      const actualizadas  = pendRevision.filter(function(o) { return o.actualizadaDelsur; });
+
+      function adminCard(o) {
+        const bloqueada = esBloqueada(o, calendarioMap);
+        const color = o.pareja ? (PAREJA_COLORS[o.pareja] || '#6B7280') : '#6B7280';
+        const parejaLabel = o.pareja
+          ? '<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;color:white;background:' + color + '">' + o.pareja + '</span>'
+          : '<span style="font-size:11px;color:#9ca3af">Sin asignar</span>';
+
+        const estadoBadge = bloqueada
+          ? '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;background:#f3f4f6;color:#9ca3af">🔒 Bloqueada</span>'
+          : o.estadoCampo === 'hecha' && !o.actualizadaDelsur
+            ? '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;background:#FEF3C7;color:#B45309">⚠ Sin actualizar</span>'
+            : o.estadoCampo === 'hecha'
+              ? '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;background:#DCFCE7;color:#166534">✓ Actualizada</span>'
+              : o.estadoCampo === 'visita'
+                ? '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;background:#111827;color:white">👁 Visita</span>'
+                : '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;background:#F0FDFA;color:#0F766E">Disponible</span>';
+
+        return '<div class="bg-white rounded-xl border border-gray-200 px-4 py-3 cursor-pointer active:bg-gray-50" data-wo="' + o.wo + '">' +
+          '<div class="flex items-start justify-between gap-2 mb-1.5">' +
+            '<div class="min-w-0">' +
+              '<p style="font-size:10px;color:#9ca3af;font-family:monospace">' + safeStr(o.wo) + '</p>' +
+              '<p class="text-sm font-semibold text-gray-900 leading-tight mt-0.5">' + safeStr(o.cliente) + '</p>' +
+            '</div>' +
+            estadoBadge +
+          '</div>' +
+          '<p class="text-xs text-gray-500 truncate mb-1.5">' + safeStr(o.direccion) + '</p>' +
+          '<div class="flex items-center gap-1.5 flex-wrap">' +
+            parejaLabel +
+            (o.hechaPor ? '<span style="font-size:11px;color:#6b7280">· ' + safeStr(o.hechaPor) + '</span>' : '') +
+            (o.fechaHecha ? '<span style="font-size:11px;color:#9ca3af">· ' + fmtDate(o.fechaHecha) + '</span>' : '') +
+          '</div>' +
+        '</div>';
+      }
+
       content.innerHTML =
-        '<div class="space-y-2">' +
+        '<div class="space-y-4">' +
+          // Header with reload
+          '<div class="flex items-center justify-between">' +
+            '<div class="flex gap-2 flex-wrap">' +
+              '<span style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:20px;background:#FEF3C7;color:#B45309">' + sinActualizar.length + ' sin actualizar</span>' +
+              '<span style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:20px;background:#DCFCE7;color:#166534">' + actualizadas.length + ' actualizadas</span>' +
+            '</div>' +
+            '<button id="btn-reload-listado" style="padding:6px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:12px;color:#374151;background:white;cursor:pointer">↻ Actualizar</button>' +
+          '</div>' +
+
+          // Pendientes de revisión
+          (pendRevision.length > 0 ?
+            '<div>' +
+              '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Pendientes de revisión (' + pendRevision.length + ')</p>' +
+              '<div class="space-y-2">' + pendRevision.map(adminCard).join('') + '</div>' +
+            '</div>'
+          : '') +
+
+          // Filtros y listado completo
           renderFiltros() +
-          '<button id="btn-asignar-pareja" class="w-full text-xs font-medium py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 mb-1">Mantén presionado para seleccionar · Asignar pareja</button>' +
+          '<button id="btn-asignar-pareja" style="width:100%;padding:8px;border:1px solid #e5e7eb;border-radius:10px;font-size:12px;color:#6b7280;background:white;cursor:pointer;margin-bottom:4px">Mantén presionado para seleccionar · Asignar pareja</button>' +
           '<div id="cambios-lista" class="space-y-2"></div>' +
         '</div>';
+
+      // Wire reload
+      document.getElementById('btn-reload-listado')?.addEventListener('click', function() {
+        showListado(db, session, isCampo, destino);
+      });
 
       renderCards();
     }
@@ -475,7 +536,7 @@ async function showMapa(db, session, isCampo, destino) {
     if (isCampo) {
       ordenes = ordenes.filter(function(o) { return o.pareja === destino && o.estadoCampo !== 'hecha'; });
     }
-    const conCoords = ordenes.filter(function(o) { return o.latitud && o.longitud; });
+    const conCoords = ordenes.filter(function(o) { return o.latitud && o.longitud && o.estadoCampo !== 'aprobada'; });
 
     if (!conCoords.length) {
       content.innerHTML =
@@ -643,6 +704,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
           '</div>'
         : '') +
         (isAdminUser ? '<button id="sheet-asignar-1" style="width:100%;padding:10px;border:1.5px solid #e5e7eb;border-radius:12px;font-size:13px;font-weight:500;color:#374151;background:white;cursor:pointer">Asignar pareja</button>' : '') +
+        (isAdminUser && o.estadoCampo === 'hecha' ? '<button id="sheet-aprobar" style="width:100%;padding:11px;background:#166534;color:white;border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer">✓ Aprobar y eliminar del mapa</button>' : '') +
       '</div>';
 
     sheet.style.transform = 'translateY(0)';
@@ -657,6 +719,23 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
     document.getElementById('sheet-hecha')?.addEventListener('click', function() { closeSheet(); showConfirmarHecha(db, session, o); });
     document.getElementById('sheet-visita')?.addEventListener('click', function() { closeSheet(); showRegistrarVisita(db, session, o); });
     document.getElementById('sheet-asignar-1')?.addEventListener('click', function() { closeSheet(); showAsignarPareja(db, [o.wo], null); });
+    document.getElementById('sheet-aprobar')?.addEventListener('click', async function() {
+      const btn = document.getElementById('sheet-aprobar');
+      if (btn) { btn.textContent = 'Aprobando...'; btn.disabled = true; }
+      try {
+        let ref;
+        if (o.id) { ref = doc(db, COL_ORDENES, o.id); }
+        else {
+          const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo', '==', o.wo)));
+          if (snap.empty) throw new Error('No encontrada');
+          ref = snap.docs[0].ref;
+        }
+        await updateDoc(ref, { estadoCampo: 'aprobada', aprobadoPor: session.displayName, fechaAprobacion: serverTimestamp() });
+        closeSheet();
+        showToast('Orden aprobada. Punto eliminado del mapa.', 'success');
+        showListado(db, session, false, null);
+      } catch(e) { showToast('Error al aprobar.', 'error'); console.error(e); if (btn) { btn.textContent = '✓ Aprobar y eliminar del mapa'; btn.disabled = false; } }
+    });
   }
 
   // ── build markers ──
