@@ -360,8 +360,18 @@ const GMAPS_KEY = 'AIzaSyAjaEXeu_4PDedaZhLfrwWvatu5RN9q1SU';
 
 function loadGoogleMaps() {
   return new Promise(function(resolve) {
-    if (window.google && window.google.maps) { resolve(); return; }
-    window.__gmapsCallback = resolve;
+    if (window.google && window.google.maps && window.markerClusterer) { resolve(); return; }
+    // Load MarkerClusterer first, then Google Maps
+    function loadClusterer() {
+      if (window.markerClusterer) { resolve(); return; }
+      const sc = document.createElement('script');
+      sc.src = 'https://unpkg.com/@googlemaps/markerclusterer/dist/index.min.js';
+      sc.onload = function() { resolve(); };
+      sc.onerror = function() { resolve(); }; // proceed even if clusterer fails
+      document.head.appendChild(sc);
+    }
+    if (window.google && window.google.maps) { loadClusterer(); return; }
+    window.__gmapsCallback = loadClusterer;
     const s = document.createElement('script');
     s.src = 'https://maps.googleapis.com/maps/api/js?key=' + GMAPS_KEY + '&callback=__gmapsCallback&libraries=places';
     s.async = true;
@@ -396,6 +406,14 @@ async function showMapa(db, session, isCampo, destino) {
     }
 
     // Full-screen map layout with bottom sheet
+    // Add spin keyframe for button spinner
+    if (!document.getElementById('cambios-spin-style')) {
+      const s = document.createElement('style');
+      s.id = 'cambios-spin-style';
+      s.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
+      document.head.appendChild(s);
+    }
+
     content.innerHTML =
       '<div style="position:relative;width:100%;height:calc(100vh - 220px);min-height:400px;">' +
         // Map container
@@ -578,17 +596,51 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
     document.getElementById('sheet-asignar')?.addEventListener('click', function() { closeSheet(); showAsignarPareja(db, [o.wo], null); });
   }
 
-  ordenes.forEach(function(o) {
+  const markers = ordenes.map(function(o) {
     const bloqueada = esBloqueada(o, calendarioMap);
     const color = bloqueada ? '#9CA3AF' : o.estadoCampo === 'visita' ? '#B45309' : o.estadoCampo === 'hecha' ? '#166534' : '#0F766E';
     const marker = new G.Marker({
       position: { lat: safeNum(o.latitud), lng: safeNum(o.longitud) },
-      map, title: o.cliente,
+      title: o.cliente,
       icon: buildIcon(color, false),
     });
     marker.__color = color;
     marker.addListener('click', function() { openSheet(o, marker); });
+    return marker;
   });
+
+  // Use MarkerClusterer if available, otherwise add directly to map
+  if (window.markerClusterer && window.markerClusterer.MarkerClusterer) {
+    new window.markerClusterer.MarkerClusterer({
+      map,
+      markers,
+      algorithmOptions: { maxZoom: 15 },
+      renderer: {
+        render: function(cluster) {
+          const count = cluster.count;
+          const size  = count > 50 ? 48 : count > 10 ? 40 : 34;
+          const bg    = count > 50 ? '#0F766E' : count > 10 ? '#0d9488' : '#14b8a6';
+          return new G.Marker({
+            position: cluster.position,
+            icon: {
+              url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(
+                '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size + '">' +
+                '<circle cx="' + (size/2) + '" cy="' + (size/2) + '" r="' + (size/2 - 2) + '" fill="' + bg + '" stroke="white" stroke-width="2"/>' +
+                '<text x="50%" y="50%" text-anchor="middle" dy=".35em" fill="white" font-size="' + (size > 40 ? 14 : 12) + '" font-family="Inter,sans-serif" font-weight="700">' + count + '</text>' +
+                '</svg>'
+              ),
+              scaledSize: new G.Size(size, size),
+              anchor: new G.Point(size/2, size/2),
+            },
+            zIndex: 1000,
+          });
+        },
+      },
+    });
+  } else {
+    // Fallback: add markers directly
+    markers.forEach(function(m) { m.setMap(map); });
+  }
 
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(function(pos) {
@@ -606,7 +658,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
       window.open('https://www.google.com/maps/dir/?api=1&destination=' + lat + ',' + lng, '_blank');
       return;
     }
-    if (btn) { btn.textContent = 'Calculando...'; btn.disabled = true; }
+    if (btn) { btn.innerHTML = '<svg style="animation:spin 0.8s linear infinite;width:14px;height:14px;flex-shrink:0" viewBox="0 0 24 24" fill="none"><circle opacity=".25" cx="12" cy="12" r="10" stroke="white" stroke-width="4"/><path opacity=".75" fill="white" d="M4 12a8 8 0 018-8v8z"/></svg> Calculando...'; btn.disabled = true; }
     navigator.geolocation.getCurrentPosition(function(pos) {
       const origin = { lat: pos.coords.latitude, lng: pos.coords.longitude };
       const dest   = { lat: lat, lng: lng };
