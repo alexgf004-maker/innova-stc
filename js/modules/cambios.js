@@ -430,6 +430,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
   const map = new G.Map(contenedor, {
     zoom: 13,
     center: { lat: safeNum(ordenes[0].latitud), lng: safeNum(ordenes[0].longitud) },
+    mapTypeId: 'satellite',
     mapTypeControl: false,
     fullscreenControl: false,
     streetViewControl: false,
@@ -498,16 +499,50 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
     }
 
     sheetBody.innerHTML =
-      '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px">' +
+      // Header — cliente + estado
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px">' +
         '<div style="flex:1;min-width:0">' +
-          '<p style="font-size:10px;color:#9ca3af;font-family:monospace">' + safeStr(o.wo) + '</p>' +
-          '<p style="font-size:16px;font-weight:700;color:#111827;margin-top:2px;line-height:1.3">' + safeStr(o.cliente) + '</p>' +
+          '<p style="font-size:10px;color:#9ca3af;font-family:monospace;margin-bottom:1px">' + safeStr(o.wo) + '</p>' +
+          '<p style="font-size:15px;font-weight:700;color:#111827;line-height:1.3">' + safeStr(o.cliente) + '</p>' +
         '</div>' +
-        '<span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;background:' + statusColor + '20;color:' + statusColor + ';flex-shrink:0;margin-left:8px">' + statusLabel + '</span>' +
+        '<span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;background:' + statusColor + '20;color:' + statusColor + ';white-space:nowrap">' + statusLabel + '</span>' +
       '</div>' +
-      '<div style="margin-bottom:14px">' +
-        infoRow('Dirección', o.direccion) +
-        infoRow('Serie', o.serie) +
+
+      // Info primaria — siempre visible
+      '<div style="background:#f9fafb;border-radius:10px;padding:10px 12px;margin-bottom:12px;display:flex;flex-direction:column;gap:6px">' +
+        '<div style="display:flex;gap:8px;align-items:baseline">' +
+          '<span style="font-size:11px;color:#9ca3af;min-width:60px">Medidor</span>' +
+          '<span style="font-size:13px;font-weight:600;color:#111827;font-family:monospace">' + safeStr(o.serie || '—') + '</span>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;align-items:baseline">' +
+          '<span style="font-size:11px;color:#9ca3af;min-width:60px">Dirección</span>' +
+          '<span style="font-size:12px;color:#374151;flex:1">' + safeStr(o.direccion || '—') + '</span>' +
+        '</div>' +
+      '</div>' +
+
+      // Bloqueo aviso
+      (bloqueada ? '<div style="background:#FEF2F2;color:#C62828;padding:8px 12px;border-radius:10px;font-size:12px;font-weight:500;margin-bottom:10px">🔒 En período de lectura — no se puede ejecutar.</div>' : '') +
+
+      // Botones de acción — siempre visibles
+      '<div style="display:flex;flex-direction:column;gap:7px;margin-bottom:10px">' +
+        '<div style="display:flex;gap:7px">' +
+          '<button id="sheet-ruta" style="flex:1;padding:11px;background:#0F766E;color:white;border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>Ruta' +
+          '</button>' +
+          '<a href="https://www.google.com/maps/dir/?api=1&destination=' + o.latitud + ',' + o.longitud + '" target="_blank" style="flex:1;padding:11px;border:1.5px solid #e5e7eb;border-radius:12px;font-size:13px;font-weight:500;color:#374151;text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center">↗ Maps</a>' +
+        '</div>' +
+        '<button id="sheet-cancel-ruta" style="width:100%;padding:9px;background:#FEF2F2;color:#C62828;border:1.5px solid #FECACA;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer;display:' + (routeActive ? 'flex' : 'none') + ';align-items:center;justify-content:center;gap:5px">✕ Cancelar ruta</button>' +
+        (!bloqueada && !hecha && isCampo ?
+          '<div style="display:flex;gap:7px">' +
+            '<button id="sheet-visita" style="flex:1;padding:11px;border:2px solid #e5e7eb;border-radius:12px;font-size:13px;font-weight:600;color:#374151;background:white;cursor:pointer">Visita</button>' +
+            '<button id="sheet-hecha" style="flex:1;padding:11px;background:#166534;color:white;border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer">✓ Hecha</button>' +
+          '</div>'
+        : '') +
+        (isAdmin ? '<button id="sheet-asignar" style="width:100%;padding:10px;border:1.5px solid #e5e7eb;border-radius:12px;font-size:13px;font-weight:500;color:#374151;background:white;cursor:pointer">Asignar pareja</button>' : '') +
+      '</div>' +
+
+      // Ver más — info secundaria colapsable
+      '<div id="sheet-extra" style="display:none;border-top:1px solid #f3f4f6;padding-top:10px;margin-bottom:4px">' +
         infoRow('DS', o.dsct) +
         infoRow('MRU', o.unidadLectura) +
         infoRow('Concepto', o.concepto) +
@@ -518,21 +553,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
         (o.hechaPor ? infoRow('Hecha por', o.hechaPor) : '') +
         (o.observacion ? infoRow('Nota visita', o.observacion) : '') +
       '</div>' +
-      (bloqueada ? '<div style="background:#FEF2F2;color:#C62828;padding:10px 12px;border-radius:10px;font-size:12px;font-weight:500;margin-bottom:12px">🔒 En período de lectura — no se puede ejecutar.</div>' : '') +
-      '<div style="display:flex;flex-direction:column;gap:8px">' +
-        '<button id="sheet-ruta" style="width:100%;padding:12px;background:#0F766E;color:white;border:none;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">' +
-          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>Trazar ruta' +
-        '</button>' +
-        '<button id="sheet-cancel-ruta" style="width:100%;padding:10px;background:#FEF2F2;color:#C62828;border:1.5px solid #FECACA;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer;display:' + (routeActive ? 'block' : 'none') + '">✕ Cancelar ruta</button>' +
-        '<a href="https://www.google.com/maps/dir/?api=1&destination=' + o.latitud + ',' + o.longitud + '" target="_blank" style="width:100%;padding:11px;border:1.5px solid #e5e7eb;border-radius:12px;font-size:13px;font-weight:500;color:#374151;text-align:center;text-decoration:none;display:block">↗ Abrir en Google Maps</a>' +
-        (!bloqueada && !hecha && isCampo ?
-          '<div style="display:flex;gap:8px">' +
-            '<button id="sheet-visita" style="flex:1;padding:11px;border:2px solid #e5e7eb;border-radius:12px;font-size:13px;font-weight:600;color:#374151;background:white;cursor:pointer">Visita</button>' +
-            '<button id="sheet-hecha" style="flex:1;padding:11px;background:#166534;color:white;border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer">✓ Hecha</button>' +
-          '</div>'
-        : '') +
-        (isAdmin ? '<button id="sheet-asignar" style="width:100%;padding:11px;border:1.5px solid #e5e7eb;border-radius:12px;font-size:13px;font-weight:500;color:#374151;background:white;cursor:pointer">Asignar pareja</button>' : '') +
-      '</div>';
+      '<button id="sheet-toggle-extra" style="width:100%;padding:8px;background:none;border:none;font-size:12px;color:#6b7280;cursor:pointer;text-align:center">Ver más ▾</button>';
 
     sheet.style.transform = 'translateY(0)';
 
@@ -544,6 +565,14 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
 
     document.getElementById('sheet-ruta')?.addEventListener('click', function() { trazarRuta(safeNum(o.latitud), safeNum(o.longitud)); });
     document.getElementById('sheet-cancel-ruta')?.addEventListener('click', function() { clearRoute(); });
+    let extraVisible = false;
+    document.getElementById('sheet-toggle-extra')?.addEventListener('click', function() {
+      extraVisible = !extraVisible;
+      const extra  = document.getElementById('sheet-extra');
+      const btn    = document.getElementById('sheet-toggle-extra');
+      if (extra) extra.style.display = extraVisible ? 'block' : 'none';
+      if (btn)   btn.textContent = extraVisible ? 'Ver menos ▴' : 'Ver más ▾';
+    });
     document.getElementById('sheet-hecha')?.addEventListener('click', function() { closeSheet(); showConfirmarHecha(db, session, o); });
     document.getElementById('sheet-visita')?.addEventListener('click', function() { closeSheet(); showRegistrarVisita(db, session, o); });
     document.getElementById('sheet-asignar')?.addEventListener('click', function() { closeSheet(); showAsignarPareja(db, [o.wo], null); });
