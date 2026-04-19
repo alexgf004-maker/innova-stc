@@ -9,6 +9,7 @@
 
 import { initAdmin }   from './modules/admin.js';
 import { initKardex }  from './modules/kardex.js';
+import { initCambios } from './modules/cambios.js';
 
 // ─────────────────────────────────────────
 // REGISTRO DE RUTAS
@@ -18,7 +19,7 @@ const ROUTES = {
   '/':                 { view: 'views/home.html',           init: null,        roles: ['admin', 'coordinadora', 'campo'] },
   '/kardex':           { view: 'views/kardex.html',         init: initKardex,  roles: ['admin', 'coordinadora', 'campo'] },
   '/otc':              { view: 'views/kardex.html',         init: initKardex,  roles: ['campo'] },
-  '/cm':               { view: 'views/kardex.html',         init: initKardex,  roles: ['campo'] },
+  '/cm':               { view: 'views/cambios.html',        init: initCambios, roles: ['campo', 'admin', 'coordinadora'] },
   '/admin/usuarios':   { view: 'views/admin-usuarios.html', init: initAdmin,   roles: ['admin'] },
   '/perfil':           { view: 'views/perfil.html',         init: null,        roles: ['admin', 'coordinadora', 'campo'] },
 };
@@ -70,7 +71,14 @@ const NAV_ITEMS = [
               <path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/>
             </svg>`,
   },
-  // Fase 2: { path: '/cambios', label: 'Cambios', roles: [...], icon: `...` },
+  {
+    path:  '/cm',
+    label: 'Cambios',
+    roles: ['admin', 'coordinadora'],
+    icon:  `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>
+            </svg>`,
+  },
   // Fase 3: { path: '/otc',     label: 'OTC',     roles: [...], icon: `...` },
 ];
 
