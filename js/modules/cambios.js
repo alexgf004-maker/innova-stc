@@ -420,52 +420,175 @@ async function showMapa(db, session, isCampo, destino) {
   } catch(e) { content.innerHTML = errHtml(); console.error(e); }
 }
 
-function initMapaCambios(ordenes, calendarioMap) {
+function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
   const contenedor = document.getElementById('mapa-contenedor');
+  const sheet      = document.getElementById('mapa-sheet');
+  const sheetBody  = document.getElementById('mapa-sheet-content');
   if (!contenedor) return;
 
-  // Use static map as fallback if Maps API not available
-  if (typeof google === 'undefined' || typeof google.maps === 'undefined') {
-    // Generate static map URL with markers
-    if (!ordenes.length) {
-      contenedor.innerHTML = '<div class="flex items-center justify-center h-full text-gray-400 text-sm">Sin coordenadas disponibles</div>';
-      return;
+  const G   = google.maps;
+  const map = new G.Map(contenedor, {
+    zoom: 13,
+    center: { lat: safeNum(ordenes[0].latitud), lng: safeNum(ordenes[0].longitud) },
+    mapTypeControl: false,
+    fullscreenControl: false,
+    streetViewControl: false,
+    zoomControlOptions: { position: G.ControlPosition.RIGHT_CENTER },
+  });
+
+  const directionsService  = new G.DirectionsService();
+  const directionsRenderer = new G.DirectionsRenderer({
+    map,
+    suppressMarkers: true,
+    polylineOptions: { strokeColor: '#0F766E', strokeWeight: 5, strokeOpacity: 0.85 },
+  });
+
+  let userMarker   = null;
+  let activeMarker = null;
+
+  map.addListener('click', function() { closeSheet(); });
+
+  function closeSheet() {
+    if (sheet) sheet.style.transform = 'translateY(100%)';
+    if (activeMarker) {
+      activeMarker.setIcon(buildIcon(activeMarker.__color, false));
+      activeMarker = null;
     }
-    const center = ordenes[0];
-    const markers = ordenes.map(function(o) {
-      const bloqueada = esBloqueada(o, calendarioMap);
-      const color = bloqueada ? 'gray' : '0F766E';
-      return 'color:0x' + color + '|' + o.latitud + ',' + o.longitud;
-    }).join('&markers=');
-    const url = 'https://maps.googleapis.com/maps/api/staticmap?center=' + center.latitud + ',' + center.longitud +
-      '&zoom=13&size=600x400&maptype=roadmap&markers=' + markers;
-    contenedor.innerHTML = '<a href="https://maps.google.com?q=' + center.latitud + ',' + center.longitud + '" target="_blank" class="block w-full h-full">' +
-      '<img src="' + url + '" class="w-full h-full object-cover" onerror="this.parentElement.parentElement.innerHTML=\'<div class=&quot;flex items-center justify-center h-full text-gray-400 text-sm flex-col gap-2&quot;><p>Mapa no disponible</p><p class=&quot;text-xs&quot;>Configura Google Maps API</p></div>\'"/>' +
-    '</a>';
-    return;
   }
 
-  const map = new google.maps.Map(contenedor, {
-    zoom: 13,
-    center: { lat: safeNum(ordenes[0]?.latitud), lng: safeNum(ordenes[0]?.longitud) },
-  });
+  function buildIcon(color, selected) {
+    return {
+      path: G.SymbolPath.CIRCLE,
+      scale: selected ? 13 : 10,
+      fillColor: color,
+      fillOpacity: 1,
+      strokeColor: '#fff',
+      strokeWeight: selected ? 3 : 2,
+    };
+  }
+
+  function openSheet(o, marker) {
+    if (!sheet || !sheetBody) return;
+    const bloqueada = esBloqueada(o, calendarioMap);
+    const hecha     = o.estadoCampo === 'hecha';
+    const isAdmin   = !isCampo;
+    const statusColor = bloqueada ? '#9CA3AF' : hecha ? '#166534' : o.estadoCampo === 'visita' ? '#B45309' : '#0F766E';
+    const statusLabel = bloqueada ? '🔒 Bloqueada' : hecha ? '✓ Hecha' : o.estadoCampo === 'visita' ? '👁 Visita' : '● Disponible';
+
+    function infoRow(label, val) {
+      if (!val) return '';
+      return '<div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid #f3f4f6">' +
+        '<span style="color:#9ca3af;font-size:12px;min-width:90px;flex-shrink:0">' + label + '</span>' +
+        '<span style="color:#111827;font-size:12px;font-weight:500;flex:1">' + safeStr(val) + '</span>' +
+      '</div>';
+    }
+
+    sheetBody.innerHTML =
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px">' +
+        '<div style="flex:1;min-width:0">' +
+          '<p style="font-size:10px;color:#9ca3af;font-family:monospace">' + safeStr(o.wo) + '</p>' +
+          '<p style="font-size:16px;font-weight:700;color:#111827;margin-top:2px;line-height:1.3">' + safeStr(o.cliente) + '</p>' +
+        '</div>' +
+        '<span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;background:' + statusColor + '20;color:' + statusColor + ';flex-shrink:0;margin-left:8px">' + statusLabel + '</span>' +
+      '</div>' +
+      '<div style="margin-bottom:14px">' +
+        infoRow('Dirección', o.direccion) +
+        infoRow('Serie', o.serie) +
+        infoRow('DS', o.dsct) +
+        infoRow('MRU', o.unidadLectura) +
+        infoRow('Concepto', o.concepto) +
+        infoRow('NC', o.nc) +
+        infoRow('Teléfono', o.telefono) +
+        infoRow('Observaciones', o.observaciones) +
+        (o.pareja && isAdmin ? infoRow('Pareja', o.pareja) : '') +
+        (o.hechaPor ? infoRow('Hecha por', o.hechaPor) : '') +
+        (o.observacion ? infoRow('Nota visita', o.observacion) : '') +
+      '</div>' +
+      (bloqueada ? '<div style="background:#FEF2F2;color:#C62828;padding:10px 12px;border-radius:10px;font-size:12px;font-weight:500;margin-bottom:12px">🔒 En período de lectura — no se puede ejecutar.</div>' : '') +
+      '<div style="display:flex;flex-direction:column;gap:8px">' +
+        '<button id="sheet-ruta" style="width:100%;padding:12px;background:#0F766E;color:white;border:none;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">' +
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>Trazar ruta' +
+        '</button>' +
+        '<a href="https://www.google.com/maps/dir/?api=1&destination=' + o.latitud + ',' + o.longitud + '" target="_blank" style="width:100%;padding:11px;border:1.5px solid #e5e7eb;border-radius:12px;font-size:13px;font-weight:500;color:#374151;text-align:center;text-decoration:none;display:block">↗ Abrir en Google Maps</a>' +
+        (!bloqueada && !hecha && isCampo ?
+          '<div style="display:flex;gap:8px">' +
+            '<button id="sheet-visita" style="flex:1;padding:11px;border:2px solid #e5e7eb;border-radius:12px;font-size:13px;font-weight:600;color:#374151;background:white;cursor:pointer">Visita</button>' +
+            '<button id="sheet-hecha" style="flex:1;padding:11px;background:#166534;color:white;border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer">✓ Hecha</button>' +
+          '</div>'
+        : '') +
+        (isAdmin ? '<button id="sheet-asignar" style="width:100%;padding:11px;border:1.5px solid #e5e7eb;border-radius:12px;font-size:13px;font-weight:500;color:#374151;background:white;cursor:pointer">Asignar pareja</button>' : '') +
+      '</div>';
+
+    sheet.style.transform = 'translateY(0)';
+
+    if (activeMarker && activeMarker !== marker) {
+      activeMarker.setIcon(buildIcon(activeMarker.__color, false));
+    }
+    marker.setIcon(buildIcon(marker.__color, true));
+    activeMarker = marker;
+
+    document.getElementById('sheet-ruta')?.addEventListener('click', function() { trazarRuta(safeNum(o.latitud), safeNum(o.longitud)); });
+    document.getElementById('sheet-hecha')?.addEventListener('click', function() { closeSheet(); showConfirmarHecha(db, session, o); });
+    document.getElementById('sheet-visita')?.addEventListener('click', function() { closeSheet(); showRegistrarVisita(db, session, o); });
+    document.getElementById('sheet-asignar')?.addEventListener('click', function() { closeSheet(); showAsignarPareja(db, [o.wo], null); });
+  }
 
   ordenes.forEach(function(o) {
     const bloqueada = esBloqueada(o, calendarioMap);
-    new google.maps.Marker({
+    const color = bloqueada ? '#9CA3AF' : o.estadoCampo === 'visita' ? '#B45309' : o.estadoCampo === 'hecha' ? '#166534' : '#0F766E';
+    const marker = new G.Marker({
       position: { lat: safeNum(o.latitud), lng: safeNum(o.longitud) },
-      map,
-      title: o.cliente,
-      icon: {
-        path: google.maps.SymbolPath.CIRCLE,
-        scale: 8,
-        fillColor: bloqueada ? '#9CA3AF' : '#0F766E',
-        fillOpacity: 1,
-        strokeColor: '#fff',
-        strokeWeight: 2,
-      },
+      map, title: o.cliente,
+      icon: buildIcon(color, false),
     });
+    marker.__color = color;
+    marker.addListener('click', function() { openSheet(o, marker); });
   });
+
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(function(pos) {
+      userMarker = new G.Marker({
+        position: { lat: pos.coords.latitude, lng: pos.coords.longitude },
+        map, title: 'Tu ubicación', zIndex: 999,
+        icon: { path: G.SymbolPath.CIRCLE, scale: 9, fillColor: '#2563EB', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2.5 },
+      });
+    }, function() {});
+  }
+
+  function trazarRuta(lat, lng) {
+    const btn = document.getElementById('sheet-ruta');
+    if (!navigator.geolocation) {
+      window.open('https://www.google.com/maps/dir/?api=1&destination=' + lat + ',' + lng, '_blank');
+      return;
+    }
+    if (btn) { btn.textContent = 'Calculando...'; btn.disabled = true; }
+    navigator.geolocation.getCurrentPosition(function(pos) {
+      const origin = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      const dest   = { lat: lat, lng: lng };
+      if (userMarker) userMarker.setPosition(origin);
+      directionsService.route({ origin, destination: dest, travelMode: G.TravelMode.DRIVING },
+        function(result, status) {
+          if (btn) btn.disabled = false;
+          if (status === 'OK') {
+            directionsRenderer.setDirections(result);
+            const leg = result.routes[0].legs[0];
+            if (btn) { btn.innerHTML = '✓ ' + leg.distance.text + ' · ' + leg.duration.text; }
+            const bounds = new G.LatLngBounds();
+            result.routes[0].overview_path.forEach(function(p) { bounds.extend(p); });
+            map.fitBounds(bounds);
+          } else {
+            if (btn) { btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>Trazar ruta'; }
+            window.open('https://www.google.com/maps/dir/?api=1&destination=' + lat + ',' + lng, '_blank');
+          }
+        }
+      );
+    }, function() {
+      if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>Trazar ruta'; }
+      window.open('https://www.google.com/maps/dir/?api=1&destination=' + lat + ',' + lng, '_blank');
+    });
+  }
+
+  window.__trazarRuta = trazarRuta;
 }
 
 // ─────────────────────────────────────────
