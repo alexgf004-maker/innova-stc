@@ -434,6 +434,14 @@ async function showSeguimiento(db, session) {
 
   const META_DIARIA = 15;
 
+  function calcCorte() {
+    const hoy   = new Date();
+    const corte = new Date(hoy.getFullYear(), hoy.getMonth(), 20);
+    if (hoy > corte) corte.setMonth(corte.getMonth() + 1);
+    const diff  = Math.ceil((corte - hoy) / (1000*60*60*24));
+    return { fecha: corte, dias: diff };
+  }
+
   try {
     const [snapOrdenes, calendarioMap] = await Promise.all([
       getDocs(collection(db, COL_ORDENES)),
