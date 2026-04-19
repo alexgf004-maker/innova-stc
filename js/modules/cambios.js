@@ -179,11 +179,9 @@ async function showListado(db, session, isCampo, destino) {
 
     let ordenes = snapOrdenes.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
 
-    // Campo: solo su pareja y ocultar hechas
+    // Campo: solo su pareja
     if (isCampo) {
-      ordenes = ordenes.filter(function(o) {
-        return o.pareja === destino && o.estadoCampo !== 'hecha';
-      });
+      ordenes = ordenes.filter(function(o) { return o.pareja === destino; });
     }
 
     ordenes.sort(function(a, b) { return safeStr(a.cliente).localeCompare(safeStr(b.cliente)); });
@@ -197,7 +195,7 @@ async function showListado(db, session, isCampo, destino) {
       return (
         '<div class="flex flex-wrap gap-2 mb-3">' +
           ['todas','disponibles','bloqueadas','hechas','visitas','sin_actualizar'].map(function(f) {
-            const labels = { todas:'Todas', disponibles:'Disponibles', bloqueadas:'Bloqueadas', hechas:'Hechas', visitas:'Visitas', sin_actualizar:'Sin actualizar' };
+            const labels = { todas:'Todas', disponibles:'Disponibles', bloqueadas:'Bloqueadas', hechas:'Realizadas', visitas:'Visitas', sin_actualizar:'Sin actualizar' };
             const activo = filtroActivo === f;
             return '<button class="cfiltro text-xs px-2.5 py-1 rounded-full border font-medium ' +
               (activo ? 'text-white border-transparent' : 'border-gray-200 text-gray-600') + '" ' +
@@ -304,14 +302,88 @@ async function showListado(db, session, isCampo, destino) {
       }
     }
 
-    content.innerHTML =
-      '<div class="space-y-2">' +
-        renderFiltros() +
-        (!isCampo ? '<button id="btn-asignar-pareja" class="w-full text-xs font-medium py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 mb-1">Mantén presionado para seleccionar · Asignar pareja</button>' : '') +
-        '<div id="cambios-lista" class="space-y-2"></div>' +
-      '</div>';
+    if (isCampo) {
+      // Campo: two sections — pendientes and realizadas
+      const pendientes  = ordenes.filter(function(o) { return o.estadoCampo !== 'hecha'; });
+      const realizadas  = ordenes.filter(function(o) { return o.estadoCampo === 'hecha'; });
 
-    renderCards();
+      function campoCard(o) {
+        const bloqueada = esBloqueada(o, calendarioMap);
+        const realizada = o.estadoCampo === 'hecha';
+        const visita    = o.estadoCampo === 'visita';
+        const statusBadge = bloqueada
+          ? '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:#f3f4f6;color:#9ca3af">🔒 Bloqueada</span>'
+          : realizada
+            ? '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:#DCFCE7;color:#166534">✓ Realizada' + (!o.actualizadaDelsur ? ' · ⚠' : '') + '</span>'
+            : visita
+              ? '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:#FEF3C7;color:#B45309">👁 Visita</span>'
+              : '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:#F0FDFA;color:#0F766E">Pendiente</span>';
+
+        return '<div class="bg-white rounded-xl border border-gray-200 px-4 py-3 cursor-pointer active:bg-gray-50 ' + (bloqueada ? 'opacity-60' : '') + '" data-wo="' + o.wo + '">' +
+          '<div class="flex items-start justify-between gap-2 mb-1">' +
+            '<div class="min-w-0">' +
+              '<p style="font-size:10px;color:#9ca3af;font-family:monospace">' + safeStr(o.wo) + '</p>' +
+              '<p class="text-sm font-semibold text-gray-900 leading-tight mt-0.5">' + safeStr(o.cliente) + '</p>' +
+            '</div>' +
+            statusBadge +
+          '</div>' +
+          '<p class="text-xs text-gray-500 truncate">' + safeStr(o.direccion) + '</p>' +
+          (o.concepto ? '<span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 inline-block mt-1">' + safeStr(o.concepto) + '</span>' : '') +
+        '</div>';
+      }
+
+      content.innerHTML =
+        '<div class="space-y-4">' +
+          // Stats
+          '<div class="grid grid-cols-3 gap-2">' +
+            '<div class="bg-white rounded-xl border border-gray-200 p-3 text-center">' +
+              '<p class="text-xl font-black" style="color:#0F766E">' + pendientes.filter(function(o){ return !esBloqueada(o,calendarioMap) && o.estadoCampo !== 'visita'; }).length + '</p>' +
+              '<p class="text-xs text-gray-400 mt-0.5">Pendientes</p>' +
+            '</div>' +
+            '<div class="bg-white rounded-xl border border-gray-200 p-3 text-center">' +
+              '<p class="text-xl font-black" style="color:#166534">' + realizadas.length + '</p>' +
+              '<p class="text-xs text-gray-400 mt-0.5">Realizadas</p>' +
+            '</div>' +
+            '<div class="bg-white rounded-xl border border-gray-200 p-3 text-center">' +
+              '<p class="text-xl font-black" style="color:#B45309">' + ordenes.filter(function(o){ return o.estadoCampo === 'visita'; }).length + '</p>' +
+              '<p class="text-xs text-gray-400 mt-0.5">Visitas</p>' +
+            '</div>' +
+          '</div>' +
+          // Pendientes
+          (pendientes.length > 0 ?
+            '<div>' +
+              '<p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Por realizar (' + pendientes.length + ')</p>' +
+              '<div id="lista-pendientes" class="space-y-2">' + pendientes.map(campoCard).join('') + '</div>' +
+            '</div>'
+          : '<div class="text-center py-6"><p class="text-sm font-semibold text-green-700">¡Todo realizado! 🎉</p></div>') +
+          // Realizadas
+          (realizadas.length > 0 ?
+            '<div>' +
+              '<p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Realizadas (' + realizadas.length + ')</p>' +
+              '<div id="lista-realizadas" class="space-y-2">' + realizadas.map(campoCard).join('') + '</div>' +
+            '</div>'
+          : '') +
+        '</div>';
+
+      // Wire card clicks
+      content.querySelectorAll('[data-wo]').forEach(function(card) {
+        card.addEventListener('click', function() {
+          const orden = ordenes.find(function(o) { return o.wo === card.dataset.wo; });
+          if (orden) showDetalleOrden(db, session, orden, isCampo, calendarioMap);
+        });
+      });
+
+    } else {
+      // Admin listado
+      content.innerHTML =
+        '<div class="space-y-2">' +
+          renderFiltros() +
+          '<button id="btn-asignar-pareja" class="w-full text-xs font-medium py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 mb-1">Mantén presionado para seleccionar · Asignar pareja</button>' +
+          '<div id="cambios-lista" class="space-y-2"></div>' +
+        '</div>';
+
+      renderCards();
+    }
 
     // Wire filtros
     content.querySelectorAll('.cfiltro').forEach(function(btn) {
@@ -521,7 +593,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
     const hecha       = o.estadoCampo === 'hecha';
     const isAdminUser = !isCampo;
     const statusColor = bloqueada ? '#9CA3AF' : hecha ? '#166534' : o.estadoCampo === 'visita' ? '#B45309' : '#0F766E';
-    const statusLabel = bloqueada ? '🔒 Bloqueada' : hecha ? '✓ Hecha' : o.estadoCampo === 'visita' ? '👁 Visita' : '● Disponible';
+    const statusLabel = bloqueada ? '🔒 Bloqueada' : hecha ? '✓ Realizada' : o.estadoCampo === 'visita' ? '👁 Visita' : '● Disponible';
 
     function chip(label, val) {
       if (!val) return '';
@@ -564,7 +636,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
         (!bloqueada && !hecha && isCampo ?
           '<div style="display:flex;gap:7px">' +
             '<button id="sheet-visita" style="flex:1;padding:11px;border:2px solid #e5e7eb;border-radius:12px;font-size:13px;font-weight:600;color:#374151;background:white;cursor:pointer">Visita</button>' +
-            '<button id="sheet-hecha" style="flex:1;padding:11px;background:#166534;color:white;border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer">✓ Hecha</button>' +
+            '<button id="sheet-hecha" style="flex:1;padding:11px;background:#166534;color:white;border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer">✓ Realizada</button>' +
           '</div>'
         : '') +
         (isAdminUser ? '<button id="sheet-asignar-1" style="width:100%;padding:10px;border:1.5px solid #e5e7eb;border-radius:12px;font-size:13px;font-weight:500;color:#374151;background:white;cursor:pointer">Asignar pareja</button>' : '') +
@@ -574,6 +646,8 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
     if (activeMarker && activeMarker !== marker) { activeMarker.setIcon(buildIcon(activeMarker.__color, false, false)); }
     marker.setIcon(buildIcon(marker.__color, true, false));
     activeMarker = marker;
+    // Store marker ref on orden for hiding after realizada
+    marker.__orden.__marker = marker;
 
     document.getElementById('sheet-ruta')?.addEventListener('click', function() { trazarRuta(safeNum(o.latitud), safeNum(o.longitud)); });
     document.getElementById('sheet-cancel-ruta')?.addEventListener('click', clearRoute);
@@ -836,7 +910,7 @@ function showDetalleOrden(db, session, orden, isCampo, calendarioMap) {
       (!bloqueada && !hecha && isCampo ?
         '<div class="flex gap-2">' +
           '<button id="btn-visita" class="flex-1 border-2 border-gray-300 text-gray-700 font-semibold rounded-xl py-2.5 text-sm">Visita</button>' +
-          '<button id="btn-hecha" class="flex-1 text-white font-semibold rounded-xl py-2.5 text-sm" style="background:#0F766E">✓ Hecha</button>' +
+          '<button id="btn-hecha" class="flex-1 text-white font-semibold rounded-xl py-2.5 text-sm" style="background:#0F766E">✓ Realizada</button>' +
         '</div>'
       : '') +
       // Admin — asignar pareja
@@ -887,7 +961,7 @@ function row(label, value) {
 function showConfirmarHecha(db, session, orden) {
   const ov = mkOverlay(
     '<div class="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">' +
-      '<h2 class="font-semibold text-gray-900">Marcar como hecha</h2>' +
+      '<h2 class="font-semibold text-gray-900">Marcar como realizada</h2>' +
       '<button id="ch-close" class="text-gray-400 hover:text-gray-700">✕</button>' +
     '</div>' +
     '<div class="flex-1 overflow-y-auto px-5 py-4 space-y-4">' +
@@ -921,7 +995,9 @@ function showConfirmarHecha(db, session, orden) {
         });
       }
       ov.remove();
-      showToast('Orden marcada como hecha.', 'success');
+      showToast('Orden marcada como realizada.', 'success');
+      // Hide marker from map if campo
+      if (orden.__marker) { orden.__marker.setMap(null); }
     } catch(e) {
       showToast('Error al guardar.', 'error');
       console.error(e);
