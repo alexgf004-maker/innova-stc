@@ -56,7 +56,7 @@ async function renderUserList(db) {
 
 const AREAS_DESTINOS = {
   OTC:     ['NALVAR', 'JPEREZ', 'RGONZA'],
-  CAMBIOS: [],
+  CAMBIOS: ['Pareja 1', 'Pareja 2', 'Pareja 3', 'Pareja 4'],
 };
 
 function usuarioOperativoBadge(asignacionActual, legacyAsignado) {
