@@ -110,7 +110,7 @@ function renderShell(container, session, db, isCampo, destino) {
       '</div>' +
       // Tabs
       '<div class="flex gap-1 bg-gray-100 rounded-xl p-1">' +
-        (isAdmin ? '<button class="ctab flex-1 py-2 text-xs font-medium rounded-lg transition-colors" data-ctab="listado">Listado</button>' : '') +
+        (isAdmin ? '<button class="ctab flex-1 py-2 text-xs font-medium rounded-lg transition-colors" data-ctab="listado">Órdenes</button>' : '') +
         (isAdmin ? '<button class="ctab flex-1 py-2 text-xs font-medium rounded-lg transition-colors" data-ctab="mapa">Mapa</button>' : '') +
         (isAdmin ? '<button class="ctab flex-1 py-2 text-xs font-medium rounded-lg transition-colors" data-ctab="seguimiento">Seguimiento</button>' : '') +
         (isCampo ? '<button class="ctab flex-1 py-2 text-xs font-medium rounded-lg transition-colors" data-ctab="listado">Mis órdenes</button>' : '') +
@@ -186,130 +186,14 @@ async function showListado(db, session, isCampo, destino) {
 
     ordenes.sort(function(a, b) { return safeStr(a.cliente).localeCompare(safeStr(b.cliente)); });
 
-    // Filtros para admin
-    let filtroActivo = 'todas';
-    let filtroPareja = 'todas';
-
-    function renderFiltros() {
-      if (isCampo) return '';
-      return (
-        '<div class="flex flex-wrap gap-2 mb-3">' +
-          ['todas','disponibles','bloqueadas','hechas','visitas','sin_actualizar'].map(function(f) {
-            const labels = { todas:'Todas', disponibles:'Disponibles', bloqueadas:'Bloqueadas', hechas:'Realizadas', visitas:'Visitas', sin_actualizar:'Sin actualizar' };
-            const activo = filtroActivo === f;
-            return '<button class="cfiltro text-xs px-2.5 py-1 rounded-full border font-medium ' +
-              (activo ? 'text-white border-transparent' : 'border-gray-200 text-gray-600') + '" ' +
-              'style="' + (activo ? 'background:#0F766E' : '') + '" data-filtro="' + f + '">' + labels[f] + '</button>';
-          }).join('') +
-        '</div>' +
-        '<div class="flex gap-2 mb-3 flex-wrap">' +
-          ['todas', ...PAREJAS].map(function(p) {
-            const activo = filtroPareja === p;
-            return '<button class="cpareja text-xs px-2.5 py-1 rounded-full border font-medium ' +
-              (activo ? 'text-white border-transparent' : 'border-gray-200 text-gray-500') + '" ' +
-              'style="' + (activo ? 'background:#1B4F8A' : '') + '" data-pareja="' + p + '">' + (p === 'todas' ? 'Todas las parejas' : p) + '</button>';
-          }).join('') +
-        '</div>'
-      );
-    }
-
-    function filtrarOrdenes() {
-      return ordenes.filter(function(o) {
-        const bloqueada = esBloqueada(o, calendarioMap);
-        if (!isCampo) {
-          if (filtroPareja !== 'todas' && o.pareja !== filtroPareja) return false;
-          if (filtroActivo === 'disponibles')   return !bloqueada && o.estadoCampo !== 'hecha';
-          if (filtroActivo === 'bloqueadas')    return bloqueada;
-          if (filtroActivo === 'hechas')        return o.estadoCampo === 'hecha';
-          if (filtroActivo === 'visitas')       return o.estadoCampo === 'visita';
-          if (filtroActivo === 'sin_actualizar') return o.estadoCampo === 'hecha' && !o.actualizadaDelsur;
-        }
-        return true;
-      });
-    }
-
-    function renderCards() {
-      const lista = filtrarOrdenes();
-      const listEl = document.getElementById('cambios-lista');
-      if (!listEl) return;
-
-      if (!lista.length) {
-        listEl.innerHTML = '<div class="text-center py-10 text-sm text-gray-400">Sin órdenes</div>';
-        return;
-      }
-
-      listEl.innerHTML = lista.map(function(o) {
-        const bloqueada = esBloqueada(o, calendarioMap);
-        const hecha     = o.estadoCampo === 'hecha';
-        const visita    = o.estadoCampo === 'visita';
-
-        const statusBadge = bloqueada
-          ? '<span class="text-xs px-2 py-0.5 rounded-full bg-gray-200 text-gray-500">🔒 Bloqueada</span>'
-          : hecha
-            ? '<span class="text-xs px-2 py-0.5 rounded-full" style="background:#DCFCE7;color:#166534">✓ Hecha' + (o.actualizadaDelsur ? '' : ' · ⚠ Sin actualizar') + '</span>'
-            : visita
-              ? '<span class="text-xs px-2 py-0.5 rounded-full" style="background:#FEF3C7;color:#B45309">👁 Visita</span>'
-              : '<span class="text-xs px-2 py-0.5 rounded-full" style="background:#F0FDFA;color:#0F766E">Disponible</span>';
-
-        return '<div class="bg-white rounded-xl border border-gray-200 px-4 py-3 ' + (bloqueada ? 'opacity-60' : '') + ' cursor-pointer active:bg-gray-50" data-wo="' + o.wo + '">' +
-          '<div class="flex items-start justify-between gap-2 mb-1">' +
-            '<div class="min-w-0">' +
-              '<p class="text-xs font-mono text-gray-400">' + safeStr(o.wo) + '</p>' +
-              '<p class="text-sm font-semibold text-gray-900 leading-tight mt-0.5">' + safeStr(o.cliente) + '</p>' +
-            '</div>' +
-            statusBadge +
-          '</div>' +
-          '<p class="text-xs text-gray-500 truncate">' + safeStr(o.direccion) + '</p>' +
-          '<div class="flex items-center gap-2 mt-1.5 flex-wrap">' +
-            (o.concepto ? '<span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">' + safeStr(o.concepto) + '</span>' : '') +
-            (o.unidadLectura ? '<span class="text-xs px-2 py-0.5 rounded-full bg-gray-50 text-gray-400 font-mono">' + safeStr(o.unidadLectura) + '</span>' : '') +
-            (!isCampo && o.pareja ? '<span class="text-xs px-2 py-0.5 rounded-full text-white" style="background:#1B4F8A">' + safeStr(o.pareja) + '</span>' : '') +
-          '</div>' +
-        '</div>';
-      }).join('');
-
-      // Wire card clicks
-      listEl.querySelectorAll('[data-wo]').forEach(function(card) {
-        card.addEventListener('click', function() {
-          const orden = ordenes.find(function(o) { return o.wo === card.dataset.wo; });
-          if (orden) showDetalleOrden(db, session, orden, isCampo, calendarioMap);
-        });
-      });
-
-      // Asignación masiva admin
-      if (!isCampo) {
-        const btnAsignar = document.getElementById('btn-asignar-pareja');
-        if (btnAsignar) {
-          btnAsignar.onclick = function() {
-            const selCards = listEl.querySelectorAll('[data-wo].selected');
-            const wos = Array.from(selCards).map(function(c) { return c.dataset.wo; });
-            if (!wos.length) { showToast('Selecciona al menos una orden.', 'error'); return; }
-            showAsignarPareja(db, wos, function() { showListado(db, session, isCampo, destino); });
-          };
-        }
-        // Long press to select
-        listEl.querySelectorAll('[data-wo]').forEach(function(card) {
-          let timer;
-          card.addEventListener('pointerdown', function() {
-            timer = setTimeout(function() {
-              card.classList.toggle('selected');
-              card.style.outline = card.classList.contains('selected') ? '2px solid #1B4F8A' : '';
-            }, 500);
-          });
-          card.addEventListener('pointerup', function() { clearTimeout(timer); });
-          card.addEventListener('pointercancel', function() { clearTimeout(timer); });
-        });
-      }
-    }
-
     if (isCampo) {
-      // Campo: two sections — pendientes and realizadas
-      const pendientes  = ordenes.filter(function(o) { return o.estadoCampo !== 'hecha'; });
-      const realizadas  = ordenes.filter(function(o) { return o.estadoCampo === 'hecha'; });
+      // ── CAMPO LISTADO ──
+      const pendientes = ordenes.filter(function(o) { return o.estadoCampo !== 'hecha' && o.estadoCampo !== 'aprobada'; });
+      const realizadas = ordenes.filter(function(o) { return o.estadoCampo === 'hecha' || o.estadoCampo === 'aprobada'; });
 
       function campoCard(o) {
         const bloqueada = esBloqueada(o, calendarioMap);
-        const realizada = o.estadoCampo === 'hecha';
+        const realizada = o.estadoCampo === 'hecha' || o.estadoCampo === 'aprobada';
         const visita    = o.estadoCampo === 'visita';
         const statusBadge = bloqueada
           ? '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:#f3f4f6;color:#9ca3af">🔒 Bloqueada</span>'
@@ -336,7 +220,6 @@ async function showListado(db, session, isCampo, destino) {
 
       content.innerHTML =
         '<div class="space-y-4">' +
-          // Stats
           '<div class="grid grid-cols-3 gap-2">' +
             '<div class="bg-white rounded-xl border border-gray-200 p-3 text-center">' +
               '<p class="text-xl font-black" style="color:#0F766E">' + pendientes.filter(function(o){ return !esBloqueada(o,calendarioMap) && o.estadoCampo !== 'visita'; }).length + '</p>' +
@@ -351,23 +234,20 @@ async function showListado(db, session, isCampo, destino) {
               '<p class="text-xs text-gray-400 mt-0.5">Visitas</p>' +
             '</div>' +
           '</div>' +
-          // Pendientes
           (pendientes.length > 0 ?
             '<div>' +
-              '<p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Por realizar (' + pendientes.length + ')</p>' +
-              '<div id="lista-pendientes" class="space-y-2">' + pendientes.map(campoCard).join('') + '</div>' +
+              '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Por realizar (' + pendientes.length + ')</p>' +
+              '<div class="space-y-2">' + pendientes.map(campoCard).join('') + '</div>' +
             '</div>'
-          : '<div class="text-center py-6"><p class="text-sm font-semibold text-green-700">¡Todo realizado! 🎉</p></div>') +
-          // Realizadas
+          : '<div class="text-center py-6 bg-white rounded-xl border border-gray-200"><p class="text-sm font-semibold text-green-700">¡Todo realizado! 🎉</p></div>') +
           (realizadas.length > 0 ?
             '<div>' +
-              '<p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Realizadas (' + realizadas.length + ')</p>' +
-              '<div id="lista-realizadas" class="space-y-2">' + realizadas.map(campoCard).join('') + '</div>' +
+              '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Realizadas (' + realizadas.length + ')</p>' +
+              '<div class="space-y-2">' + realizadas.map(campoCard).join('') + '</div>' +
             '</div>'
           : '') +
         '</div>';
 
-      // Wire card clicks — campo
       content.querySelectorAll('[data-wo]').forEach(function(card) {
         card.addEventListener('click', function() {
           const orden = ordenes.find(function(o) { return o.wo === card.dataset.wo; });
@@ -376,28 +256,31 @@ async function showListado(db, session, isCampo, destino) {
       });
 
     } else {
-      // Admin listado
-        // Admin listado — restyled with review flow
-      const pendRevision = ordenes.filter(function(o) { return o.estadoCampo === 'hecha'; });
-      const sinActualizar = pendRevision.filter(function(o) { return !o.actualizadaDelsur; });
-      const actualizadas  = pendRevision.filter(function(o) { return o.actualizadaDelsur; });
+      // ── ADMIN LISTADO — Órdenes ──
+      let busq = '';
+      let filtroEstado = 'todas';
+      let filtroPareja = 'todas';
 
-      function adminCard(o) {
-        const bloqueada = esBloqueada(o, calendarioMap);
-        const color = o.pareja ? (PAREJA_COLORS[o.pareja] || '#6B7280') : '#6B7280';
-        const parejaLabel = o.pareja
-          ? '<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;color:white;background:' + color + '">' + o.pareja + '</span>'
-          : '<span style="font-size:11px;color:#9ca3af">Sin asignar</span>';
+      function ordenFiltrada(o) {
+        const q = busq.toLowerCase();
+        if (q && !safeStr(o.wo).toLowerCase().includes(q) && !safeStr(o.cliente).toLowerCase().includes(q) && !safeStr(o.direccion).toLowerCase().includes(q)) return false;
+        if (filtroPareja !== 'todas' && o.pareja !== filtroPareja) return false;
+        const bl = esBloqueada(o, calendarioMap);
+        if (filtroEstado === 'disponibles') return !bl && !o.estadoCampo;
+        if (filtroEstado === 'bloqueadas')  return bl;
+        if (filtroEstado === 'realizadas')  return o.estadoCampo === 'hecha';
+        if (filtroEstado === 'visitas')     return o.estadoCampo === 'visita';
+        if (filtroEstado === 'sin_asignar') return !o.pareja;
+        return true;
+      }
 
-        const estadoBadge = bloqueada
-          ? '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;background:#f3f4f6;color:#9ca3af">🔒 Bloqueada</span>'
-          : o.estadoCampo === 'hecha' && !o.actualizadaDelsur
-            ? '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;background:#FEF3C7;color:#B45309">⚠ Sin actualizar</span>'
-            : o.estadoCampo === 'hecha'
-              ? '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;background:#DCFCE7;color:#166534">✓ Actualizada</span>'
-              : o.estadoCampo === 'visita'
-                ? '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;background:#111827;color:white">👁 Visita</span>'
-                : '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;background:#F0FDFA;color:#0F766E">Disponible</span>';
+      function adminOrderCard(o) {
+        const bl    = esBloqueada(o, calendarioMap);
+        const color = o.pareja ? (PAREJA_COLORS[o.pareja] || '#6B7280') : '#9CA3AF';
+        const estado = bl ? 'Bloqueada' : o.estadoCampo === 'hecha' ? 'Realizada' : o.estadoCampo === 'visita' ? 'Visita' : o.estadoCampo === 'aprobada' ? 'Aprobada' : 'Disponible';
+        const estadoColor = bl ? '#9CA3AF' : o.estadoCampo === 'hecha' ? '#B45309' : o.estadoCampo === 'visita' ? '#111827' : o.estadoCampo === 'aprobada' ? '#166534' : '#0F766E';
+        const estadoBg    = bl ? '#f3f4f6' : o.estadoCampo === 'hecha' ? '#FEF3C7' : o.estadoCampo === 'visita' ? '#111827' : o.estadoCampo === 'aprobada' ? '#DCFCE7' : '#F0FDFA';
+        const estadoTxt   = o.estadoCampo === 'visita' ? 'white' : estadoColor;
 
         return '<div class="bg-white rounded-xl border border-gray-200 px-4 py-3 cursor-pointer active:bg-gray-50" data-wo="' + o.wo + '">' +
           '<div class="flex items-start justify-between gap-2 mb-1.5">' +
@@ -405,802 +288,128 @@ async function showListado(db, session, isCampo, destino) {
               '<p style="font-size:10px;color:#9ca3af;font-family:monospace">' + safeStr(o.wo) + '</p>' +
               '<p class="text-sm font-semibold text-gray-900 leading-tight mt-0.5">' + safeStr(o.cliente) + '</p>' +
             '</div>' +
-            estadoBadge +
+            '<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;background:' + estadoBg + ';color:' + estadoTxt + ';flex-shrink:0">' + estado + '</span>' +
           '</div>' +
           '<p class="text-xs text-gray-500 truncate mb-1.5">' + safeStr(o.direccion) + '</p>' +
-          '<div class="flex items-center gap-1.5 flex-wrap">' +
-            parejaLabel +
-            (o.hechaPor ? '<span style="font-size:11px;color:#6b7280">· ' + safeStr(o.hechaPor) + '</span>' : '') +
-            (o.fechaHecha ? '<span style="font-size:11px;color:#9ca3af">· ' + fmtDate(o.fechaHecha) + '</span>' : '') +
+          '<div style="display:flex;align-items:center;gap:6px">' +
+            (o.pareja ? '<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;color:white;background:' + color + '">' + o.pareja + '</span>' : '<span style="font-size:11px;color:#9ca3af">Sin asignar</span>') +
           '</div>' +
         '</div>';
       }
 
+      function renderAdminList() {
+        const filtradas = ordenes.filter(ordenFiltrada);
+        const lista = document.getElementById('admin-ordenes-lista');
+        const count = document.getElementById('admin-ordenes-count');
+        if (count) count.textContent = filtradas.length + ' órdenes';
+        if (!lista) return;
+        lista.innerHTML = filtradas.length
+          ? filtradas.map(adminOrderCard).join('')
+          : '<div class="text-center py-8 text-sm text-gray-400">Sin resultados</div>';
+
+        lista.querySelectorAll('[data-wo]').forEach(function(card) {
+          card.addEventListener('click', function() {
+            const orden = ordenes.find(function(o) { return o.wo === card.dataset.wo; });
+            if (orden) showDetalleOrden(db, session, orden, false, calendarioMap);
+          });
+        });
+
+        // Long press to select for pareja assignment
+        lista.querySelectorAll('[data-wo]').forEach(function(card) {
+          let timer;
+          card.addEventListener('pointerdown', function() {
+            timer = setTimeout(function() {
+              card.classList.toggle('selected');
+              card.style.outline = card.classList.contains('selected') ? '2px solid #1B4F8A' : '';
+            }, 500);
+          });
+          card.addEventListener('pointerup', function() { clearTimeout(timer); });
+          card.addEventListener('pointercancel', function() { clearTimeout(timer); });
+        });
+      }
+
       content.innerHTML =
-        '<div class="space-y-4">' +
-          // Header with reload
+        '<div class="space-y-3">' +
+          // Buscador
+          '<div class="relative">' +
+            '<svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' +
+            '<input id="admin-buscar" type="text" placeholder="Buscar por WO, cliente, dirección..." class="w-full border border-gray-200 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"/>' +
+          '</div>' +
+          // Filtro estado
+          '<div class="flex gap-1.5 overflow-x-auto pb-1 hide-scrollbar">' +
+            [['todas','Todas'],['disponibles','Disponibles'],['realizadas','Realizadas'],['visitas','Visitas'],['bloqueadas','Bloqueadas'],['sin_asignar','Sin asignar']].map(function(f) {
+              return '<button class="fest-btn text-xs font-semibold px-3 py-1.5 rounded-full border whitespace-nowrap flex-shrink-0 ' + (f[0] === 'todas' ? 'border-transparent text-white' : 'border-gray-200 text-gray-600') + '" style="' + (f[0] === 'todas' ? 'background:#1B4F8A' : '') + '" data-fest="' + f[0] + '">' + f[1] + '</button>';
+            }).join('') +
+          '</div>' +
+          // Filtro pareja
+          '<div class="flex gap-1.5 overflow-x-auto pb-1 hide-scrollbar">' +
+            [['todas','Todas']].concat(PAREJAS.map(function(p) { return [p, p]; })).map(function(p) {
+              const col = p[0] !== 'todas' ? PAREJA_COLORS[p[0]] : null;
+              return '<button class="fpar-btn text-xs font-semibold px-3 py-1.5 rounded-full border whitespace-nowrap flex-shrink-0 ' + (p[0] === 'todas' ? 'border-gray-300 text-gray-600' : 'border-transparent text-white') + '" style="' + (col ? 'background:' + col : '') + '" data-fpar="' + p[0] + '">' + p[1] + '</button>';
+            }).join('') +
+          '</div>' +
+          // Count + assign btn
           '<div class="flex items-center justify-between">' +
-            '<div class="flex gap-2 flex-wrap">' +
-              '<span style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:20px;background:#FEF3C7;color:#B45309">' + sinActualizar.length + ' sin actualizar</span>' +
-              '<span style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:20px;background:#DCFCE7;color:#166534">' + actualizadas.length + ' actualizadas</span>' +
-            '</div>' +
-            '<button id="btn-reload-listado" style="padding:6px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:12px;color:#374151;background:white;cursor:pointer">↻ Actualizar</button>' +
+            '<p id="admin-ordenes-count" class="text-xs text-gray-400">' + ordenes.length + ' órdenes</p>' +
+            '<button id="btn-asignar-sel" class="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600">Asignar seleccionadas</button>' +
           '</div>' +
-
-          // Pendientes de revisión
-          (pendRevision.length > 0 ?
-            '<div>' +
-              '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Pendientes de revisión (' + pendRevision.length + ')</p>' +
-              '<div class="space-y-2">' + pendRevision.map(adminCard).join('') + '</div>' +
-            '</div>'
-          : '') +
-
-          // Filtros y listado completo
-          renderFiltros() +
-          '<button id="btn-asignar-pareja" style="width:100%;padding:8px;border:1px solid #e5e7eb;border-radius:10px;font-size:12px;color:#6b7280;background:white;cursor:pointer;margin-bottom:4px">Mantén presionado para seleccionar · Asignar pareja</button>' +
-          '<div id="cambios-lista" class="space-y-2"></div>' +
+          '<div id="admin-ordenes-lista" class="space-y-2"></div>' +
         '</div>';
 
-      // Wire reload
-      document.getElementById('btn-reload-listado')?.addEventListener('click', function() {
-        showListado(db, session, isCampo, destino);
+      renderAdminList();
+
+      // Wire search
+      document.getElementById('admin-buscar').addEventListener('input', function(e) {
+        busq = e.target.value.trim();
+        renderAdminList();
       });
 
-      renderCards();
-    }
-
-    // Wire filtros
-    content.querySelectorAll('.cfiltro').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        filtroActivo = btn.dataset.filtro;
-        content.querySelector('.space-y-2').innerHTML = renderFiltros() +
-          (!isCampo ? '<button id="btn-asignar-pareja" class="w-full text-xs font-medium py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 mb-1">Mantén presionado para seleccionar · Asignar pareja</button>' : '') +
-          '<div id="cambios-lista" class="space-y-2"></div>';
-        renderCards();
-        rebindFiltros();
-      });
-    });
-    content.querySelectorAll('.cpareja').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        filtroPareja = btn.dataset.pareja;
-        content.querySelector('.space-y-2').innerHTML = renderFiltros() +
-          (!isCampo ? '<button id="btn-asignar-pareja" class="w-full text-xs font-medium py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 mb-1">Mantén presionado para seleccionar · Asignar pareja</button>' : '') +
-          '<div id="cambios-lista" class="space-y-2"></div>';
-        renderCards();
-        rebindFiltros();
-      });
-    });
-
-    function rebindFiltros() {
-      content.querySelectorAll('.cfiltro').forEach(function(btn) {
+      // Wire estado filters
+      content.querySelectorAll('.fest-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
-          filtroActivo = btn.dataset.filtro;
-          content.querySelector('.space-y-2').innerHTML = renderFiltros() +
-            (!isCampo ? '<button id="btn-asignar-pareja" class="w-full text-xs font-medium py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 mb-1">Mantén presionado para seleccionar · Asignar pareja</button>' : '') +
-            '<div id="cambios-lista" class="space-y-2"></div>';
-          renderCards(); rebindFiltros();
+          filtroEstado = btn.dataset.fest;
+          content.querySelectorAll('.fest-btn').forEach(function(b) {
+            b.style.background = b.dataset.fest === filtroEstado ? '#1B4F8A' : '';
+            b.style.borderColor = b.dataset.fest === filtroEstado ? 'transparent' : '#e5e7eb';
+            b.style.color = b.dataset.fest === filtroEstado ? 'white' : '#4b5563';
+          });
+          renderAdminList();
         });
       });
-      content.querySelectorAll('.cpareja').forEach(function(btn) {
+
+      // Wire pareja filters
+      content.querySelectorAll('.fpar-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
-          filtroPareja = btn.dataset.pareja;
-          content.querySelector('.space-y-2').innerHTML = renderFiltros() +
-            (!isCampo ? '<button id="btn-asignar-pareja" class="w-full text-xs font-medium py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 mb-1">Mantén presionado para seleccionar · Asignar pareja</button>' : '') +
-            '<div id="cambios-lista" class="space-y-2"></div>';
-          renderCards(); rebindFiltros();
+          filtroPareja = btn.dataset.fpar;
+          content.querySelectorAll('.fpar-btn').forEach(function(b) {
+            const col = b.dataset.fpar !== 'todas' ? PAREJA_COLORS[b.dataset.fpar] : null;
+            const activo = b.dataset.fpar === filtroPareja;
+            b.style.background = activo ? (col || '#374151') : '';
+            b.style.borderColor = activo ? 'transparent' : '#e5e7eb';
+            b.style.color = activo ? 'white' : (col ? col : '#4b5563');
+          });
+          renderAdminList();
         });
+      });
+
+      // Assign selected
+      document.getElementById('btn-asignar-sel').addEventListener('click', function() {
+        const selCards = document.querySelectorAll('#admin-ordenes-lista [data-wo].selected');
+        const wos = Array.from(selCards).map(function(c) { return c.dataset.wo; });
+        if (!wos.length) { showToast('Mantén presionado para seleccionar órdenes.', 'error'); return; }
+        showAsignarPareja(db, wos, function() { showListado(db, session, false, null); });
       });
     }
 
   } catch(e) { content.innerHTML = errHtml(); console.error(e); }
 }
 
-// ─────────────────────────────────────────
-// MAPA
-// ─────────────────────────────────────────
-const GMAPS_KEY = 'AIzaSyAjaEXeu_4PDedaZhLfrwWvatu5RN9q1SU';
-
-function loadGoogleMaps() {
-  return new Promise(function(resolve) {
-    if (window.google && window.google.maps && window.markerClusterer) { resolve(); return; }
-    // Load MarkerClusterer first, then Google Maps
-    function loadClusterer() {
-      if (window.markerClusterer) { resolve(); return; }
-      const sc = document.createElement('script');
-      sc.src = 'https://unpkg.com/@googlemaps/markerclusterer/dist/index.min.js';
-      sc.onload = function() { resolve(); };
-      sc.onerror = function() { resolve(); }; // proceed even if clusterer fails
-      document.head.appendChild(sc);
-    }
-    if (window.google && window.google.maps) { loadClusterer(); return; }
-    window.__gmapsCallback = loadClusterer;
-    const s = document.createElement('script');
-    s.src = 'https://maps.googleapis.com/maps/api/js?key=' + GMAPS_KEY + '&callback=__gmapsCallback&libraries=places,geometry,drawing';
-    s.async = true;
-    document.head.appendChild(s);
-  });
-}
-
-async function showMapa(db, session, isCampo, destino) {
-  const content = document.getElementById('cambios-content');
-  if (!content) return;
-  content.innerHTML = loading();
-
-  try {
-    const [snapOrdenes, calendarioMap] = await Promise.all([
-      getDocs(collection(db, COL_ORDENES)),
-      getCalendarioMap(db),
-    ]);
-
-    let ordenes = snapOrdenes.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
-    if (isCampo) {
-      ordenes = ordenes.filter(function(o) { return o.pareja === destino && o.estadoCampo !== 'hecha'; });
-    }
-    const conCoords = ordenes.filter(function(o) { return o.latitud && o.longitud && o.estadoCampo !== 'aprobada'; });
-
-    if (!conCoords.length) {
-      content.innerHTML =
-        '<div class="text-center py-12 space-y-2">' +
-          '<p class="text-gray-400 text-sm">Sin coordenadas disponibles</p>' +
-          '<p class="text-xs text-gray-300">Incluye columnas Latitud y Longitud en el Excel</p>' +
-        '</div>';
-      return;
-    }
-
-    // Full-screen map layout with bottom sheet
-    // Add spin keyframe for button spinner
-    if (!document.getElementById('cambios-spin-style')) {
-      const s = document.createElement('style');
-      s.id = 'cambios-spin-style';
-      s.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
-      document.head.appendChild(s);
-    }
-
-    content.innerHTML =
-      '<div style="position:relative;width:100%;height:calc(100vh - 220px);min-height:400px;">' +
-        // Map container
-        '<div id="mapa-contenedor" style="width:100%;height:100%;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">' +
-          '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#9ca3af;font-size:14px;gap:8px">' +
-            '<svg style="width:16px;height:16px;animation:spin 1s linear infinite" viewBox="0 0 24 24" fill="none"><circle opacity=".25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path opacity=".75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>' +
-            'Cargando mapa...' +
-          '</div>' +
-        '</div>' +
-        // Bottom sheet — hidden by default
-        '<div id="mapa-sheet" style="position:absolute;bottom:0;left:0;right:0;background:white;border-radius:16px 16px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,0.15);transform:translateY(100%);transition:transform 0.3s ease;z-index:10;max-height:70%;overflow-y:auto;">' +
-          '<div style="display:flex;justify-content:center;padding:10px 0 4px">' +
-            '<div style="width:36px;height:4px;background:#e5e7eb;border-radius:2px"></div>' +
-          '</div>' +
-          '<div id="mapa-sheet-content" style="padding:0 16px 24px"></div>' +
-        '</div>' +
-      '</div>';
-
-    await loadGoogleMaps();
-    initMapaCambios(conCoords, calendarioMap, session, isCampo, db);
-
-  } catch(e) { content.innerHTML = errHtml(); console.error(e); }
-}
-
-function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
-  const contenedor = document.getElementById('mapa-contenedor');
-  const sheet      = document.getElementById('mapa-sheet');
-  const sheetBody  = document.getElementById('mapa-sheet-content');
-  if (!contenedor) return;
-
-  const G   = google.maps;
-  const map = new G.Map(contenedor, {
-    zoom: 13,
-    center: { lat: safeNum(ordenes[0].latitud), lng: safeNum(ordenes[0].longitud) },
-    mapTypeId: 'hybrid',
-    mapTypeControl: false,
-    fullscreenControl: false,
-    streetViewControl: false,
-    zoomControlOptions: { position: G.ControlPosition.RIGHT_CENTER },
-  });
-
-  const directionsService  = new G.DirectionsService();
-  const directionsRenderer = new G.DirectionsRenderer({
-    map,
-    suppressMarkers: true,
-    polylineOptions: { strokeColor: '#0F766E', strokeWeight: 5, strokeOpacity: 0.85 },
-  });
-
-  let userMarker   = null;
-  let activeMarker = null;
-  let assignMode   = false;
-  let selectedWOs  = new Set();
-  let drawnShapes  = [];
-  let drawingMgr   = null;
-  let routeActive  = false;
-
-  // ── helpers ──
-  function getMarkerColor(o) {
-    const bl = esBloqueada(o, calendarioMap);
-    if (bl) return '#9CA3AF';                          // gris — bloqueada
-    if (o.estadoCampo === 'visita') return '#111827';  // negro — visita
-    // pareja color (includes realizadas for admin view)
-    if (o.pareja && PAREJA_COLORS[o.pareja]) return PAREJA_COLORS[o.pareja];
-    return '#6B7280';
-  }
-
-  function buildIcon(color, selected, inAssign) {
-    return {
-      path: G.SymbolPath.CIRCLE,
-      scale: selected ? 13 : 10,
-      fillColor: color,
-      fillOpacity: 1,
-      strokeColor: inAssign && selected ? '#FBBF24' : '#fff',
-      strokeWeight: inAssign && selected ? 4 : selected ? 3 : 2,
-    };
-  }
-
-  // ── close bottom sheet ──
-  map.addListener('click', function() { closeSheet(); });
-
-  function closeSheet() {
-    if (sheet) sheet.style.transform = 'translateY(100%)';
-    if (activeMarker) { activeMarker.setIcon(buildIcon(activeMarker.__color, false, assignMode)); activeMarker = null; }
-  }
-
-  function clearRoute() {
-    directionsRenderer.setDirections({ routes: [] });
-    routeActive = false;
-    const cb = document.getElementById('sheet-cancel-ruta');
-    if (cb) cb.style.display = 'none';
-    const rb = document.getElementById('sheet-ruta');
-    if (rb) { rb.disabled = false; rb.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>Trazar ruta'; }
-  }
-
-  // ── open bottom sheet ──
-  function openSheet(o, marker) {
-    if (!sheet || !sheetBody) return;
-    const bloqueada   = esBloqueada(o, calendarioMap);
-    const hecha       = o.estadoCampo === 'hecha';
-    const isAdminUser = !isCampo;
-    const statusColor = bloqueada ? '#9CA3AF' : hecha ? '#166534' : o.estadoCampo === 'visita' ? '#374151' : '#0F766E';
-    const statusLabel = bloqueada ? '🔒 Bloqueada' : hecha ? '✓ Realizada' : o.estadoCampo === 'visita' ? '👁 Visita' : '● Disponible';
-
-    function chip(label, val) {
-      if (!val) return '';
-      return '<div style="background:#f3f4f6;border-radius:8px;padding:6px 10px">' +
-        '<p style="font-size:10px;color:#9ca3af;margin-bottom:2px">' + label + '</p>' +
-        '<p style="font-size:12px;font-weight:600;color:#111827;word-break:break-word">' + safeStr(val) + '</p>' +
-      '</div>';
-    }
-
-    sheetBody.innerHTML =
-      '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:12px">' +
-        '<div style="flex:1;min-width:0">' +
-          '<p style="font-size:10px;color:#9ca3af;font-family:monospace">' + safeStr(o.wo) + '</p>' +
-          '<p style="font-size:16px;font-weight:800;color:#111827;margin-top:2px;line-height:1.25">' + safeStr(o.cliente) + '</p>' +
-        '</div>' +
-        '<span style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;background:' + statusColor + '18;color:' + statusColor + ';white-space:nowrap;flex-shrink:0">' + statusLabel + '</span>' +
-      '</div>' +
-      '<div style="display:flex;gap:8px;align-items:flex-start;background:#f9fafb;border-radius:10px;padding:9px 12px;margin-bottom:10px">' +
-        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>' +
-        '<p style="font-size:12px;color:#374151;line-height:1.4">' + safeStr(o.direccion || '—') + '</p>' +
-      '</div>' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px">' +
-        chip('Medidor', o.serie) + chip('DS', o.dsct) +
-        chip('MRU', o.unidadLectura) + chip('Concepto', o.concepto) +
-        chip('NC', o.nc) + chip('Teléfono', o.telefono) +
-        (o.pareja && isAdminUser ? chip('Pareja', o.pareja) : '') +
-        (o.observaciones ? '<div style="grid-column:1/-1;background:#f3f4f6;border-radius:8px;padding:6px 10px"><p style="font-size:10px;color:#9ca3af;margin-bottom:2px">Observaciones</p><p style="font-size:12px;color:#374151">' + safeStr(o.observaciones) + '</p></div>' : '') +
-        (o.observacion ? '<div style="grid-column:1/-1;background:#FEF3C7;border-radius:8px;padding:6px 10px"><p style="font-size:10px;color:#B45309;margin-bottom:2px">Nota visita</p><p style="font-size:12px;color:#374151">' + safeStr(o.observacion) + '</p></div>' : '') +
-        (o.hechaPor ? '<div style="grid-column:1/-1;background:#F0FDF4;border-radius:8px;padding:6px 10px"><p style="font-size:10px;color:#166534;margin-bottom:2px">Hecha por</p><p style="font-size:12px;color:#374151">' + safeStr(o.hechaPor) + '</p></div>' : '') +
-      '</div>' +
-      (bloqueada ? '<div style="background:#FEF2F2;color:#C62828;padding:9px 12px;border-radius:10px;font-size:12px;font-weight:500;margin-bottom:10px">🔒 En período de lectura — no se puede ejecutar.</div>' : '') +
-      '<div style="display:flex;flex-direction:column;gap:7px">' +
-        '<div style="display:flex;gap:7px">' +
-          '<button id="sheet-ruta" style="flex:1;padding:12px;background:#0F766E;color:white;border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px">' +
-            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>Trazar ruta' +
-          '</button>' +
-          '<a href="https://www.google.com/maps/dir/?api=1&destination=' + o.latitud + ',' + o.longitud + '" target="_blank" style="flex:1;padding:12px;border:1.5px solid #e5e7eb;border-radius:12px;font-size:13px;font-weight:500;color:#374151;text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center">↗ Maps</a>' +
-        '</div>' +
-        '<button id="sheet-cancel-ruta" style="width:100%;padding:9px;background:#FEF2F2;color:#C62828;border:1.5px solid #FECACA;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer;display:' + (routeActive ? 'flex' : 'none') + ';align-items:center;justify-content:center">✕ Cancelar ruta</button>' +
-        (!bloqueada && !hecha && isCampo ?
-          '<div style="display:flex;gap:7px">' +
-            '<button id="sheet-visita" style="flex:1;padding:11px;border:2px solid #e5e7eb;border-radius:12px;font-size:13px;font-weight:600;color:#374151;background:white;cursor:pointer">Visita</button>' +
-            '<button id="sheet-hecha" style="flex:1;padding:11px;background:#166534;color:white;border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer">✓ Realizada</button>' +
-          '</div>'
-        : '') +
-        (isAdminUser ? '<button id="sheet-asignar-1" style="width:100%;padding:10px;border:1.5px solid #e5e7eb;border-radius:12px;font-size:13px;font-weight:500;color:#374151;background:white;cursor:pointer">Asignar pareja</button>' : '') +
-        (isAdminUser && o.estadoCampo === 'hecha' ? '<button id="sheet-aprobar" style="width:100%;padding:11px;background:#166534;color:white;border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer">✓ Aprobar y eliminar del mapa</button>' : '') +
-      '</div>';
-
-    sheet.style.transform = 'translateY(0)';
-    if (activeMarker && activeMarker !== marker) { activeMarker.setIcon(buildIcon(activeMarker.__color, false, false)); }
-    marker.setIcon(buildIcon(marker.__color, true, false));
-    activeMarker = marker;
-    // Store marker ref on orden for hiding after realizada
-    marker.__orden.__marker = marker;
-
-    document.getElementById('sheet-ruta')?.addEventListener('click', function() { trazarRuta(safeNum(o.latitud), safeNum(o.longitud)); });
-    document.getElementById('sheet-cancel-ruta')?.addEventListener('click', clearRoute);
-    document.getElementById('sheet-hecha')?.addEventListener('click', function() { closeSheet(); showConfirmarHecha(db, session, o); });
-    document.getElementById('sheet-visita')?.addEventListener('click', function() { closeSheet(); showRegistrarVisita(db, session, o); });
-    document.getElementById('sheet-asignar-1')?.addEventListener('click', function() { closeSheet(); showAsignarPareja(db, [o.wo], null); });
-    document.getElementById('sheet-aprobar')?.addEventListener('click', async function() {
-      const btn = document.getElementById('sheet-aprobar');
-      if (btn) { btn.textContent = 'Aprobando...'; btn.disabled = true; }
-      try {
-        let ref;
-        if (o.id) { ref = doc(db, COL_ORDENES, o.id); }
-        else {
-          const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo', '==', o.wo)));
-          if (snap.empty) throw new Error('No encontrada');
-          ref = snap.docs[0].ref;
-        }
-        await updateDoc(ref, { estadoCampo: 'aprobada', aprobadoPor: session.displayName, fechaAprobacion: serverTimestamp() });
-        closeSheet();
-        showToast('Orden aprobada. Punto eliminado del mapa.', 'success');
-        showListado(db, session, false, null);
-      } catch(e) { showToast('Error al aprobar.', 'error'); console.error(e); if (btn) { btn.textContent = '✓ Aprobar y eliminar del mapa'; btn.disabled = false; } }
-    });
-  }
-
-  // ── build markers ──
-  const markers = ordenes.map(function(o) {
-    const color  = getMarkerColor(o);
-    const marker = new G.Marker({ position: { lat: safeNum(o.latitud), lng: safeNum(o.longitud) }, title: o.cliente, icon: buildIcon(color, false, false) });
-    marker.__color  = color;
-    marker.__orden  = o;
-    marker.__sel    = false;
-    marker.addListener('click', function() {
-      if (assignMode) { toggleSel(marker); } else { openSheet(o, marker); }
-    });
-    return marker;
-  });
-
-  // Add markers directly to map
-  markers.forEach(function(m) { m.setMap(map); });
-
-  // ── user location ──
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(function(pos) {
-      userMarker = new G.Marker({ position: { lat: pos.coords.latitude, lng: pos.coords.longitude }, map, title: 'Tu ubicación', zIndex: 999, icon: { path: G.SymbolPath.CIRCLE, scale: 9, fillColor: '#2563EB', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2.5 } });
-    }, function() {});
-  }
-
-  // ── assign mode ──
-  function toggleSel(marker) {
-    const wo = marker.__orden.wo;
-    if (selectedWOs.has(wo)) { selectedWOs.delete(wo); marker.__sel = false; }
-    else { selectedWOs.add(wo); marker.__sel = true; }
-    marker.setIcon(buildIcon(marker.__color, marker.__sel, true));
-    updateAssignPanel();
-  }
-
-  function updateAssignPanel() {
-    const el = document.getElementById('assign-count');
-    if (el) el.textContent = selectedWOs.size + ' orden' + (selectedWOs.size !== 1 ? 'es' : '') + ' seleccionada' + (selectedWOs.size !== 1 ? 's' : '');
-  }
-
-  function clearSel() {
-    selectedWOs.clear();
-    drawnShapes.forEach(function(s) { s.setMap(null); }); drawnShapes = [];
-    markers.forEach(function(m) { m.__sel = false; m.setIcon(buildIcon(m.__color, false, assignMode)); });
-    if (drawingMgr) drawingMgr.setDrawingMode(null);
-    updateAssignPanel();
-  }
-
-  function enterAssignMode() {
-    assignMode = true; closeSheet();
-    const p = document.getElementById('assign-panel');
-    if (p) p.style.display = 'flex';
-    const btn = document.getElementById('btn-assign-mode');
-    if (btn) { btn.style.background = '#1B4F8A'; btn.style.color = 'white'; btn.textContent = '✕ Salir asignación'; }
-    markers.forEach(function(m) { m.setIcon(buildIcon(m.__color, m.__sel, true)); });
-    if (!drawingMgr && G.drawing) {
-      drawingMgr = new G.drawing.DrawingManager({
-        drawingMode: null, drawingControl: false,
-        rectangleOptions: { fillColor:'#FBBF24', fillOpacity:0.15, strokeColor:'#FBBF24', strokeWeight:2, clickable:false, editable:false },
-        polygonOptions:   { fillColor:'#FBBF24', fillOpacity:0.15, strokeColor:'#FBBF24', strokeWeight:2, clickable:false, editable:false },
-      });
-      drawingMgr.setMap(map);
-      G.event.addListener(drawingMgr, 'overlaycomplete', function(e) {
-        drawnShapes.push(e.overlay);
-        drawingMgr.setDrawingMode(null);
-        markers.forEach(function(m) {
-          const pos = m.getPosition();
-          let inside = false;
-          if (e.type === 'rectangle') inside = e.overlay.getBounds().contains(pos);
-          else if (e.type === 'polygon' && G.geometry) inside = G.geometry.poly.containsLocation(pos, e.overlay);
-          if (inside) { selectedWOs.add(m.__orden.wo); m.__sel = true; m.setIcon(buildIcon(m.__color, true, true)); }
-        });
-        updateAssignPanel();
-      });
-    }
-  }
-
-  function exitAssignMode() {
-    assignMode = false; clearSel();
-    const p = document.getElementById('assign-panel');
-    if (p) p.style.display = 'none';
-    const btn = document.getElementById('btn-assign-mode');
-    if (btn) { btn.style.background = 'white'; btn.style.color = '#1B4F8A'; btn.textContent = '🗂 Asignar'; }
-    markers.forEach(function(m) { m.setIcon(buildIcon(m.__color, false, false)); });
-  }
-
-  async function doAssign(pareja) {
-    if (!selectedWOs.size) { showToast('Selecciona al menos una orden.','error'); return; }
-    const btn = document.getElementById('ap-btn-' + pareja.replace(' ','_'));
-    if (btn) { btn.textContent = '...'; btn.disabled = true; }
-    try {
-      const color = PAREJA_COLORS[pareja] || '#0F766E';
-      await Promise.all(Array.from(selectedWOs).map(async function(wo) {
-        const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo','==',wo)));
-        if (!snap.empty) await updateDoc(snap.docs[0].ref, { pareja, asignadoEn: serverTimestamp() });
-        const m = markers.find(function(mk) { return mk.__orden.wo === wo; });
-        if (m) { m.__orden.pareja = pareja; m.__color = color; m.__sel = false; m.setIcon(buildIcon(color, false, true)); }
-      }));
-      showToast(selectedWOs.size + ' órdenes → ' + pareja, 'success');
-      selectedWOs.clear();
-      updateAssignPanel();
-    } catch(e) { showToast('Error al asignar.','error'); console.error(e); }
-    if (btn) { btn.textContent = pareja; btn.disabled = false; }
-  }
-
-  // Inject assign mode button inside map
-  const btnAssign = document.createElement('button');
-  btnAssign.id = 'btn-assign-mode';
-  btnAssign.textContent = '🗂 Asignar';
-  btnAssign.style.cssText = 'position:absolute;top:10px;left:10px;z-index:10;background:white;border:1.5px solid #e5e7eb;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;color:#1B4F8A;box-shadow:0 2px 8px rgba(0,0,0,0.15);cursor:pointer;';
-  contenedor.style.position = 'relative';
-  contenedor.appendChild(btnAssign);
-  btnAssign.addEventListener('click', function() { assignMode ? exitAssignMode() : enterAssignMode(); });
-
-  // Inject assign panel below map inside wrapper
-  const wrapper = contenedor.parentElement;
-  const panelEl = document.createElement('div');
-  panelEl.id = 'assign-panel';
-  panelEl.style.cssText = 'display:none;flex-direction:column;gap:8px;background:white;border:1px solid #e5e7eb;border-radius:12px;padding:12px;margin-top:8px;';
-  panelEl.innerHTML =
-    '<div style="display:flex;align-items:center;justify-content:space-between">' +
-      '<p id="assign-count" style="font-size:13px;font-weight:600;color:#374151">0 órdenes seleccionadas</p>' +
-      '<button id="assign-clear" style="font-size:12px;color:#6b7280;background:none;border:1px solid #e5e7eb;border-radius:8px;padding:4px 10px;cursor:pointer">Limpiar</button>' +
-    '</div>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">' +
-      PAREJAS.map(function(p) {
-        return '<button id="ap-btn-' + p.replace(' ','_') + '" data-pareja="' + p + '" style="padding:10px;background:' + PAREJA_COLORS[p] + ';color:white;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">' + p + '</button>';
-      }).join('') +
-    '</div>' +
-    '<div style="display:flex;gap:6px">' +
-      '<button id="assign-rect" style="flex:1;padding:9px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:12px;color:#374151;background:white;cursor:pointer">⬜ Rectángulo</button>' +
-      '<button id="assign-poly" style="flex:1;padding:9px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:12px;color:#374151;background:white;cursor:pointer">✏️ Polígono</button>' +
-    '</div>';
-  wrapper.appendChild(panelEl);
-
-  document.getElementById('assign-clear').addEventListener('click', clearSel);
-  document.getElementById('assign-rect').addEventListener('click', function() { if (drawingMgr) drawingMgr.setDrawingMode(G.drawing.OverlayType.RECTANGLE); });
-  document.getElementById('assign-poly').addEventListener('click', function() { if (drawingMgr) drawingMgr.setDrawingMode(G.drawing.OverlayType.POLYGON); });
-  panelEl.querySelectorAll('[data-pareja]').forEach(function(btn) { btn.addEventListener('click', function() { doAssign(btn.dataset.pareja); }); });
-
-  // Hide assign controls for campo
-  if (isCampo) { btnAssign.style.display = 'none'; panelEl.style.display = 'none'; }
-
-  // ── route ──
-  function trazarRuta(lat, lng) {
-    const btn = document.getElementById('sheet-ruta');
-    if (!navigator.geolocation) { window.open('https://www.google.com/maps/dir/?api=1&destination=' + lat + ',' + lng, '_blank'); return; }
-    if (btn) { btn.innerHTML = '<svg style="animation:spin .8s linear infinite;width:14px;height:14px" viewBox="0 0 24 24" fill="none"><circle opacity=".25" cx="12" cy="12" r="10" stroke="white" stroke-width="4"/><path opacity=".75" fill="white" d="M4 12a8 8 0 018-8v8z"/></svg> Calculando...'; btn.disabled = true; }
-    navigator.geolocation.getCurrentPosition(function(pos) {
-      const origin = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-      const dest   = { lat: lat, lng: lng };
-      if (userMarker) userMarker.setPosition(origin);
-      directionsService.route({ origin, destination: dest, travelMode: G.TravelMode.DRIVING }, function(result, status) {
-        if (btn) btn.disabled = false;
-        if (status === 'OK') {
-          directionsRenderer.setDirections(result);
-          routeActive = true;
-          const leg = result.routes[0].legs[0];
-          if (btn) btn.innerHTML = '✓ ' + leg.distance.text + ' · ' + leg.duration.text;
-          const cb = document.getElementById('sheet-cancel-ruta'); if (cb) cb.style.display = 'flex';
-          const bounds = new G.LatLngBounds();
-          result.routes[0].overview_path.forEach(function(p) { bounds.extend(p); });
-          map.fitBounds(bounds);
-        } else {
-          if (btn) btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>Trazar ruta';
-          window.open('https://www.google.com/maps/dir/?api=1&destination=' + lat + ',' + lng, '_blank');
-        }
-      });
-    }, function() {
-      if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>Trazar ruta'; }
-      window.open('https://www.google.com/maps/dir/?api=1&destination=' + lat + ',' + lng, '_blank');
-    });
-  }
-
-  window.__trazarRuta = trazarRuta;
-
-  // spin keyframe
-  if (!document.getElementById('cambios-spin-style')) {
-    const s = document.createElement('style'); s.id = 'cambios-spin-style';
-    s.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
-    document.head.appendChild(s);
-  }
-}
-
-
-// ─────────────────────────────────────────
-// DETALLE DE ORDEN
-// ─────────────────────────────────────────
-function showDetalleOrden(db, session, orden, isCampo, calendarioMap) {
-  const bloqueada = esBloqueada(orden, calendarioMap);
-  const hecha     = orden.estadoCampo === 'hecha';
-  const isAdmin   = ['admin', 'coordinadora'].includes(session.role);
-
-  const mapsUrl = orden.latitud && orden.longitud
-    ? 'https://www.google.com/maps/dir/?api=1&destination=' + orden.latitud + ',' + orden.longitud
-    : 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(safeStr(orden.direccion));
-
-  const ov = mkOverlay(
-    '<div class="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">' +
-      '<div>' +
-        '<p class="text-xs font-mono text-gray-400">' + safeStr(orden.wo) + '</p>' +
-        '<h2 class="font-semibold text-gray-900 leading-tight">' + safeStr(orden.cliente) + '</h2>' +
-      '</div>' +
-      '<button id="det-close" class="text-gray-400 hover:text-gray-700">✕</button>' +
-    '</div>' +
-    '<div class="flex-1 overflow-y-auto px-5 py-4 space-y-4">' +
-      // Bloqueo
-      (bloqueada ?
-        '<div class="rounded-xl px-4 py-3 text-sm font-medium" style="background:#FEF2F2;color:#C62828">🔒 Esta orden está en período de lectura y no puede ejecutarse.</div>'
-      : '') +
-      // Datos
-      '<div class="space-y-2 text-sm">' +
-        row('Dirección', orden.direccion) +
-        row('NC', orden.nc) +
-        row('Serie', orden.serie) +
-        row('DS', orden.dsct) +
-        row('Concepto', orden.concepto) +
-        row('MRU', orden.unidadLectura) +
-        row('Teléfono', orden.telefono) +
-        row('Observaciones', orden.observaciones) +
-        (orden.pareja ? row('Pareja', orden.pareja) : '') +
-        (orden.estadoCampo ? row('Estado', orden.estadoCampo + (orden.actualizadaDelsur ? ' · Actualizada' : orden.estadoCampo === 'hecha' ? ' · ⚠ Sin actualizar en Delsur' : '')) : '') +
-        (orden.observacion ? row('Observación', orden.observacion) : '') +
-        (orden.fechaHecha ? row('Fecha hecha', fmtDate(orden.fechaHecha)) : '') +
-        (orden.hechaPor ? row('Registrada por', orden.hechaPor) : '') +
-      '</div>' +
-    '</div>' +
-    '<div class="px-5 py-4 border-t border-gray-100 space-y-2 shrink-0">' +
-      // Cómo llegar — siempre visible
-      '<a href="' + mapsUrl + '" target="_blank" class="flex items-center justify-center gap-2 w-full border border-gray-300 text-gray-700 font-medium rounded-xl py-2.5 text-sm hover:bg-gray-50">' +
-        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>' +
-        'Cómo llegar' +
-      '</a>' +
-      // Acciones campo
-      (!bloqueada && !hecha && isCampo ?
-        '<div class="flex gap-2">' +
-          '<button id="btn-visita" class="flex-1 border-2 border-gray-300 text-gray-700 font-semibold rounded-xl py-2.5 text-sm">Visita</button>' +
-          '<button id="btn-hecha" class="flex-1 text-white font-semibold rounded-xl py-2.5 text-sm" style="background:#0F766E">✓ Realizada</button>' +
-        '</div>'
-      : '') +
-      // Admin — asignar pareja + aprobar
-      (isAdmin && !isCampo ?
-        '<button id="btn-asignar-1" class="w-full border border-gray-300 text-gray-600 font-medium rounded-xl py-2.5 text-sm hover:bg-gray-50">Asignar pareja</button>'
-      : '') +
-      (isAdmin && !isCampo && orden.estadoCampo === 'hecha' ?
-        '<button id="btn-aprobar" class="w-full text-white font-semibold rounded-xl py-2.5 text-sm" style="background:#166534">✓ Aprobar y eliminar del mapa</button>'
-      : '') +
-    '</div>'
-  );
-
-  ov.querySelector('#det-close').onclick = () => ov.remove();
-
-  // Acción Hecha
-  const btnHecha = ov.querySelector('#btn-hecha');
-  if (btnHecha) {
-    btnHecha.onclick = function() {
-      ov.remove();
-      showConfirmarHecha(db, session, orden);
-    };
-  }
-
-  // Acción Visita
-  const btnVisita = ov.querySelector('#btn-visita');
-  if (btnVisita) {
-    btnVisita.onclick = function() {
-      ov.remove();
-      showRegistrarVisita(db, session, orden);
-    };
-  }
-
-  // Admin aprobar
-  const btnAprobar = ov.querySelector('#btn-aprobar');
-  if (btnAprobar) {
-    btnAprobar.onclick = async function() {
-      btnAprobar.textContent = 'Aprobando...';
-      btnAprobar.disabled = true;
-      try {
-        let ref;
-        if (orden.id) { ref = doc(db, COL_ORDENES, orden.id); }
-        else {
-          const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo', '==', orden.wo)));
-          if (snap.empty) throw new Error('No encontrada');
-          ref = snap.docs[0].ref;
-        }
-        await updateDoc(ref, { estadoCampo: 'aprobada', aprobadoPor: session.displayName, fechaAprobacion: serverTimestamp() });
-        ov.remove();
-        showToast('Orden aprobada. Punto eliminado del mapa.', 'success');
-        showListado(db, session, false, null);
-      } catch(e) {
-        showToast('Error al aprobar.', 'error');
-        btnAprobar.textContent = '✓ Aprobar y eliminar del mapa';
-        btnAprobar.disabled = false;
-        console.error(e);
-      }
-    };
-  }
-
-  // Admin asignar
-  const btnAsignar1 = ov.querySelector('#btn-asignar-1');
-  if (btnAsignar1) {
-    btnAsignar1.onclick = function() {
-      ov.remove();
-      showAsignarPareja(db, [orden.wo], null);
-    };
-  }
-}
-
-function row(label, value) {
-  if (!value) return '';
-  return '<div class="flex gap-2"><span class="text-gray-400 shrink-0 w-28">' + label + '</span><span class="text-gray-900 font-medium flex-1">' + safeStr(value) + '</span></div>';
-}
-
-// ─────────────────────────────────────────
-// CONFIRMAR HECHA
-// ─────────────────────────────────────────
-function showConfirmarHecha(db, session, orden) {
-  const ov = mkOverlay(
-    '<div class="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">' +
-      '<h2 class="font-semibold text-gray-900">Marcar como realizada</h2>' +
-      '<button id="ch-close" class="text-gray-400 hover:text-gray-700">✕</button>' +
-    '</div>' +
-    '<div class="flex-1 overflow-y-auto px-5 py-4 space-y-4">' +
-      '<p class="text-sm text-gray-600">WO <strong>' + safeStr(orden.wo) + '</strong> · ' + safeStr(orden.cliente) + '</p>' +
-      '<div class="rounded-xl p-4 space-y-3" style="background:#F0FDFA">' +
-        '<p class="text-sm font-semibold text-gray-800">¿Ya está actualizada en Delsur?</p>' +
-        '<div class="flex gap-3">' +
-          '<button id="ch-si" class="flex-1 py-3 rounded-xl font-bold text-white text-sm" style="background:#0F766E">Sí</button>' +
-          '<button id="ch-no" class="flex-1 py-3 rounded-xl font-bold border-2 border-gray-300 text-gray-700 text-sm">No</button>' +
-        '</div>' +
-      '</div>' +
-    '</div>'
-  );
-
-  ov.querySelector('#ch-close').onclick = () => ov.remove();
-
-  async function guardarHecha(actualizada) {
-    try {
-      // Try direct update first, fallback to query by WO
-      if (orden.id) {
-        await updateDoc(doc(db, COL_ORDENES, orden.id), {
-          estadoCampo: 'hecha', actualizadaDelsur: actualizada,
-          fechaHecha: serverTimestamp(), hechaPor: session.displayName,
-        });
-      } else {
-        const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo', '==', orden.wo)));
-        if (snap.empty) throw new Error('Orden no encontrada');
-        await updateDoc(snap.docs[0].ref, {
-          estadoCampo: 'hecha', actualizadaDelsur: actualizada,
-          fechaHecha: serverTimestamp(), hechaPor: session.displayName,
-        });
-      }
-      ov.remove();
-      showToast('Orden marcada como realizada.', 'success');
-      // Hide marker from map if campo
-      if (orden.__marker) { orden.__marker.setMap(null); }
-    } catch(e) {
-      showToast('Error al guardar.', 'error');
-      console.error(e);
-    }
-  }
-
-  ov.querySelector('#ch-si').onclick = () => guardarHecha(true);
-  ov.querySelector('#ch-no').onclick = () => guardarHecha(false);
-}
-
-// ─────────────────────────────────────────
-// REGISTRAR VISITA
-// ─────────────────────────────────────────
-function showRegistrarVisita(db, session, orden) {
-  const ov = mkOverlay(
-    '<div class="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">' +
-      '<h2 class="font-semibold text-gray-900">Registrar visita</h2>' +
-      '<button id="rv-close" class="text-gray-400 hover:text-gray-700">✕</button>' +
-    '</div>' +
-    '<div class="flex-1 overflow-y-auto px-5 py-4 space-y-3">' +
-      '<p class="text-sm text-gray-600">WO <strong>' + safeStr(orden.wo) + '</strong> · ' + safeStr(orden.cliente) + '</p>' +
-      '<div>' +
-        '<label class="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wider">Motivo / Observación</label>' +
-        '<textarea id="rv-obs" rows="3" placeholder="Ej. Cliente ausente, medidor inaccesible..." class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2" style="--tw-ring-color:#0F766E"></textarea>' +
-      '</div>' +
-    '</div>' +
-    '<div class="px-5 py-4 border-t border-gray-100 flex gap-2 shrink-0">' +
-      '<button id="rv-cancel" class="flex-1 border border-gray-200 text-gray-600 rounded-xl py-2.5 text-sm font-medium">Cancelar</button>' +
-      '<button id="rv-save" class="flex-1 text-white rounded-xl py-2.5 text-sm font-semibold" style="background:#0F766E">Guardar visita</button>' +
-    '</div>'
-  );
-
-  ov.querySelector('#rv-close').onclick = ov.querySelector('#rv-cancel').onclick = () => ov.remove();
-  ov.querySelector('#rv-save').onclick = async function() {
-    const obs = ov.querySelector('#rv-obs').value.trim();
-    try {
-      let ref;
-      if (orden.id) {
-        ref = doc(db, COL_ORDENES, orden.id);
-      } else {
-        const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo', '==', orden.wo)));
-        if (snap.empty) throw new Error('Orden no encontrada');
-        ref = snap.docs[0].ref;
-      }
-      await updateDoc(ref, {
-        estadoCampo: 'visita', observacion: obs || 'Sin observación',
-        fechaVisita: serverTimestamp(), visitadoPor: session.displayName,
-      });
-      ov.remove();
-      showToast('Visita registrada.', 'success');
-    } catch(e) {
-      showToast('Error al guardar.', 'error');
-      console.error(e);
-    }
-  };
-}
-
-// ─────────────────────────────────────────
-// ASIGNAR PAREJA
-// ─────────────────────────────────────────
-function showAsignarPareja(db, wos, onDone) {
-  const ov = mkOverlay(
-    '<div class="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">' +
-      '<div>' +
-        '<h2 class="font-semibold text-gray-900">Asignar pareja</h2>' +
-        '<p class="text-xs text-gray-400 mt-0.5">' + wos.length + ' orden(es) seleccionada(s)</p>' +
-      '</div>' +
-      '<button id="ap-close" class="text-gray-400 hover:text-gray-700">✕</button>' +
-    '</div>' +
-    '<div class="flex-1 overflow-y-auto px-5 py-4 space-y-2">' +
-      PAREJAS.map(function(p) {
-        return '<button data-pareja="' + p + '" class="w-full flex items-center justify-between px-4 py-3.5 rounded-xl border-2 border-gray-200 hover:border-blue-300 text-left transition-all">' +
-          '<span class="font-semibold text-gray-900">' + p + '</span>' +
-          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1B4F8A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>' +
-        '</button>';
-      }).join('') +
-    '</div>'
-  );
-
-  ov.querySelector('#ap-close').onclick = () => ov.remove();
-
-  ov.querySelectorAll('[data-pareja]').forEach(function(btn) {
-    btn.addEventListener('click', async function() {
-      const pareja = btn.dataset.pareja;
-      btn.textContent = 'Asignando...';
-      btn.disabled = true;
-      try {
-        await Promise.all(wos.map(async function(wo) {
-          const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo', '==', wo)));
-          if (!snap.empty) {
-            await updateDoc(snap.docs[0].ref, { pareja, asignadoEn: serverTimestamp() });
-          }
-        }));
-        ov.remove();
-        showToast(wos.length + ' orden(es) asignada(s) a ' + pareja, 'success');
-        if (onDone) onDone();
-      } catch(e) {
-        showToast('Error al asignar.', 'error');
-        console.error(e);
-      }
-    });
-  });
-}
-
-// ─────────────────────────────────────────
-// SEGUIMIENTO ADMIN
-// ─────────────────────────────────────────
 async function showSeguimiento(db, session) {
   const content = document.getElementById('cambios-content');
   if (!content) return;
   content.innerHTML = loading();
+
+  const META_DIARIA = 15;
 
   try {
     const [snapOrdenes, calendarioMap] = await Promise.all([
@@ -1209,85 +418,218 @@ async function showSeguimiento(db, session) {
     ]);
 
     const ordenes = snapOrdenes.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
-    const total        = ordenes.length;
-    const hechas       = ordenes.filter(function(o) { return o.estadoCampo === 'hecha'; });
-    const sinActualizar = hechas.filter(function(o) { return !o.actualizadaDelsur; });
-    const visitas      = ordenes.filter(function(o) { return o.estadoCampo === 'visita'; });
-    const bloqueadas   = ordenes.filter(function(o) { return esBloqueada(o, calendarioMap); });
-    const pendientes   = ordenes.filter(function(o) { return !o.estadoCampo && !esBloqueada(o, calendarioMap); });
 
-    // Por pareja
-    const porPareja = {};
-    PAREJAS.forEach(function(p) { porPareja[p] = { total: 0, hechas: 0, sinActualizar: 0 }; });
-    ordenes.forEach(function(o) {
-      if (o.pareja && porPareja[o.pareja]) {
-        porPareja[o.pareja].total++;
-        if (o.estadoCampo === 'hecha') porPareja[o.pareja].hechas++;
-        if (o.estadoCampo === 'hecha' && !o.actualizadaDelsur) porPareja[o.pareja].sinActualizar++;
-      }
+    // Today boundaries
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const manana = new Date(hoy); manana.setDate(manana.getDate() + 1);
+
+    function esHoy(ts) {
+      if (!ts) return false;
+      const d = ts.toDate ? ts.toDate() : new Date(ts);
+      return d >= hoy && d < manana;
+    }
+
+    // Build pareja stats
+    const stats = {};
+    PAREJAS.forEach(function(p) {
+      stats[p] = { total: 0, hechasHoy: 0, visitasHoy: 0, pendConfirm: [], hechasTotal: 0 };
     });
 
-    function statCard(val, label, color) {
-      return '<div class="bg-white rounded-xl border border-gray-200 p-4 text-center">' +
-        '<p class="text-2xl font-black" style="color:' + color + '">' + val + '</p>' +
-        '<p class="text-xs text-gray-500 mt-0.5">' + label + '</p>' +
+    ordenes.forEach(function(o) {
+      if (!o.pareja || !stats[o.pareja]) return;
+      if (o.estadoCampo !== 'aprobada') stats[o.pareja].total++;
+      if (o.estadoCampo === 'hecha') {
+        stats[o.pareja].hechasTotal++;
+        if (esHoy(o.fechaHecha)) { stats[o.pareja].hechasHoy++; stats[o.pareja].pendConfirm.push(o); }
+      }
+      if (o.estadoCampo === 'visita' && esHoy(o.fechaVisita)) stats[o.pareja].visitasHoy++;
+    });
+
+    // Pending confirmation across all parejas
+    const todasPendConfirm = ordenes.filter(function(o) { return o.estadoCampo === 'hecha'; });
+
+    function parejaCard(p) {
+      const s     = stats[p];
+      const color = PAREJA_COLORS[p];
+      const logros = s.hechasHoy + s.visitasHoy; // visitas count toward daily progress
+      const pct    = Math.min(100, Math.round((logros / META_DIARIA) * 100));
+      const barColor = pct >= 100 ? '#166534' : pct >= 60 ? '#0F766E' : pct >= 30 ? '#B45309' : '#C62828';
+
+      return '<div class="bg-white rounded-xl border border-gray-200 p-4">' +
+        // Header pareja
+        '<div class="flex items-center justify-between mb-3">' +
+          '<div class="flex items-center gap-2">' +
+            '<span style="width:10px;height:10px;border-radius:50%;background:' + color + ';display:inline-block;flex-shrink:0"></span>' +
+            '<p class="font-bold text-gray-900">' + p + '</p>' +
+          '</div>' +
+          '<span class="text-xs text-gray-400">' + s.total + ' asignadas</span>' +
+        '</div>' +
+        // Meta progress
+        '<div class="mb-3">' +
+          '<div class="flex items-center justify-between mb-1">' +
+            '<p class="text-xs text-gray-500">Meta diaria</p>' +
+            '<p class="text-xs font-bold" style="color:' + barColor + '">' + logros + ' / ' + META_DIARIA + '</p>' +
+          '</div>' +
+          '<div style="height:8px;background:#f3f4f6;border-radius:4px;overflow:hidden">' +
+            '<div style="height:100%;width:' + pct + '%;background:' + barColor + ';border-radius:4px;transition:width .3s"></div>' +
+          '</div>' +
+        '</div>' +
+        // Counts
+        '<div class="grid grid-cols-3 gap-2 text-center">' +
+          '<div style="background:#F0FDFA;border-radius:8px;padding:6px">' +
+            '<p class="text-lg font-black" style="color:#0F766E">' + s.hechasHoy + '</p>' +
+            '<p class="text-xs text-gray-400">Realizadas hoy</p>' +
+          '</div>' +
+          '<div style="background:#f9f9f9;border-radius:8px;padding:6px">' +
+            '<p class="text-lg font-black text-gray-700">' + s.visitasHoy + '</p>' +
+            '<p class="text-xs text-gray-400">Visitas hoy</p>' +
+          '</div>' +
+          '<div style="background:' + (s.pendConfirm.length ? '#FEF3C7' : '#F0FDFA') + ';border-radius:8px;padding:6px">' +
+            '<p class="text-lg font-black" style="color:' + (s.pendConfirm.length ? '#B45309' : '#166534') + '">' + s.pendConfirm.length + '</p>' +
+            '<p class="text-xs text-gray-400">Por confirmar</p>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }
+
+    function confirmCard(o) {
+      const color = o.pareja ? (PAREJA_COLORS[o.pareja] || '#6B7280') : '#6B7280';
+      return '<div class="bg-white rounded-xl border ' + (!o.actualizadaDelsur ? 'border-yellow-300' : 'border-gray-200') + ' px-4 py-3 cursor-pointer active:bg-gray-50" data-wo="' + o.wo + '">' +
+        '<div class="flex items-start justify-between gap-2 mb-1">' +
+          '<div class="min-w-0">' +
+            '<p style="font-size:10px;color:#9ca3af;font-family:monospace">' + safeStr(o.wo) + '</p>' +
+            '<p class="text-sm font-semibold text-gray-900 leading-tight mt-0.5">' + safeStr(o.cliente) + '</p>' +
+          '</div>' +
+          (!o.actualizadaDelsur
+            ? '<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;background:#FEF3C7;color:#B45309;white-space:nowrap">⚠ Sin actualizar</span>'
+            : '<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;background:#DCFCE7;color:#166534;white-space:nowrap">✓ Actualizada</span>') +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:6px">' +
+          (o.pareja ? '<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;color:white;background:' + color + '">' + o.pareja + '</span>' : '') +
+          (o.hechaPor ? '<span style="font-size:11px;color:#6b7280">· ' + safeStr(o.hechaPor) + '</span>' : '') +
+          (o.fechaHecha ? '<span style="font-size:11px;color:#9ca3af">· ' + fmtDate(o.fechaHecha) + '</span>' : '') +
+        '</div>' +
       '</div>';
     }
 
     content.innerHTML =
       '<div class="space-y-4">' +
-        '<div class="grid grid-cols-3 gap-2">' +
-          statCard(total, 'Total', '#374151') +
-          statCard(hechas.length, 'Hechas', '#0F766E') +
-          statCard(pendientes.length, 'Pendientes', '#1B4F8A') +
-        '</div>' +
-        '<div class="grid grid-cols-3 gap-2">' +
-          statCard(sinActualizar.length, 'Sin actualizar', '#C62828') +
-          statCard(visitas.length, 'Visitas', '#B45309') +
-          statCard(bloqueadas.length, 'Bloqueadas', '#6B7280') +
-        '</div>' +
+        // Meta global
+        (function() {
+          const totalHoy = Object.values(stats).reduce(function(acc, s) { return acc + s.hechasHoy + s.visitasHoy; }, 0);
+          const metaTotal = META_DIARIA * PAREJAS.length;
+          const pct = Math.min(100, Math.round((totalHoy / metaTotal) * 100));
+          return '<div class="bg-white rounded-xl border border-gray-200 p-4">' +
+            '<div class="flex items-center justify-between mb-2">' +
+              '<p class="font-bold text-gray-900">Progreso global hoy</p>' +
+              '<p class="text-sm font-black" style="color:#0F766E">' + totalHoy + ' / ' + metaTotal + '</p>' +
+            '</div>' +
+            '<div style="height:10px;background:#f3f4f6;border-radius:5px;overflow:hidden">' +
+              '<div style="height:100%;width:' + pct + '%;background:#0F766E;border-radius:5px;transition:width .3s"></div>' +
+            '</div>' +
+            '<p style="font-size:11px;color:#9ca3af;margin-top:4px">Meta: ' + META_DIARIA + ' cambios por pareja · ' + metaTotal + ' total</p>' +
+          '</div>';
+        })() +
         // Por pareja
-        '<div class="bg-white rounded-xl border border-gray-200 overflow-hidden">' +
-          '<div class="px-4 py-3 border-b border-gray-100">' +
-            '<p class="font-semibold text-sm text-gray-900">Por pareja</p>' +
-          '</div>' +
-          '<div class="divide-y divide-gray-50">' +
-            PAREJAS.map(function(p) {
-              const d = porPareja[p];
-              const pct = d.total ? Math.round((d.hechas / d.total) * 100) : 0;
-              return '<div class="px-4 py-3">' +
-                '<div class="flex items-center justify-between mb-1.5">' +
-                  '<p class="text-sm font-semibold text-gray-900">' + p + '</p>' +
-                  '<p class="text-xs text-gray-400">' + d.hechas + '/' + d.total + ' · ' + (d.sinActualizar ? '<span style="color:#C62828">' + d.sinActualizar + ' sin actualizar</span>' : '✓') + '</p>' +
-                '</div>' +
-                '<div class="w-full bg-gray-100 rounded-full h-1.5">' +
-                  '<div class="h-1.5 rounded-full transition-all" style="width:' + pct + '%;background:#0F766E"></div>' +
-                '</div>' +
-              '</div>';
-            }).join('') +
-          '</div>' +
-        '</div>' +
-        // Sin actualizar detail
-        (sinActualizar.length > 0 ?
-          '<div class="bg-white rounded-xl border border-gray-200 overflow-hidden">' +
-            '<div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">' +
-              '<p class="font-semibold text-sm text-gray-900">Sin actualizar en Delsur</p>' +
-              '<span class="text-xs font-bold px-2 py-0.5 rounded-full text-white" style="background:#C62828">' + sinActualizar.length + '</span>' +
+        '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em">Por pareja</p>' +
+        '<div class="space-y-3">' + PAREJAS.map(parejaCard).join('') + '</div>' +
+        // Pendientes de confirmar
+        (todasPendConfirm.length > 0 ?
+          '<div>' +
+            '<div class="flex items-center justify-between mb-2">' +
+              '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em">Pendientes de confirmación (' + todasPendConfirm.length + ')</p>' +
+              '<button id="btn-reload-seg" style="padding:5px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:12px;color:#374151;background:white;cursor:pointer">↻</button>' +
             '</div>' +
-            '<div class="divide-y divide-gray-50">' +
-              sinActualizar.map(function(o) {
-                return '<div class="px-4 py-3">' +
-                  '<p class="text-sm font-medium text-gray-900">' + safeStr(o.cliente) + '</p>' +
-                  '<p class="text-xs text-gray-400 mt-0.5">' + safeStr(o.wo) + ' · ' + safeStr(o.pareja) + ' · Hecha: ' + fmtDate(o.fechaHecha) + '</p>' +
-                '</div>';
-              }).join('') +
-            '</div>' +
+            '<div class="space-y-2">' + todasPendConfirm.map(confirmCard).join('') + '</div>' +
           '</div>'
-        : '') +
+        : '<div class="text-center py-6 bg-white rounded-xl border border-gray-200"><p class="text-sm font-semibold text-green-700">Sin órdenes pendientes de confirmación ✓</p></div>') +
       '</div>';
+
+    // Wire confirm cards
+    content.querySelectorAll('[data-wo]').forEach(function(card) {
+      card.addEventListener('click', function() {
+        const orden = todasPendConfirm.find(function(o) { return o.wo === card.dataset.wo; }) ||
+                      ordenes.find(function(o) { return o.wo === card.dataset.wo; });
+        if (orden) showConfirmarOrdenAdmin(db, session, orden, calendarioMap);
+      });
+    });
+
+    document.getElementById('btn-reload-seg')?.addEventListener('click', function() {
+      showSeguimiento(db, session);
+    });
 
   } catch(e) { content.innerHTML = errHtml(); console.error(e); }
 }
+
+function showConfirmarOrdenAdmin(db, session, orden, calendarioMap) {
+  const ov = mkOverlay(
+    '<div class="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">' +
+      '<div>' +
+        '<p class="text-xs font-mono text-gray-400">' + safeStr(orden.wo) + '</p>' +
+        '<h2 class="font-semibold text-gray-900">' + safeStr(orden.cliente) + '</h2>' +
+      '</div>' +
+      '<button id="coa-close" class="text-gray-400 hover:text-gray-700">✕</button>' +
+    '</div>' +
+    '<div class="flex-1 overflow-y-auto px-5 py-4 space-y-3">' +
+      '<div class="space-y-1.5 text-sm">' +
+        (orden.direccion ? '<p class="text-gray-600">' + safeStr(orden.direccion) + '</p>' : '') +
+        (orden.serie ? '<p class="text-gray-500">Medidor: <span class="font-mono font-semibold text-gray-800">' + safeStr(orden.serie) + '</span></p>' : '') +
+        (orden.pareja ? '<p class="text-gray-500">Pareja: <span class="font-semibold" style="color:' + (PAREJA_COLORS[orden.pareja]||'#374151') + '">' + safeStr(orden.pareja) + '</span></p>' : '') +
+        (orden.hechaPor ? '<p class="text-gray-500">Realizada por: <span class="font-semibold text-gray-800">' + safeStr(orden.hechaPor) + '</span></p>' : '') +
+        (orden.fechaHecha ? '<p class="text-gray-500">Fecha: <span class="font-semibold text-gray-800">' + fmtDate(orden.fechaHecha) + '</span></p>' : '') +
+      '</div>' +
+      '<div class="rounded-xl p-4 space-y-1" style="background:#F0FDFA">' +
+        '<p class="text-sm font-semibold text-gray-800">¿Confirmás que esta orden fue realizada?</p>' +
+        '<p class="text-xs text-gray-500">Si confirmás, el punto desaparece del mapa permanentemente.</p>' +
+      '</div>' +
+    '</div>' +
+    '<div class="px-5 py-4 border-t border-gray-100 flex gap-2 shrink-0">' +
+      '<button id="coa-rechazar" class="flex-1 py-3 rounded-xl font-bold border-2 border-gray-300 text-gray-700 text-sm">✗ Rechazar</button>' +
+      '<button id="coa-confirmar" class="flex-1 py-3 rounded-xl font-bold text-white text-sm" style="background:#166534">✓ Confirmar</button>' +
+    '</div>'
+  );
+
+  ov.querySelector('#coa-close').onclick = () => ov.remove();
+
+  ov.querySelector('#coa-confirmar').onclick = async function() {
+    const btn = ov.querySelector('#coa-confirmar');
+    btn.textContent = 'Confirmando...'; btn.disabled = true;
+    try {
+      let ref;
+      if (orden.id) { ref = doc(db, COL_ORDENES, orden.id); }
+      else {
+        const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo','==',orden.wo)));
+        if (snap.empty) throw new Error('No encontrada');
+        ref = snap.docs[0].ref;
+      }
+      await updateDoc(ref, { estadoCampo: 'aprobada', aprobadoPor: session.displayName, fechaAprobacion: serverTimestamp() });
+      ov.remove();
+      showToast('Orden confirmada. Punto eliminado del mapa.', 'success');
+      showSeguimiento(db, session);
+    } catch(e) { showToast('Error.', 'error'); btn.textContent = '✓ Confirmar'; btn.disabled = false; console.error(e); }
+  };
+
+  ov.querySelector('#coa-rechazar').onclick = async function() {
+    const btn = ov.querySelector('#coa-rechazar');
+    btn.textContent = 'Rechazando...'; btn.disabled = true;
+    try {
+      let ref;
+      if (orden.id) { ref = doc(db, COL_ORDENES, orden.id); }
+      else {
+        const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo','==',orden.wo)));
+        if (snap.empty) throw new Error('No encontrada');
+        ref = snap.docs[0].ref;
+      }
+      await updateDoc(ref, { estadoCampo: null, actualizadaDelsur: null, fechaHecha: null, hechaPor: null });
+      ov.remove();
+      showToast('Orden devuelta a campo como pendiente.', 'success');
+      showSeguimiento(db, session);
+    } catch(e) { showToast('Error.', 'error'); btn.textContent = '✗ Rechazar'; btn.disabled = false; console.error(e); }
+  };
+}
+
+
 
 // ─────────────────────────────────────────
 // CARGAR ÓRDENES DESDE EXCEL
