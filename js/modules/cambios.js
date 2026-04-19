@@ -712,8 +712,6 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
   contenedor.style.position = 'relative';
   contenedor.appendChild(btnAssign);
   btnAssign.addEventListener('click', function() { assignMode ? exitAssignMode() : enterAssignMode(); });
-  // Only show for admin
-  if (isCampo) { btnAssign.style.display = 'none'; panelEl.style.display = 'none'; }
 
   // Inject assign panel below map inside wrapper
   const wrapper = contenedor.parentElement;
@@ -740,6 +738,9 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
   document.getElementById('assign-rect').addEventListener('click', function() { if (drawingMgr) drawingMgr.setDrawingMode(G.drawing.OverlayType.RECTANGLE); });
   document.getElementById('assign-poly').addEventListener('click', function() { if (drawingMgr) drawingMgr.setDrawingMode(G.drawing.OverlayType.POLYGON); });
   panelEl.querySelectorAll('[data-pareja]').forEach(function(btn) { btn.addEventListener('click', function() { doAssign(btn.dataset.pareja); }); });
+
+  // Hide assign controls for campo
+  if (isCampo) { btnAssign.style.display = 'none'; panelEl.style.display = 'none'; }
 
   // ── route ──
   function trazarRuta(lat, lng) {
