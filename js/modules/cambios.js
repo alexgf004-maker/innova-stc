@@ -470,77 +470,68 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
 
   let userMarker   = null;
   let activeMarker = null;
+  let assignMode   = false;
+  let selectedWOs  = new Set();
+  let drawnShapes  = [];
+  let drawingMgr   = null;
+  let routeActive  = false;
 
-  let routeActive = false;
-
-  map.addListener('click', function() { closeSheet(); });
-
-  function clearRoute() {
-    directionsRenderer.setDirections({ routes: [] });
-    routeActive = false;
-    const cancelBtn = document.getElementById('sheet-cancel-ruta');
-    if (cancelBtn) cancelBtn.style.display = 'none';
-    const rutaBtn = document.getElementById('sheet-ruta');
-    if (rutaBtn) {
-      rutaBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>Trazar ruta';
-      rutaBtn.disabled = false;
-    }
+  // ── helpers ──
+  function getMarkerColor(o) {
+    if (o.pareja && PAREJA_COLORS[o.pareja]) return PAREJA_COLORS[o.pareja];
+    const bl = esBloqueada(o, calendarioMap);
+    if (bl) return '#9CA3AF';
+    if (o.estadoCampo === 'visita') return '#B45309';
+    if (o.estadoCampo === 'hecha')  return '#166534';
+    return '#6B7280';
   }
 
-  function closeSheet() {
-    if (sheet) sheet.style.transform = 'translateY(100%)';
-    if (activeMarker) {
-      activeMarker.setIcon(buildIcon(activeMarker.__color, false));
-      activeMarker = null;
-    }
-  }
-
-  function buildIcon(color, selected, assignMode) {
+  function buildIcon(color, selected, inAssign) {
     return {
       path: G.SymbolPath.CIRCLE,
       scale: selected ? 13 : 10,
       fillColor: color,
       fillOpacity: 1,
-      strokeColor: assignMode && selected ? '#FBBF24' : '#fff',
-      strokeWeight: assignMode && selected ? 4 : selected ? 3 : 2,
+      strokeColor: inAssign && selected ? '#FBBF24' : '#fff',
+      strokeWeight: inAssign && selected ? 4 : selected ? 3 : 2,
     };
   }
 
-  function getMarkerColor(o) {
-    if (o.pareja && PAREJA_COLORS[o.pareja]) return PAREJA_COLORS[o.pareja];
-    const bloqueada = esBloqueada(o, calendarioMap);
-    if (bloqueada) return '#9CA3AF';
-    if (o.estadoCampo === 'visita') return '#B45309';
-    if (o.estadoCampo === 'hecha') return '#166534';
-    return '#6B7280'; // sin asignar
+  // ── close bottom sheet ──
+  map.addListener('click', function() { closeSheet(); });
+
+  function closeSheet() {
+    if (sheet) sheet.style.transform = 'translateY(100%)';
+    if (activeMarker) { activeMarker.setIcon(buildIcon(activeMarker.__color, false, assignMode)); activeMarker = null; }
   }
 
+  function clearRoute() {
+    directionsRenderer.setDirections({ routes: [] });
+    routeActive = false;
+    const cb = document.getElementById('sheet-cancel-ruta');
+    if (cb) cb.style.display = 'none';
+    const rb = document.getElementById('sheet-ruta');
+    if (rb) { rb.disabled = false; rb.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>Trazar ruta'; }
+  }
+
+  // ── open bottom sheet ──
   function openSheet(o, marker) {
     if (!sheet || !sheetBody) return;
-    const bloqueada = esBloqueada(o, calendarioMap);
-    const hecha     = o.estadoCampo === 'hecha';
-    const isAdmin   = !isCampo;
+    const bloqueada   = esBloqueada(o, calendarioMap);
+    const hecha       = o.estadoCampo === 'hecha';
+    const isAdminUser = !isCampo;
     const statusColor = bloqueada ? '#9CA3AF' : hecha ? '#166534' : o.estadoCampo === 'visita' ? '#B45309' : '#0F766E';
     const statusLabel = bloqueada ? '🔒 Bloqueada' : hecha ? '✓ Hecha' : o.estadoCampo === 'visita' ? '👁 Visita' : '● Disponible';
 
-    function infoRow(label, val) {
-      if (!val) return '';
-      return '<div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid #f3f4f6">' +
-        '<span style="color:#9ca3af;font-size:12px;min-width:90px;flex-shrink:0">' + label + '</span>' +
-        '<span style="color:#111827;font-size:12px;font-weight:500;flex:1">' + safeStr(val) + '</span>' +
-      '</div>';
-    }
-
     function chip(label, val) {
       if (!val) return '';
-      return '<div style="background:#f3f4f6;border-radius:8px;padding:6px 10px;min-width:0">' +
+      return '<div style="background:#f3f4f6;border-radius:8px;padding:6px 10px">' +
         '<p style="font-size:10px;color:#9ca3af;margin-bottom:2px">' + label + '</p>' +
         '<p style="font-size:12px;font-weight:600;color:#111827;word-break:break-word">' + safeStr(val) + '</p>' +
       '</div>';
     }
 
     sheetBody.innerHTML =
-      // Header
       '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:12px">' +
         '<div style="flex:1;min-width:0">' +
           '<p style="font-size:10px;color:#9ca3af;font-family:monospace">' + safeStr(o.wo) + '</p>' +
@@ -548,90 +539,66 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
         '</div>' +
         '<span style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;background:' + statusColor + '18;color:' + statusColor + ';white-space:nowrap;flex-shrink:0">' + statusLabel + '</span>' +
       '</div>' +
-
-      // Dirección — fila completa
       '<div style="display:flex;gap:8px;align-items:flex-start;background:#f9fafb;border-radius:10px;padding:9px 12px;margin-bottom:10px">' +
         '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>' +
         '<p style="font-size:12px;color:#374151;line-height:1.4">' + safeStr(o.direccion || '—') + '</p>' +
       '</div>' +
-
-      // Grid de chips — info clave
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px">' +
-        chip('Medidor', o.serie) +
-        chip('DS', o.dsct) +
-        chip('MRU', o.unidadLectura) +
-        chip('Concepto', o.concepto) +
-        chip('NC', o.nc) +
-        chip('Teléfono', o.telefono) +
-        (o.pareja && isAdmin ? chip('Pareja', o.pareja) : '') +
+        chip('Medidor', o.serie) + chip('DS', o.dsct) +
+        chip('MRU', o.unidadLectura) + chip('Concepto', o.concepto) +
+        chip('NC', o.nc) + chip('Teléfono', o.telefono) +
+        (o.pareja && isAdminUser ? chip('Pareja', o.pareja) : '') +
         (o.observaciones ? '<div style="grid-column:1/-1;background:#f3f4f6;border-radius:8px;padding:6px 10px"><p style="font-size:10px;color:#9ca3af;margin-bottom:2px">Observaciones</p><p style="font-size:12px;color:#374151">' + safeStr(o.observaciones) + '</p></div>' : '') +
         (o.observacion ? '<div style="grid-column:1/-1;background:#FEF3C7;border-radius:8px;padding:6px 10px"><p style="font-size:10px;color:#B45309;margin-bottom:2px">Nota visita</p><p style="font-size:12px;color:#374151">' + safeStr(o.observacion) + '</p></div>' : '') +
         (o.hechaPor ? '<div style="grid-column:1/-1;background:#F0FDF4;border-radius:8px;padding:6px 10px"><p style="font-size:10px;color:#166534;margin-bottom:2px">Hecha por</p><p style="font-size:12px;color:#374151">' + safeStr(o.hechaPor) + '</p></div>' : '') +
       '</div>' +
-
-      // Bloqueo
-      (bloqueada ? '<div style="background:#FEF2F2;color:#C62828;padding:9px 12px;border-radius:10px;font-size:12px;font-weight:500;margin-bottom:10px;display:flex;align-items:center;gap:6px">🔒 En período de lectura — no se puede ejecutar.</div>' : '') +
-
-      // Botones
+      (bloqueada ? '<div style="background:#FEF2F2;color:#C62828;padding:9px 12px;border-radius:10px;font-size:12px;font-weight:500;margin-bottom:10px">🔒 En período de lectura — no se puede ejecutar.</div>' : '') +
       '<div style="display:flex;flex-direction:column;gap:7px">' +
         '<div style="display:flex;gap:7px">' +
           '<button id="sheet-ruta" style="flex:1;padding:12px;background:#0F766E;color:white;border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px">' +
             '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>Trazar ruta' +
           '</button>' +
-          '<a href="https://www.google.com/maps/dir/?api=1&destination=' + o.latitud + ',' + o.longitud + '" target="_blank" style="flex:1;padding:12px;border:1.5px solid #e5e7eb;border-radius:12px;font-size:13px;font-weight:500;color:#374151;text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:4px">↗ Maps</a>' +
+          '<a href="https://www.google.com/maps/dir/?api=1&destination=' + o.latitud + ',' + o.longitud + '" target="_blank" style="flex:1;padding:12px;border:1.5px solid #e5e7eb;border-radius:12px;font-size:13px;font-weight:500;color:#374151;text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center">↗ Maps</a>' +
         '</div>' +
-        '<button id="sheet-cancel-ruta" style="width:100%;padding:9px;background:#FEF2F2;color:#C62828;border:1.5px solid #FECACA;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer;display:' + (routeActive ? 'flex' : 'none') + ';align-items:center;justify-content:center;gap:5px">✕ Cancelar ruta</button>' +
+        '<button id="sheet-cancel-ruta" style="width:100%;padding:9px;background:#FEF2F2;color:#C62828;border:1.5px solid #FECACA;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer;display:' + (routeActive ? 'flex' : 'none') + ';align-items:center;justify-content:center">✕ Cancelar ruta</button>' +
         (!bloqueada && !hecha && isCampo ?
           '<div style="display:flex;gap:7px">' +
             '<button id="sheet-visita" style="flex:1;padding:11px;border:2px solid #e5e7eb;border-radius:12px;font-size:13px;font-weight:600;color:#374151;background:white;cursor:pointer">Visita</button>' +
             '<button id="sheet-hecha" style="flex:1;padding:11px;background:#166534;color:white;border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer">✓ Hecha</button>' +
           '</div>'
         : '') +
-        (isAdmin ? '<button id="sheet-asignar" style="width:100%;padding:10px;border:1.5px solid #e5e7eb;border-radius:12px;font-size:13px;font-weight:500;color:#374151;background:white;cursor:pointer">Asignar pareja</button>' : '') +
+        (isAdminUser ? '<button id="sheet-asignar-1" style="width:100%;padding:10px;border:1.5px solid #e5e7eb;border-radius:12px;font-size:13px;font-weight:500;color:#374151;background:white;cursor:pointer">Asignar pareja</button>' : '') +
       '</div>';
 
     sheet.style.transform = 'translateY(0)';
-
-    if (activeMarker && activeMarker !== marker) {
-      activeMarker.setIcon(buildIcon(activeMarker.__color, false));
-    }
-    marker.setIcon(buildIcon(marker.__color, true));
+    if (activeMarker && activeMarker !== marker) { activeMarker.setIcon(buildIcon(activeMarker.__color, false, false)); }
+    marker.setIcon(buildIcon(marker.__color, true, false));
     activeMarker = marker;
 
     document.getElementById('sheet-ruta')?.addEventListener('click', function() { trazarRuta(safeNum(o.latitud), safeNum(o.longitud)); });
-    document.getElementById('sheet-cancel-ruta')?.addEventListener('click', function() { clearRoute(); });
-
+    document.getElementById('sheet-cancel-ruta')?.addEventListener('click', clearRoute);
     document.getElementById('sheet-hecha')?.addEventListener('click', function() { closeSheet(); showConfirmarHecha(db, session, o); });
     document.getElementById('sheet-visita')?.addEventListener('click', function() { closeSheet(); showRegistrarVisita(db, session, o); });
-    document.getElementById('sheet-asignar')?.addEventListener('click', function() { closeSheet(); showAsignarPareja(db, [o.wo], null); });
+    document.getElementById('sheet-asignar-1')?.addEventListener('click', function() { closeSheet(); showAsignarPareja(db, [o.wo], null); });
   }
 
+  // ── build markers ──
   const markers = ordenes.map(function(o) {
-    const bloqueada = esBloqueada(o, calendarioMap);
-    const color = getMarkerColor(o);
-    const marker = new G.Marker({
-      position: { lat: safeNum(o.latitud), lng: safeNum(o.longitud) },
-      title: o.cliente,
-      icon: buildIcon(color, false, false),
-    });
-    marker.__color = color;
-    marker.__orden = o;
-    marker.__selected = false;
+    const color  = getMarkerColor(o);
+    const marker = new G.Marker({ position: { lat: safeNum(o.latitud), lng: safeNum(o.longitud) }, title: o.cliente, icon: buildIcon(color, false, false) });
+    marker.__color  = color;
+    marker.__orden  = o;
+    marker.__sel    = false;
     marker.addListener('click', function() {
-      if (assignMode) {
-        toggleSelectMarker(marker);
-      } else {
-        openSheet(o, marker);
-      }
+      if (assignMode) { toggleSel(marker); } else { openSheet(o, marker); }
     });
     return marker;
   });
 
-  // Use MarkerClusterer if available, otherwise add directly to map
+  // ── clustering ──
   if (window.markerClusterer && window.markerClusterer.MarkerClusterer) {
     new window.markerClusterer.MarkerClusterer({
-      map,
-      markers,
+      map, markers,
       algorithmOptions: { maxZoom: 15 },
       renderer: {
         render: function(cluster) {
@@ -640,74 +607,179 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
           const bg    = count > 50 ? '#0F766E' : count > 10 ? '#0d9488' : '#14b8a6';
           return new G.Marker({
             position: cluster.position,
-            icon: {
-              url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(
-                '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size + '">' +
-                '<circle cx="' + (size/2) + '" cy="' + (size/2) + '" r="' + (size/2 - 2) + '" fill="' + bg + '" stroke="white" stroke-width="2"/>' +
-                '<text x="50%" y="50%" text-anchor="middle" dy=".35em" fill="white" font-size="' + (size > 40 ? 14 : 12) + '" font-family="Inter,sans-serif" font-weight="700">' + count + '</text>' +
-                '</svg>'
-              ),
-              scaledSize: new G.Size(size, size),
-              anchor: new G.Point(size/2, size/2),
-            },
+            icon: { url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size + '"><circle cx="' + (size/2) + '" cy="' + (size/2) + '" r="' + (size/2-2) + '" fill="' + bg + '" stroke="white" stroke-width="2"/><text x="50%" y="50%" text-anchor="middle" dy=".35em" fill="white" font-size="' + (size > 40 ? 14 : 12) + '" font-family="Inter,sans-serif" font-weight="700">' + count + '</text></svg>'),
+              scaledSize: new G.Size(size, size), anchor: new G.Point(size/2, size/2) },
             zIndex: 1000,
           });
         },
       },
     });
   } else {
-    // Fallback: add markers directly
     markers.forEach(function(m) { m.setMap(map); });
   }
 
+  // ── user location ──
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(function(pos) {
-      userMarker = new G.Marker({
-        position: { lat: pos.coords.latitude, lng: pos.coords.longitude },
-        map, title: 'Tu ubicación', zIndex: 999,
-        icon: { path: G.SymbolPath.CIRCLE, scale: 9, fillColor: '#2563EB', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2.5 },
-      });
+      userMarker = new G.Marker({ position: { lat: pos.coords.latitude, lng: pos.coords.longitude }, map, title: 'Tu ubicación', zIndex: 999, icon: { path: G.SymbolPath.CIRCLE, scale: 9, fillColor: '#2563EB', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2.5 } });
     }, function() {});
   }
 
+  // ── assign mode ──
+  function toggleSel(marker) {
+    const wo = marker.__orden.wo;
+    if (selectedWOs.has(wo)) { selectedWOs.delete(wo); marker.__sel = false; }
+    else { selectedWOs.add(wo); marker.__sel = true; }
+    marker.setIcon(buildIcon(marker.__color, marker.__sel, true));
+    updateAssignPanel();
+  }
+
+  function updateAssignPanel() {
+    const el = document.getElementById('assign-count');
+    if (el) el.textContent = selectedWOs.size + ' orden' + (selectedWOs.size !== 1 ? 'es' : '') + ' seleccionada' + (selectedWOs.size !== 1 ? 's' : '');
+  }
+
+  function clearSel() {
+    selectedWOs.clear();
+    drawnShapes.forEach(function(s) { s.setMap(null); }); drawnShapes = [];
+    markers.forEach(function(m) { m.__sel = false; m.setIcon(buildIcon(m.__color, false, assignMode)); });
+    if (drawingMgr) drawingMgr.setDrawingMode(null);
+    updateAssignPanel();
+  }
+
+  function enterAssignMode() {
+    assignMode = true; closeSheet();
+    const p = document.getElementById('assign-panel');
+    if (p) p.style.display = 'flex';
+    const btn = document.getElementById('btn-assign-mode');
+    if (btn) { btn.style.background = '#1B4F8A'; btn.style.color = 'white'; btn.textContent = '✕ Salir asignación'; }
+    markers.forEach(function(m) { m.setIcon(buildIcon(m.__color, m.__sel, true)); });
+    if (!drawingMgr && G.drawing) {
+      drawingMgr = new G.drawing.DrawingManager({
+        drawingMode: null, drawingControl: false,
+        rectangleOptions: { fillColor:'#FBBF24', fillOpacity:0.15, strokeColor:'#FBBF24', strokeWeight:2, clickable:false, editable:false },
+        polygonOptions:   { fillColor:'#FBBF24', fillOpacity:0.15, strokeColor:'#FBBF24', strokeWeight:2, clickable:false, editable:false },
+      });
+      drawingMgr.setMap(map);
+      G.event.addListener(drawingMgr, 'overlaycomplete', function(e) {
+        drawnShapes.push(e.overlay);
+        drawingMgr.setDrawingMode(null);
+        markers.forEach(function(m) {
+          const pos = m.getPosition();
+          let inside = false;
+          if (e.type === 'rectangle') inside = e.overlay.getBounds().contains(pos);
+          else if (e.type === 'polygon' && G.geometry) inside = G.geometry.poly.containsLocation(pos, e.overlay);
+          if (inside) { selectedWOs.add(m.__orden.wo); m.__sel = true; m.setIcon(buildIcon(m.__color, true, true)); }
+        });
+        updateAssignPanel();
+      });
+    }
+  }
+
+  function exitAssignMode() {
+    assignMode = false; clearSel();
+    const p = document.getElementById('assign-panel');
+    if (p) p.style.display = 'none';
+    const btn = document.getElementById('btn-assign-mode');
+    if (btn) { btn.style.background = 'white'; btn.style.color = '#1B4F8A'; btn.textContent = '🗂 Asignar'; }
+    markers.forEach(function(m) { m.setIcon(buildIcon(m.__color, false, false)); });
+  }
+
+  async function doAssign(pareja) {
+    if (!selectedWOs.size) { showToast('Selecciona al menos una orden.','error'); return; }
+    const btn = document.getElementById('ap-btn-' + pareja.replace(' ','_'));
+    if (btn) { btn.textContent = '...'; btn.disabled = true; }
+    try {
+      const color = PAREJA_COLORS[pareja] || '#0F766E';
+      await Promise.all(Array.from(selectedWOs).map(async function(wo) {
+        const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo','==',wo)));
+        if (!snap.empty) await updateDoc(snap.docs[0].ref, { pareja, asignadoEn: serverTimestamp() });
+        const m = markers.find(function(mk) { return mk.__orden.wo === wo; });
+        if (m) { m.__orden.pareja = pareja; m.__color = color; m.__sel = false; m.setIcon(buildIcon(color, false, true)); }
+      }));
+      showToast(selectedWOs.size + ' órdenes → ' + pareja, 'success');
+      selectedWOs.clear();
+      updateAssignPanel();
+    } catch(e) { showToast('Error al asignar.','error'); console.error(e); }
+    if (btn) { btn.textContent = pareja; btn.disabled = false; }
+  }
+
+  // Inject assign mode button inside map
+  const btnAssign = document.createElement('button');
+  btnAssign.id = 'btn-assign-mode';
+  btnAssign.textContent = '🗂 Asignar';
+  btnAssign.style.cssText = 'position:absolute;top:10px;left:10px;z-index:10;background:white;border:1.5px solid #e5e7eb;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;color:#1B4F8A;box-shadow:0 2px 8px rgba(0,0,0,0.15);cursor:pointer;';
+  contenedor.style.position = 'relative';
+  contenedor.appendChild(btnAssign);
+  btnAssign.addEventListener('click', function() { assignMode ? exitAssignMode() : enterAssignMode(); });
+
+  // Inject assign panel below map inside wrapper
+  const wrapper = contenedor.parentElement;
+  const panelEl = document.createElement('div');
+  panelEl.id = 'assign-panel';
+  panelEl.style.cssText = 'display:none;flex-direction:column;gap:8px;background:white;border:1px solid #e5e7eb;border-radius:12px;padding:12px;margin-top:8px;';
+  panelEl.innerHTML =
+    '<div style="display:flex;align-items:center;justify-content:space-between">' +
+      '<p id="assign-count" style="font-size:13px;font-weight:600;color:#374151">0 órdenes seleccionadas</p>' +
+      '<button id="assign-clear" style="font-size:12px;color:#6b7280;background:none;border:1px solid #e5e7eb;border-radius:8px;padding:4px 10px;cursor:pointer">Limpiar</button>' +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">' +
+      PAREJAS.map(function(p) {
+        return '<button id="ap-btn-' + p.replace(' ','_') + '" data-pareja="' + p + '" style="padding:10px;background:' + PAREJA_COLORS[p] + ';color:white;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">' + p + '</button>';
+      }).join('') +
+    '</div>' +
+    '<div style="display:flex;gap:6px">' +
+      '<button id="assign-rect" style="flex:1;padding:9px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:12px;color:#374151;background:white;cursor:pointer">⬜ Rectángulo</button>' +
+      '<button id="assign-poly" style="flex:1;padding:9px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:12px;color:#374151;background:white;cursor:pointer">✏️ Polígono</button>' +
+    '</div>';
+  wrapper.appendChild(panelEl);
+
+  document.getElementById('assign-clear').addEventListener('click', clearSel);
+  document.getElementById('assign-rect').addEventListener('click', function() { if (drawingMgr) drawingMgr.setDrawingMode(G.drawing.OverlayType.RECTANGLE); });
+  document.getElementById('assign-poly').addEventListener('click', function() { if (drawingMgr) drawingMgr.setDrawingMode(G.drawing.OverlayType.POLYGON); });
+  panelEl.querySelectorAll('[data-pareja]').forEach(function(btn) { btn.addEventListener('click', function() { doAssign(btn.dataset.pareja); }); });
+
+  // ── route ──
   function trazarRuta(lat, lng) {
     const btn = document.getElementById('sheet-ruta');
-    if (!navigator.geolocation) {
-      window.open('https://www.google.com/maps/dir/?api=1&destination=' + lat + ',' + lng, '_blank');
-      return;
-    }
-    if (btn) { btn.innerHTML = '<svg style="animation:spin 0.8s linear infinite;width:14px;height:14px;flex-shrink:0" viewBox="0 0 24 24" fill="none"><circle opacity=".25" cx="12" cy="12" r="10" stroke="white" stroke-width="4"/><path opacity=".75" fill="white" d="M4 12a8 8 0 018-8v8z"/></svg> Calculando...'; btn.disabled = true; }
+    if (!navigator.geolocation) { window.open('https://www.google.com/maps/dir/?api=1&destination=' + lat + ',' + lng, '_blank'); return; }
+    if (btn) { btn.innerHTML = '<svg style="animation:spin .8s linear infinite;width:14px;height:14px" viewBox="0 0 24 24" fill="none"><circle opacity=".25" cx="12" cy="12" r="10" stroke="white" stroke-width="4"/><path opacity=".75" fill="white" d="M4 12a8 8 0 018-8v8z"/></svg> Calculando...'; btn.disabled = true; }
     navigator.geolocation.getCurrentPosition(function(pos) {
       const origin = { lat: pos.coords.latitude, lng: pos.coords.longitude };
       const dest   = { lat: lat, lng: lng };
       if (userMarker) userMarker.setPosition(origin);
-      directionsService.route({ origin, destination: dest, travelMode: G.TravelMode.DRIVING },
-        function(result, status) {
-          if (btn) btn.disabled = false;
-          if (status === 'OK') {
-            directionsRenderer.setDirections(result);
-            routeActive = true;
-            const leg = result.routes[0].legs[0];
-            if (btn) { btn.innerHTML = '✓ ' + leg.distance.text + ' · ' + leg.duration.text; }
-            const cancelBtn = document.getElementById('sheet-cancel-ruta');
-            if (cancelBtn) cancelBtn.style.display = 'block';
-            const bounds = new G.LatLngBounds();
-            result.routes[0].overview_path.forEach(function(p) { bounds.extend(p); });
-            map.fitBounds(bounds);
-          } else {
-            if (btn) { btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>Trazar ruta'; }
-            window.open('https://www.google.com/maps/dir/?api=1&destination=' + lat + ',' + lng, '_blank');
-          }
+      directionsService.route({ origin, destination: dest, travelMode: G.TravelMode.DRIVING }, function(result, status) {
+        if (btn) btn.disabled = false;
+        if (status === 'OK') {
+          directionsRenderer.setDirections(result);
+          routeActive = true;
+          const leg = result.routes[0].legs[0];
+          if (btn) btn.innerHTML = '✓ ' + leg.distance.text + ' · ' + leg.duration.text;
+          const cb = document.getElementById('sheet-cancel-ruta'); if (cb) cb.style.display = 'flex';
+          const bounds = new G.LatLngBounds();
+          result.routes[0].overview_path.forEach(function(p) { bounds.extend(p); });
+          map.fitBounds(bounds);
+        } else {
+          if (btn) btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>Trazar ruta';
+          window.open('https://www.google.com/maps/dir/?api=1&destination=' + lat + ',' + lng, '_blank');
         }
-      );
+      });
     }, function() {
-      if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>Trazar ruta'; }
+      if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>Trazar ruta'; }
       window.open('https://www.google.com/maps/dir/?api=1&destination=' + lat + ',' + lng, '_blank');
     });
   }
 
   window.__trazarRuta = trazarRuta;
+
+  // spin keyframe
+  if (!document.getElementById('cambios-spin-style')) {
+    const s = document.createElement('style'); s.id = 'cambios-spin-style';
+    s.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
+    document.head.appendChild(s);
+  }
 }
+
 
 // ─────────────────────────────────────────
 // DETALLE DE ORDEN
