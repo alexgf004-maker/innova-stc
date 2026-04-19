@@ -390,24 +390,32 @@ async function showMapa(db, session, isCampo, destino) {
       content.innerHTML =
         '<div class="text-center py-12 space-y-2">' +
           '<p class="text-gray-400 text-sm">Sin coordenadas disponibles</p>' +
-          '<p class="text-xs text-gray-300">Incluye columnas Latitud y Longitud en el Excel de órdenes</p>' +
+          '<p class="text-xs text-gray-300">Incluye columnas Latitud y Longitud en el Excel</p>' +
         '</div>';
       return;
     }
 
+    // Full-screen map layout with bottom sheet
     content.innerHTML =
-      '<div class="space-y-2">' +
-        '<p class="text-xs text-gray-400">' + conCoords.length + ' órdenes · Toca un marcador para ver opciones</p>' +
-        '<div id="mapa-contenedor" class="w-full rounded-xl border border-gray-200 overflow-hidden" style="height:calc(100vh - 260px);min-height:350px;">' +
-          '<div class="flex items-center justify-center h-full text-gray-400 text-sm gap-2">' +
-            '<svg class="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>' +
+      '<div style="position:relative;width:100%;height:calc(100vh - 220px);min-height:400px;">' +
+        // Map container
+        '<div id="mapa-contenedor" style="width:100%;height:100%;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">' +
+          '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#9ca3af;font-size:14px;gap:8px">' +
+            '<svg style="width:16px;height:16px;animation:spin 1s linear infinite" viewBox="0 0 24 24" fill="none"><circle opacity=".25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path opacity=".75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>' +
             'Cargando mapa...' +
           '</div>' +
+        '</div>' +
+        // Bottom sheet — hidden by default
+        '<div id="mapa-sheet" style="position:absolute;bottom:0;left:0;right:0;background:white;border-radius:16px 16px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,0.15);transform:translateY(100%);transition:transform 0.3s ease;z-index:10;max-height:70%;overflow-y:auto;">' +
+          '<div style="display:flex;justify-content:center;padding:10px 0 4px">' +
+            '<div style="width:36px;height:4px;background:#e5e7eb;border-radius:2px"></div>' +
+          '</div>' +
+          '<div id="mapa-sheet-content" style="padding:0 16px 24px"></div>' +
         '</div>' +
       '</div>';
 
     await loadGoogleMaps();
-    initMapaCambios(conCoords, calendarioMap, session, isCampo);
+    initMapaCambios(conCoords, calendarioMap, session, isCampo, db);
 
   } catch(e) { content.innerHTML = errHtml(); console.error(e); }
 }
