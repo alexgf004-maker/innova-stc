@@ -393,7 +393,10 @@ async function showListado(db, session, isCampo, destino) {
           // Count + assign btn
           '<div class="flex items-center justify-between">' +
             '<p id="admin-ordenes-count" class="text-xs text-gray-400">' + ordenes.length + ' órdenes</p>' +
-            '<button id="btn-asignar-sel" class="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600">Asignar seleccionadas</button>' +
+            '<div style="display:flex;gap:6px">' +
+              '<button id="btn-asignar-sel" class="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600">Asignar</button>' +
+              '<button id="btn-desasignar-pareja" class="text-xs font-medium px-3 py-1.5 rounded-lg border border-red-200 text-red-600 bg-red-50">Desasignar pareja</button>' +
+            '</div>' +
           '</div>' +
           '<div id="admin-ordenes-lista" class="space-y-2"></div>' +
         '</div>';
@@ -440,6 +443,11 @@ async function showListado(db, session, isCampo, destino) {
         const wos = Array.from(selCards).map(function(c) { return c.dataset.wo; });
         if (!wos.length) { showToast('Mantén presionado para seleccionar órdenes.', 'error'); return; }
         showAsignarPareja(db, wos, function() { showListado(db, session, false, null); });
+      });
+
+      // Desasignar pareja completa
+      document.getElementById('btn-desasignar-pareja').addEventListener('click', function() {
+        showDesasignarPareja(db, ordenes, function() { showListado(db, session, false, null); });
       });
     }
 
@@ -1172,20 +1180,22 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
 
   async function doAssign(pareja) {
     if (!selectedWOs.size) { showToast('Selecciona al menos una orden.','error'); return; }
-    const btn = document.getElementById('ap-btn-' + pareja.replace(' ','_'));
+    const isDesasignar = pareja === null;
+    const btnId = isDesasignar ? 'ap-btn-desasignar' : 'ap-btn-' + pareja.replace(' ','_');
+    const btn = document.getElementById(btnId);
     if (btn) { btn.textContent = '...'; btn.disabled = true; }
     try {
-      const color = PAREJA_COLORS[pareja] || '#0F766E';
+      const color = isDesasignar ? '#6B7280' : (PAREJA_COLORS[pareja] || '#0F766E');
       await Promise.all(Array.from(selectedWOs).map(async function(wo) {
         const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo','==',wo)));
-        if (!snap.empty) await updateDoc(snap.docs[0].ref, { pareja, asignadoEn: serverTimestamp() });
+        if (!snap.empty) await updateDoc(snap.docs[0].ref, isDesasignar ? { pareja: null } : { pareja, asignadoEn: serverTimestamp() });
         const m = markers.find(function(mk) { return mk.__orden.wo === wo; });
-        if (m) { m.__orden.pareja = pareja; m.__color = color; m.__sel = false; m.setIcon(buildIcon(color, false, true)); }
+        if (m) { m.__orden.pareja = isDesasignar ? null : pareja; m.__color = color; m.__sel = false; m.setIcon(buildIcon(color, false, true)); }
       }));
-      showToast(selectedWOs.size + ' órdenes → ' + pareja, 'success');
+      showToast(isDesasignar ? selectedWOs.size + ' órdenes desasignadas' : selectedWOs.size + ' órdenes → ' + pareja, 'success');
       selectedWOs.clear(); updateAssignPanel();
-    } catch(e) { showToast('Error al asignar.','error'); console.error(e); }
-    if (btn) { btn.textContent = pareja; btn.disabled = false; }
+    } catch(e) { showToast('Error.','error'); console.error(e); }
+    if (btn) { btn.textContent = isDesasignar ? '✕ Desasignar seleccionadas' : pareja; btn.disabled = false; }
   }
 
   const btnAssign = document.createElement('button');
@@ -1203,6 +1213,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
   panelEl.innerHTML =
     '<div style="display:flex;align-items:center;justify-content:space-between"><p id="assign-count" style="font-size:13px;font-weight:600;color:#374151">0 órdenes seleccionadas</p><button id="assign-clear" style="font-size:12px;color:#6b7280;background:none;border:1px solid #e5e7eb;border-radius:8px;padding:4px 10px;cursor:pointer">Limpiar</button></div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">' + PAREJAS.map(function(p) { return '<button id="ap-btn-' + p.replace(' ','_') + '" data-pareja="' + p + '" style="padding:10px;background:' + PAREJA_COLORS[p] + ';color:white;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">' + p + '</button>'; }).join('') + '</div>' +
+    '<button id="ap-btn-desasignar" style="width:100%;padding:9px;background:#FEF2F2;color:#C62828;border:1.5px solid #FECACA;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">✕ Desasignar seleccionadas</button>' +
     '<div style="display:flex;gap:6px"><button id="assign-rect" style="flex:1;padding:9px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:12px;color:#374151;background:white;cursor:pointer">⬜ Rectángulo</button><button id="assign-poly" style="flex:1;padding:9px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:12px;color:#374151;background:white;cursor:pointer">✏️ Polígono</button></div>';
   wrapper.appendChild(panelEl);
 
@@ -1210,6 +1221,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
   document.getElementById('assign-rect').addEventListener('click', function() { if (drawingMgr) drawingMgr.setDrawingMode(G.drawing.OverlayType.RECTANGLE); });
   document.getElementById('assign-poly').addEventListener('click', function() { if (drawingMgr) drawingMgr.setDrawingMode(G.drawing.OverlayType.POLYGON); });
   panelEl.querySelectorAll('[data-pareja]').forEach(function(btn) { btn.addEventListener('click', function() { doAssign(btn.dataset.pareja); }); });
+  document.getElementById('ap-btn-desasignar')?.addEventListener('click', function() { doAssign(null); });
 
   if (isCampo) { btnAssign.style.display = 'none'; panelEl.style.display = 'none'; }
 
@@ -1759,4 +1771,78 @@ async function bodegaPedidos(db, session, el) {
       '</div>';
 
   } catch(e) { el.innerHTML = errHtml(); console.error(e); }
+}
+
+// ─────────────────────────────────────────
+// DESASIGNAR PAREJA COMPLETA
+// ─────────────────────────────────────────
+function showDesasignarPareja(db, ordenes, onDone) {
+  // Count pending orders per pareja
+  const counts = {};
+  PAREJAS.forEach(function(p) { counts[p] = 0; });
+  ordenes.forEach(function(o) {
+    if (o.pareja && counts[o.pareja] !== undefined && o.estadoCampo !== 'aprobada') counts[o.pareja]++;
+  });
+
+  const ov = mkOverlay(
+    '<div class="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">' +
+      '<div>' +
+        '<h2 class="font-semibold text-gray-900">Desasignar pareja</h2>' +
+        '<p class="text-xs text-gray-400 mt-0.5">Quita todas las órdenes pendientes de una pareja</p>' +
+      '</div>' +
+      '<button id="dp-close" class="text-gray-400 hover:text-gray-700">✕</button>' +
+    '</div>' +
+    '<div class="flex-1 overflow-y-auto px-5 py-4 space-y-2">' +
+      PAREJAS.map(function(p) {
+        const c = PAREJA_COLORS[p];
+        const n = counts[p];
+        return '<div class="flex items-center justify-between bg-white border border-gray-200 rounded-xl px-4 py-3">' +
+          '<div class="flex items-center gap-3">' +
+            '<span style="width:10px;height:10px;border-radius:50%;background:' + c + ';display:inline-block;flex-shrink:0"></span>' +
+            '<div>' +
+              '<p class="font-semibold text-gray-900 text-sm">' + p + '</p>' +
+              '<p class="text-xs text-gray-400">' + n + ' orden' + (n !== 1 ? 'es' : '') + ' asignada' + (n !== 1 ? 's' : '') + '</p>' +
+            '</div>' +
+          '</div>' +
+          (n > 0 ?
+            '<button data-pareja="' + p + '" class="btn-dp text-xs font-bold px-3 py-2 rounded-lg" style="background:#FEF2F2;color:#C62828;border:1px solid #FECACA">Desasignar</button>'
+          : '<span class="text-xs text-gray-300">Sin órdenes</span>') +
+        '</div>';
+      }).join('') +
+      '<div class="pt-2 border-t border-gray-100">' +
+        '<button id="dp-all" class="w-full py-3 rounded-xl text-sm font-bold" style="background:#FEF2F2;color:#C62828;border:1.5px solid #FECACA">✕ Desasignar TODAS las parejas</button>' +
+      '</div>' +
+    '</div>'
+  );
+
+  ov.querySelector('#dp-close').onclick = () => ov.remove();
+
+  async function desasignar(pareja) {
+    const btn = pareja
+      ? ov.querySelector('[data-pareja="' + pareja + '"].btn-dp')
+      : ov.querySelector('#dp-all');
+    if (btn) { btn.textContent = 'Desasignando...'; btn.disabled = true; }
+    try {
+      const toUnassign = ordenes.filter(function(o) {
+        return (pareja ? o.pareja === pareja : o.pareja) && o.estadoCampo !== 'aprobada' && o.estadoCampo !== 'hecha';
+      });
+      await Promise.all(toUnassign.map(function(o) {
+        const ref = o.id ? doc(db, COL_ORDENES, o.id) : null;
+        if (!ref) return Promise.resolve();
+        return updateDoc(ref, { pareja: null });
+      }));
+      ov.remove();
+      showToast(toUnassign.length + ' órdenes desasignadas' + (pareja ? ' de ' + pareja : ''), 'success');
+      if (onDone) onDone();
+    } catch(e) {
+      showToast('Error al desasignar.', 'error');
+      if (btn) { btn.disabled = false; btn.textContent = pareja ? 'Desasignar' : '✕ Desasignar TODAS las parejas'; }
+      console.error(e);
+    }
+  }
+
+  ov.querySelectorAll('.btn-dp').forEach(function(btn) {
+    btn.addEventListener('click', function() { desasignar(btn.dataset.pareja); });
+  });
+  ov.querySelector('#dp-all').addEventListener('click', function() { desasignar(null); });
 }
