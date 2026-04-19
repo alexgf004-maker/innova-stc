@@ -70,19 +70,36 @@ export async function initCambios(session) {
   const destino  = session.asignacionActual?.destino || null;
 
   // Campo sin asignación a CAMBIOS
-  if (isCampo && (!session.asignacionActual || session.asignacionActual.area !== 'CAMBIOS')) {
-    container.innerHTML =
-      '<div class="flex flex-col items-center justify-center min-h-64 px-6 text-center space-y-4">' +
-        '<div class="w-16 h-16 rounded-2xl flex items-center justify-center" style="background:#F0FDFA">' +
-          '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#0F766E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3"/></svg>' +
-        '</div>' +
-        '<div>' +
-          '<p class="font-bold text-gray-900 text-lg">Sin asignación a Cambios</p>' +
-          '<p class="text-sm text-gray-500 mt-1">No tienes una pareja asignada en el área de Cambios.</p>' +
-          '<p class="text-sm text-gray-500">Contacta a administración.</p>' +
-        '</div>' +
-      '</div>';
-    return;
+  if (isCampo) {
+    const sArea = session.asignacionActual?.area || (session.usuarioOperativoAsignado ? 'OTC' : null);
+    if (sArea && sArea !== 'CAMBIOS') {
+      container.innerHTML =
+        '<div class="flex flex-col items-center justify-center min-h-64 px-6 text-center space-y-4">' +
+          '<div class="w-16 h-16 rounded-2xl flex items-center justify-center" style="background:#FEF2F2">' +
+            '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#C62828" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>' +
+          '</div>' +
+          '<div>' +
+            '<p class="font-bold text-gray-900 text-lg">Sin acceso a Cambios</p>' +
+            '<p class="text-sm text-gray-500 mt-1">Estás asignado al área ' + (sArea || 'sin asignar') + '.</p>' +
+            '<p class="text-sm text-gray-500">Contacta a administración para cambiar tu asignación.</p>' +
+          '</div>' +
+        '</div>';
+      return;
+    }
+    if (!session.asignacionActual || session.asignacionActual.area !== 'CAMBIOS') {
+      container.innerHTML =
+        '<div class="flex flex-col items-center justify-center min-h-64 px-6 text-center space-y-4">' +
+          '<div class="w-16 h-16 rounded-2xl flex items-center justify-center" style="background:#F0FDFA">' +
+            '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#0F766E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3"/></svg>' +
+          '</div>' +
+          '<div>' +
+            '<p class="font-bold text-gray-900 text-lg">Sin asignación a Cambios</p>' +
+            '<p class="text-sm text-gray-500 mt-1">No tienes una pareja asignada en el área de Cambios.</p>' +
+            '<p class="text-sm text-gray-500">Contacta a administración.</p>' +
+          '</div>' +
+        '</div>';
+      return;
+    }
   }
 
   renderShell(container, session, db, isCampo, destino);
