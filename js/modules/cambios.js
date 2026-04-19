@@ -14,6 +14,12 @@ import { showToast } from '../ui.js';
 // CONSTANTES
 // ─────────────────────────────────────────
 const PAREJAS = ['Pareja 1', 'Pareja 2', 'Pareja 3', 'Pareja 4'];
+const PAREJA_COLORS = {
+  'Pareja 1': '#1B4F8A',
+  'Pareja 2': '#EA580C',
+  'Pareja 3': '#7C3AED',
+  'Pareja 4': '#DB2777',
+};
 const COL_ORDENES    = 'cambios_ordenes';
 const COL_CALENDARIO = 'cambios_calendario';
 
@@ -373,7 +379,7 @@ function loadGoogleMaps() {
     if (window.google && window.google.maps) { loadClusterer(); return; }
     window.__gmapsCallback = loadClusterer;
     const s = document.createElement('script');
-    s.src = 'https://maps.googleapis.com/maps/api/js?key=' + GMAPS_KEY + '&callback=__gmapsCallback&libraries=places';
+    s.src = 'https://maps.googleapis.com/maps/api/js?key=' + GMAPS_KEY + '&callback=__gmapsCallback&libraries=places,geometry,drawing';
     s.async = true;
     document.head.appendChild(s);
   });
@@ -489,15 +495,24 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
     }
   }
 
-  function buildIcon(color, selected) {
+  function buildIcon(color, selected, assignMode) {
     return {
       path: G.SymbolPath.CIRCLE,
       scale: selected ? 13 : 10,
       fillColor: color,
       fillOpacity: 1,
-      strokeColor: '#fff',
-      strokeWeight: selected ? 3 : 2,
+      strokeColor: assignMode && selected ? '#FBBF24' : '#fff',
+      strokeWeight: assignMode && selected ? 4 : selected ? 3 : 2,
     };
+  }
+
+  function getMarkerColor(o) {
+    if (o.pareja && PAREJA_COLORS[o.pareja]) return PAREJA_COLORS[o.pareja];
+    const bloqueada = esBloqueada(o, calendarioMap);
+    if (bloqueada) return '#9CA3AF';
+    if (o.estadoCampo === 'visita') return '#B45309';
+    if (o.estadoCampo === 'hecha') return '#166534';
+    return '#6B7280'; // sin asignar
   }
 
   function openSheet(o, marker) {
@@ -593,14 +608,22 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
 
   const markers = ordenes.map(function(o) {
     const bloqueada = esBloqueada(o, calendarioMap);
-    const color = bloqueada ? '#9CA3AF' : o.estadoCampo === 'visita' ? '#B45309' : o.estadoCampo === 'hecha' ? '#166534' : '#0F766E';
+    const color = getMarkerColor(o);
     const marker = new G.Marker({
       position: { lat: safeNum(o.latitud), lng: safeNum(o.longitud) },
       title: o.cliente,
-      icon: buildIcon(color, false),
+      icon: buildIcon(color, false, false),
     });
     marker.__color = color;
-    marker.addListener('click', function() { openSheet(o, marker); });
+    marker.__orden = o;
+    marker.__selected = false;
+    marker.addListener('click', function() {
+      if (assignMode) {
+        toggleSelectMarker(marker);
+      } else {
+        openSheet(o, marker);
+      }
+    });
     return marker;
   });
 
