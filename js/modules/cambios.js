@@ -205,16 +205,20 @@ async function showListado(db, session, isCampo, destino) {
                 ? '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:#111827;color:white">👁 Visita</span>'
                 : '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:#F0FDFA;color:#0F766E">Pendiente</span>';
 
-        return '<div class="bg-white rounded-xl border border-gray-200 px-4 py-3 cursor-pointer active:bg-gray-50 ' + (bloqueada ? 'opacity-60' : '') + '" data-wo="' + o.wo + '">' +
-          '<div class="flex items-start justify-between gap-2 mb-1">' +
+        const sinActualizar = (o.estadoCampo === 'hecha') && !o.actualizadaDelsur;
+        return '<div class="bg-white rounded-xl border ' + (sinActualizar ? 'border-yellow-300' : 'border-gray-200') + ' px-4 py-3 ' + (bloqueada ? 'opacity-60' : '') + '" data-wo="' + o.wo + '">' +
+          '<div class="flex items-start justify-between gap-2 mb-1 cursor-pointer" data-wo-tap="' + o.wo + '">' +
             '<div class="min-w-0">' +
               '<p style="font-size:10px;color:#9ca3af;font-family:monospace">' + safeStr(o.wo) + '</p>' +
               '<p class="text-sm font-semibold text-gray-900 leading-tight mt-0.5">' + safeStr(o.cliente) + '</p>' +
             '</div>' +
             statusBadge +
           '</div>' +
-          '<p class="text-xs text-gray-500 truncate">' + safeStr(o.direccion) + '</p>' +
-          (o.concepto ? '<span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 inline-block mt-1">' + safeStr(o.concepto) + '</span>' : '') +
+          '<p class="text-xs text-gray-500 truncate mb-1.5" data-wo-tap="' + o.wo + '">' + safeStr(o.direccion) + '</p>' +
+          (o.concepto ? '<span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 inline-block mb-1.5">' + safeStr(o.concepto) + '</span>' : '') +
+          (sinActualizar ?
+            '<button class="btn-actualizar w-full mt-1 py-2 rounded-xl text-xs font-bold border-2 border-yellow-400 text-yellow-700 bg-yellow-50" data-wo="' + o.wo + '" data-id="' + (o.id||'') + '">✓ Ya actualicé en Delsur</button>'
+          : '') +
         '</div>';
       }
 
@@ -248,10 +252,29 @@ async function showListado(db, session, isCampo, destino) {
           : '') +
         '</div>';
 
-      content.querySelectorAll('[data-wo]').forEach(function(card) {
-        card.addEventListener('click', function() {
-          const orden = ordenes.find(function(o) { return o.wo === card.dataset.wo; });
+      // Wire tap on card (not on actualizar button)
+      content.querySelectorAll('[data-wo-tap]').forEach(function(el) {
+        el.addEventListener('click', function() {
+          const orden = ordenes.find(function(o) { return o.wo === el.dataset.woTap; });
           if (orden) showDetalleOrden(db, session, orden, isCampo, calendarioMap);
+        });
+      });
+
+      // Wire "ya actualicé" buttons
+      content.querySelectorAll('.btn-actualizar').forEach(function(btn) {
+        btn.addEventListener('click', async function(e) {
+          e.stopPropagation();
+          btn.textContent = 'Guardando...'; btn.disabled = true;
+          try {
+            const wo  = btn.dataset.wo;
+            const id  = btn.dataset.id;
+            let ref;
+            if (id) { ref = doc(db, COL_ORDENES, id); }
+            else { const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo','==',wo))); if (snap.empty) throw new Error(); ref = snap.docs[0].ref; }
+            await updateDoc(ref, { actualizadaDelsur: true });
+            showToast('Orden marcada como actualizada.', 'success');
+            showListado(db, session, true, destino);
+          } catch(e) { showToast('Error al guardar.','error'); btn.textContent = '✓ Ya actualicé en Delsur'; btn.disabled = false; }
         });
       });
 
@@ -531,6 +554,48 @@ async function showSeguimiento(db, session) {
             '<p style="font-size:11px;color:#9ca3af;margin-top:4px">Meta: ' + META_DIARIA + ' cambios por pareja · ' + metaTotal + ' total</p>' +
           '</div>';
         })() +
+        // Alerta de corte
+        (function() {
+          const { dias, fecha } = calcCorte();
+          const sinAct = ordenes.filter(function(o) { return o.estadoCampo === 'hecha' && !o.actualizadaDelsur; });
+          const fmtCorte = fecha.toLocaleDateString('es-SV', { day:'2-digit', month:'long' });
+          const urgente  = dias <= 3;
+          const alertColor = urgente ? '#C62828' : dias <= 7 ? '#B45309' : '#166534';
+          const alertBg    = urgente ? '#FEF2F2' : dias <= 7 ? '#FEF3C7' : '#F0FDF4';
+          const alertBorder= urgente ? '#FECACA' : dias <= 7 ? '#FDE68A' : '#BBF7D0';
+
+          // Por pareja sin actualizar
+          const sinActPorPareja = {};
+          PAREJAS.forEach(function(p) { sinActPorPareja[p] = []; });
+          sinAct.forEach(function(o) { if (o.pareja && sinActPorPareja[o.pareja]) sinActPorPareja[o.pareja].push(o); });
+
+          return '<div style="background:' + alertBg + ';border:1.5px solid ' + alertBorder + ';border-radius:12px;padding:14px;margin-bottom:4px">' +
+            '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+              '<div>' +
+                '<p style="font-size:13px;font-weight:700;color:' + alertColor + '">Corte: ' + fmtCorte + '</p>' +
+                '<p style="font-size:11px;color:' + alertColor + ';opacity:.8">' + (dias === 0 ? '¡Hoy es el corte!' : dias === 1 ? 'Mañana es el corte' : 'Faltan ' + dias + ' días') + '</p>' +
+              '</div>' +
+              '<div style="text-align:right">' +
+                '<p style="font-size:24px;font-weight:900;color:' + alertColor + ';line-height:1">' + sinAct.length + '</p>' +
+                '<p style="font-size:10px;color:' + alertColor + ';opacity:.8">sin actualizar</p>' +
+              '</div>' +
+            '</div>' +
+            (sinAct.length > 0 ?
+              '<div style="display:flex;flex-direction:column;gap:4px">' +
+                PAREJAS.filter(function(p) { return sinActPorPareja[p].length > 0; }).map(function(p) {
+                  return '<div style="display:flex;align-items:center;justify-content:space-between;background:white;border-radius:8px;padding:6px 10px">' +
+                    '<div style="display:flex;align-items:center;gap:6px">' +
+                      '<span style="width:8px;height:8px;border-radius:50%;background:' + PAREJA_COLORS[p] + ';display:inline-block;flex-shrink:0"></span>' +
+                      '<span style="font-size:12px;font-weight:600;color:#374151">' + p + '</span>' +
+                    '</div>' +
+                    '<span style="font-size:12px;font-weight:700;color:' + alertColor + '">' + sinActPorPareja[p].length + ' sin actualizar</span>' +
+                  '</div>';
+                }).join('') +
+              '</div>'
+            : '<p style="font-size:12px;color:' + alertColor + ';text-align:center;font-weight:600">✓ Todas las órdenes están actualizadas</p>') +
+          '</div>';
+        })() +
+
         // Por pareja
         '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em">Por pareja</p>' +
         '<div class="space-y-3">' + PAREJAS.map(parejaCard).join('') + '</div>' +
