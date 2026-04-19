@@ -446,7 +446,21 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
   let userMarker   = null;
   let activeMarker = null;
 
+  let routeActive = false;
+
   map.addListener('click', function() { closeSheet(); });
+
+  function clearRoute() {
+    directionsRenderer.setDirections({ routes: [] });
+    routeActive = false;
+    const cancelBtn = document.getElementById('sheet-cancel-ruta');
+    if (cancelBtn) cancelBtn.style.display = 'none';
+    const rutaBtn = document.getElementById('sheet-ruta');
+    if (rutaBtn) {
+      rutaBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>Trazar ruta';
+      rutaBtn.disabled = false;
+    }
+  }
 
   function closeSheet() {
     if (sheet) sheet.style.transform = 'translateY(100%)';
@@ -509,6 +523,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
         '<button id="sheet-ruta" style="width:100%;padding:12px;background:#0F766E;color:white;border:none;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">' +
           '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>Trazar ruta' +
         '</button>' +
+        '<button id="sheet-cancel-ruta" style="width:100%;padding:10px;background:#FEF2F2;color:#C62828;border:1.5px solid #FECACA;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer;display:' + (routeActive ? 'block' : 'none') + '">✕ Cancelar ruta</button>' +
         '<a href="https://www.google.com/maps/dir/?api=1&destination=' + o.latitud + ',' + o.longitud + '" target="_blank" style="width:100%;padding:11px;border:1.5px solid #e5e7eb;border-radius:12px;font-size:13px;font-weight:500;color:#374151;text-align:center;text-decoration:none;display:block">↗ Abrir en Google Maps</a>' +
         (!bloqueada && !hecha && isCampo ?
           '<div style="display:flex;gap:8px">' +
@@ -528,6 +543,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
     activeMarker = marker;
 
     document.getElementById('sheet-ruta')?.addEventListener('click', function() { trazarRuta(safeNum(o.latitud), safeNum(o.longitud)); });
+    document.getElementById('sheet-cancel-ruta')?.addEventListener('click', function() { clearRoute(); });
     document.getElementById('sheet-hecha')?.addEventListener('click', function() { closeSheet(); showConfirmarHecha(db, session, o); });
     document.getElementById('sheet-visita')?.addEventListener('click', function() { closeSheet(); showRegistrarVisita(db, session, o); });
     document.getElementById('sheet-asignar')?.addEventListener('click', function() { closeSheet(); showAsignarPareja(db, [o.wo], null); });
@@ -571,8 +587,11 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
           if (btn) btn.disabled = false;
           if (status === 'OK') {
             directionsRenderer.setDirections(result);
+            routeActive = true;
             const leg = result.routes[0].legs[0];
             if (btn) { btn.innerHTML = '✓ ' + leg.distance.text + ' · ' + leg.duration.text; }
+            const cancelBtn = document.getElementById('sheet-cancel-ruta');
+            if (cancelBtn) cancelBtn.style.display = 'block';
             const bounds = new G.LatLngBounds();
             result.routes[0].overview_path.forEach(function(p) { bounds.extend(p); });
             map.fitBounds(bounds);
