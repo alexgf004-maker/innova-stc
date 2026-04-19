@@ -903,12 +903,20 @@ function showConfirmarHecha(db, session, orden) {
 
   async function guardarHecha(actualizada) {
     try {
-      await updateDoc(doc(db, COL_ORDENES, orden.id), {
-        estadoCampo:      'hecha',
-        actualizadaDelsur: actualizada,
-        fechaHecha:        serverTimestamp(),
-        hechaPor:          session.displayName,
-      });
+      // Try direct update first, fallback to query by WO
+      if (orden.id) {
+        await updateDoc(doc(db, COL_ORDENES, orden.id), {
+          estadoCampo: 'hecha', actualizadaDelsur: actualizada,
+          fechaHecha: serverTimestamp(), hechaPor: session.displayName,
+        });
+      } else {
+        const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo', '==', orden.wo)));
+        if (snap.empty) throw new Error('Orden no encontrada');
+        await updateDoc(snap.docs[0].ref, {
+          estadoCampo: 'hecha', actualizadaDelsur: actualizada,
+          fechaHecha: serverTimestamp(), hechaPor: session.displayName,
+        });
+      }
       ov.remove();
       showToast('Orden marcada como hecha.', 'success');
     } catch(e) {
@@ -947,11 +955,17 @@ function showRegistrarVisita(db, session, orden) {
   ov.querySelector('#rv-save').onclick = async function() {
     const obs = ov.querySelector('#rv-obs').value.trim();
     try {
-      await updateDoc(doc(db, COL_ORDENES, orden.id), {
-        estadoCampo:  'visita',
-        observacion:  obs || 'Sin observación',
-        fechaVisita:  serverTimestamp(),
-        visitadoPor:  session.displayName,
+      let ref;
+      if (orden.id) {
+        ref = doc(db, COL_ORDENES, orden.id);
+      } else {
+        const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo', '==', orden.wo)));
+        if (snap.empty) throw new Error('Orden no encontrada');
+        ref = snap.docs[0].ref;
+      }
+      await updateDoc(ref, {
+        estadoCampo: 'visita', observacion: obs || 'Sin observación',
+        fechaVisita: serverTimestamp(), visitadoPor: session.displayName,
       });
       ov.remove();
       showToast('Visita registrada.', 'success');
