@@ -258,6 +258,7 @@ async function showListado(db, session, isCampo, destino) {
           '<p class="text-xs text-gray-500 truncate">' + safeStr(o.direccion) + '</p>' +
           '<div class="flex items-center gap-2 mt-1.5 flex-wrap">' +
             (o.concepto ? '<span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">' + safeStr(o.concepto) + '</span>' : '') +
+            (o.unidadLectura ? '<span class="text-xs px-2 py-0.5 rounded-full bg-gray-50 text-gray-400 font-mono">' + safeStr(o.unidadLectura) + '</span>' : '') +
             (!isCampo && o.pareja ? '<span class="text-xs px-2 py-0.5 rounded-full text-white" style="background:#1B4F8A">' + safeStr(o.pareja) + '</span>' : '') +
           '</div>' +
         '</div>';
@@ -487,12 +488,13 @@ function showDetalleOrden(db, session, orden, isCampo, calendarioMap) {
       // Datos
       '<div class="space-y-2 text-sm">' +
         row('Dirección', orden.direccion) +
-        row('Serie actual', orden.serie) +
-        row('Marca', orden.marca) +
-        row('DS/CT', orden.dsct) +
-        row('Concepto', orden.concepto) +
-        row('Unidad lectura', orden.unidadLectura) +
         row('NC', orden.nc) +
+        row('Serie', orden.serie) +
+        row('DS', orden.dsct) +
+        row('Concepto', orden.concepto) +
+        row('MRU', orden.unidadLectura) +
+        row('Teléfono', orden.telefono) +
+        row('Observaciones', orden.observaciones) +
         (orden.pareja ? row('Pareja', orden.pareja) : '') +
         (orden.estadoCampo ? row('Estado', orden.estadoCampo + (orden.actualizadaDelsur ? ' · Actualizada' : orden.estadoCampo === 'hecha' ? ' · ⚠ Sin actualizar en Delsur' : '')) : '') +
         (orden.observacion ? row('Observación', orden.observacion) : '') +
@@ -858,7 +860,6 @@ async function parseExcelOrdenes(file) {
     const reader = new FileReader();
     reader.onload = function(e) {
       try {
-        // Dynamic import SheetJS
         import('https://cdn.sheetjs.com/xlsx-0.20.1/package/xlsx.mjs').then(function(XLSX) {
           const data  = new Uint8Array(e.target.result);
           const wb    = XLSX.read(data, { type: 'array' });
@@ -866,18 +867,18 @@ async function parseExcelOrdenes(file) {
           const rows  = XLSX.utils.sheet_to_json(ws, { defval: '' });
           const mapped = rows.map(function(r) {
             return {
-              wo:            safeStr(r['WO'] || r['wo']),
-              nc:            safeStr(r['NC'] || r['nc']),
-              cliente:       safeStr(r['Cliente'] || r['cliente'] || r['CLIENTE']),
-              direccion:     safeStr(r['Dirección'] || r['Direccion'] || r['direccion'] || r['DIRECCION']),
-              serie:         safeStr(r['Serie'] || r['serie'] || r['SERIE']),
-              marca:         safeStr(r['Marca'] || r['marca'] || r['MARCA']),
-              dsct:          safeStr(r['DSCT'] || r['dsct'] || r['DS/CT']),
-              concepto:      safeStr(r['Concepto'] || r['concepto'] || r['CONCEPTO']),
-              unidadLectura: safeStr(r['unidadLectura'] || r['UnidadLectura'] || r['Unidad_Lectura'] || r['UL']),
-              responsable:   safeStr(r['Responsable'] || r['responsable'] || ''),
-              latitud:       safeNum(r['Latitud'] || r['latitud'] || r['lat'] || 0),
-              longitud:      safeNum(r['Longitud'] || r['longitud'] || r['lng'] || r['lon'] || 0),
+              unidadLectura: safeStr(r['MRU']      || r['mru']      || r['Mru']),
+              wo:            safeStr(r['WO']        || r['wo']),
+              nc:            safeStr(r['NC']        || r['nc']),
+              cliente:       safeStr(r['NOMBRE']    || r['Nombre']   || r['nombre']),
+              direccion:     safeStr(r['DIRECCIÓN'] || r['DIRECCION']|| r['Dirección'] || r['Direccion']),
+              dsct:          safeStr(r['DS']        || r['ds']),
+              serie:         safeStr(r['MEDIDOR']   || r['Medidor']  || r['medidor']),
+              latitud:       safeNum(r['LATITUD']   || r['Latitud']  || r['latitud']),
+              longitud:      safeNum(r['LONGITUD']  || r['Longitud'] || r['longitud']),
+              concepto:      safeStr(r['WO Class']  || r['wo class'] || r['WO_Class']),
+              telefono:      safeStr(r['TELÉFONO']  || r['TELEFONO'] || r['Teléfono'] || r['telefono']),
+              observaciones: safeStr(r['Lecturas y observaciones'] || r['Lecturas_y_observaciones'] || r['observaciones']),
               estadoCampo:   null,
               pareja:        null,
               cargadoEn:     new Date().toISOString(),
@@ -976,7 +977,7 @@ async function parseExcelCalendario(file) {
           const ws   = wb.Sheets[wb.SheetNames[0]];
           const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
           const mapped = rows.map(function(r) {
-            const ul   = safeStr(r['unidadLectura'] || r['UnidadLectura'] || r['Unidad_Lectura'] || r['UL'] || r['unidad_lectura']);
+            const ul   = safeStr(r['MRU'] || r['mru'] || r['unidadLectura'] || r['UnidadLectura'] || r['UL']);
             const fl   = r['fechaLectura'] || r['FechaLectura'] || r['Fecha_Lectura'] || r['fecha_lectura'];
             const fecha = fl instanceof Date ? fl : new Date(fl);
             if (!ul || isNaN(fecha.getTime())) return null;
