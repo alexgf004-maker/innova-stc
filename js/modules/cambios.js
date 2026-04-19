@@ -1,5 +1,5 @@
 /**
- * cambios.js — Módulo Cambio de Medidores
+ * cambios.js — Módulo Cambio e Medidores
  * Fase 2: Gestión de órdenes, asignación por parejas, vista campo/admin
  */
 
