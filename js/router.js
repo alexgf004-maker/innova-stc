@@ -119,12 +119,6 @@ export function navigate(path, session, replace = false) {
     loadView('/', _session);
     return;
   }
-  // Verificar área para campo
-  if (_session.role === 'campo') {
-    const sArea = _session.asignacionActual?.area || (_session.usuarioOperativoAsignado ? 'OTC' : null);
-    if (path === '/otc' && sArea !== 'OTC') { loadView('/', _session); return; }
-    if (path === '/cm'  && sArea !== 'CAMBIOS' && !['admin','coordinadora'].includes(_session.role)) { loadView('/', _session); return; }
-  }
 
   if (!replace) {
     history.pushState({ path }, '', '#' + path);
@@ -178,13 +172,7 @@ function buildNav(session) {
   const sidebarNav = document.getElementById('sidebar-nav');
   const bottomNav  = document.getElementById('bottom-nav');
 
-  const sessionArea = session.asignacionActual?.area || (session.usuarioOperativoAsignado ? 'OTC' : null);
-  const visible = NAV_ITEMS.filter(function(item) {
-    if (!item.roles.includes(session.role)) return false;
-    // For campo: if item has area restriction, only show if matches assigned area
-    if (item.area && session.role === 'campo') return item.area === sessionArea;
-    return true;
-  });
+  const visible = NAV_ITEMS.filter(item => item.roles.includes(session.role));
 
   // Sidebar (desktop) — todos los items visibles
   sidebarNav.innerHTML = visible.map(item => `
