@@ -8,6 +8,7 @@
  */
 
 import { initAdmin }   from './modules/admin.js';
+import { initHome }    from './modules/home.js';
 import { initKardex }  from './modules/kardex.js';
 import { initCambios } from './modules/cambios.js';
 
@@ -16,7 +17,7 @@ import { initCambios } from './modules/cambios.js';
 // Para agregar un módulo: agrega una entrada aquí.
 // ─────────────────────────────────────────
 const ROUTES = {
-  '/':                 { view: 'views/home.html',           init: null,        roles: ['admin', 'coordinadora', 'campo'] },
+  '/':                 { view: 'views/home.html',           init: initHome,    roles: ['admin', 'coordinadora', 'campo'] },
   '/kardex':           { view: 'views/kardex.html',         init: initKardex,  roles: ['admin', 'coordinadora', 'campo'] },
   '/otc':              { view: 'views/kardex.html',         init: initKardex,  roles: ['campo'] },
   '/cm':               { view: 'views/cambios.html',        init: initCambios, roles: ['campo', 'admin', 'coordinadora'] },
