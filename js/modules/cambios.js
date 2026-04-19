@@ -712,6 +712,8 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
   contenedor.style.position = 'relative';
   contenedor.appendChild(btnAssign);
   btnAssign.addEventListener('click', function() { assignMode ? exitAssignMode() : enterAssignMode(); });
+  // Only show for admin
+  if (isCampo) { btnAssign.style.display = 'none'; panelEl.style.display = 'none'; }
 
   // Inject assign panel below map inside wrapper
   const wrapper = contenedor.parentElement;
