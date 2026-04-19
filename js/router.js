@@ -52,7 +52,7 @@ const NAV_ITEMS = [
     roles: ['campo'],
     area:  'OTC',
     icon:  `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
             </svg>`,
   },
   {
@@ -61,7 +61,7 @@ const NAV_ITEMS = [
     roles: ['campo'],
     area:  'CAMBIOS',
     icon:  `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>
+              <rect x="2" y="4" width="20" height="16" rx="2"/><path d="M12 14a2 2 0 100-4 2 2 0 000 4z"/><path d="M6 14l3.5-3.5M18 14l-3.5-3.5"/><line x1="12" y1="8" x2="12" y2="6"/>
             </svg>`,
   },
   {
@@ -78,7 +78,7 @@ const NAV_ITEMS = [
     label: 'Cambios',
     roles: ['admin', 'coordinadora'],
     icon:  `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>
+              <rect x="2" y="4" width="20" height="16" rx="2"/><path d="M12 14a2 2 0 100-4 2 2 0 000 4z"/><path d="M6 14l3.5-3.5M18 14l-3.5-3.5"/><line x1="12" y1="8" x2="12" y2="6"/>
             </svg>`,
   },
   // Fase 3: { path: '/otc',     label: 'OTC',     roles: [...], icon: `...` },
