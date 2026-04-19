@@ -113,8 +113,9 @@ function renderShell(container, session, db, isCampo, destino) {
         (isAdmin ? '<button class="ctab flex-1 py-2 text-xs font-medium rounded-lg transition-colors" data-ctab="listado">Órdenes</button>' : '') +
         (isAdmin ? '<button class="ctab flex-1 py-2 text-xs font-medium rounded-lg transition-colors" data-ctab="mapa">Mapa</button>' : '') +
         (isAdmin ? '<button class="ctab flex-1 py-2 text-xs font-medium rounded-lg transition-colors" data-ctab="seguimiento">Seguimiento</button>' : '') +
-        (isCampo ? '<button class="ctab flex-1 py-2 text-xs font-medium rounded-lg transition-colors" data-ctab="listado">Mis órdenes</button>' : '') +
+        (isCampo ? '<button class="ctab flex-1 py-2 text-xs font-medium rounded-lg transition-colors" data-ctab="listado">Órdenes</button>' : '') +
         (isCampo ? '<button class="ctab flex-1 py-2 text-xs font-medium rounded-lg transition-colors" data-ctab="mapa">Mapa</button>' : '') +
+        (isCampo ? '<button class="ctab flex-1 py-2 text-xs font-medium rounded-lg transition-colors" data-ctab="bodega">Bodega</button>' : '') +
       '</div>' +
       '<div id="cambios-content"></div>' +
     '</div>';
@@ -130,6 +131,7 @@ function renderShell(container, session, db, isCampo, destino) {
       if (t === 'listado')     await showListado(db, session, isCampo, destino);
       if (t === 'mapa')        await showMapa(db, session, isCampo, destino);
       if (t === 'seguimiento') await showSeguimiento(db, session);
+      if (t === 'bodega')      await showBodegaCampo(db, session, destino);
     });
   });
 
@@ -1385,4 +1387,359 @@ function showAsignarPareja(db, wos, onDone) {
       } catch(e) { showToast('Error al asignar.','error'); console.error(e); }
     });
   });
+}
+
+// ─────────────────────────────────────────
+// BODEGA — CAMPO (área CAMBIOS)
+// ─────────────────────────────────────────
+async function showBodegaCampo(db, session, destino) {
+  const content = document.getElementById('cambios-content');
+  if (!content) return;
+
+  // Sub-nav state
+  let seccion = 'inicio';
+
+  function renderSubNav() {
+    return '<div class="flex gap-1 bg-gray-100 rounded-xl p-1 mb-4">' +
+      ['inicio','consumo','solicitar','pedidos'].map(function(s) {
+        const labels = { inicio:'Inicio', consumo:'Consumo', solicitar:'Solicitar', pedidos:'Pedidos' };
+        const activo = seccion === s;
+        return '<button class="bodega-sub flex-1 py-2 text-xs font-medium rounded-lg transition-colors" data-sec="' + s + '" ' +
+          'style="background:' + (activo ? 'white' : 'transparent') + ';color:' + (activo ? '#0F766E' : '#6B7280') + ';box-shadow:' + (activo ? '0 1px 3px rgba(0,0,0,0.1)' : 'none') + '">' +
+          labels[s] + '</button>';
+      }).join('') +
+    '</div>';
+  }
+
+  async function renderSeccion() {
+    const inner = document.getElementById('bodega-inner');
+    if (!inner) return;
+    inner.innerHTML = loading();
+    if (seccion === 'inicio')    await bodegaInicio(db, session, destino, inner);
+    if (seccion === 'consumo')   await bodegaConsumo(db, session, destino, inner);
+    if (seccion === 'solicitar') await bodegaSolicitar(db, session, inner);
+    if (seccion === 'pedidos')   await bodegaPedidos(db, session, inner);
+  }
+
+  content.innerHTML =
+    '<div>' +
+      renderSubNav() +
+      '<div id="bodega-inner"></div>' +
+    '</div>';
+
+  await renderSeccion();
+
+  function rewire() {
+    content.querySelectorAll('.bodega-sub').forEach(function(btn) {
+      btn.addEventListener('click', async function() {
+        seccion = btn.dataset.sec;
+        // Update styles
+        content.querySelectorAll('.bodega-sub').forEach(function(b) {
+          const a = b.dataset.sec === seccion;
+          b.style.background  = a ? 'white' : 'transparent';
+          b.style.color       = a ? '#0F766E' : '#6B7280';
+          b.style.boxShadow   = a ? '0 1px 3px rgba(0,0,0,0.1)' : 'none';
+        });
+        await renderSeccion();
+        rewire();
+      });
+    });
+  }
+  rewire();
+}
+
+// ── Inicio ──────────────────────────────
+async function bodegaInicio(db, session, destino, el) {
+  try {
+    const usuario = session.asignacionActual?.destino || destino;
+
+    // Material asignado al usuario (salidas de bodega)
+    const snapSalidas = await getDocs(
+      query(collection(db, 'kardex/movimientos/salidas'),
+        where('area', '==', 'CAMBIOS'),
+        where('usuarioOperativo', '==', usuario)
+      )
+    );
+    const snapItems = await getDocs(collection(db, 'kardex/inventario/items'));
+    const itemsMap  = {};
+    snapItems.docs.forEach(function(d) { itemsMap[d.id] = d.data(); });
+
+    // Aggregate assigned material
+    const asignado = {};
+    snapSalidas.docs.forEach(function(d) {
+      const data = d.data();
+      (data.materiales || []).forEach(function(m) {
+        if (!asignado[m.itemId]) asignado[m.itemId] = { nombre: m.nombre || (itemsMap[m.itemId]?.nombre || m.itemId), unit: m.unit || '', cantidad: 0 };
+        asignado[m.itemId].cantidad += (m.cantidad || 0);
+      });
+    });
+
+    // Subtract consumos
+    const snapConsumos = await getDocs(
+      query(collection(db, 'kardex/movimientos/consumos'),
+        where('area', '==', 'CAMBIOS'),
+        where('usuarioOperativo', '==', usuario)
+      )
+    );
+    snapConsumos.docs.forEach(function(d) {
+      const data = d.data();
+      (data.materiales || []).forEach(function(m) {
+        if (asignado[m.itemId]) asignado[m.itemId].cantidad -= (m.cantidad || 0);
+      });
+    });
+
+    const items = Object.values(asignado).filter(function(i) { return i.cantidad > 0; });
+
+    el.innerHTML =
+      '<div class="space-y-4">' +
+        // Bienvenida
+        '<div class="rounded-2xl p-4 text-white" style="background:#0F766E">' +
+          '<p class="text-xs font-medium opacity-80 uppercase tracking-wider">Bodega · CAMBIOS</p>' +
+          '<p class="text-2xl font-black mt-1">' + safeStr(usuario) + '</p>' +
+          '<p class="text-xs opacity-70 mt-0.5">' + items.length + ' material' + (items.length !== 1 ? 'es' : '') + ' asignado' + (items.length !== 1 ? 's' : '') + '</p>' +
+        '</div>' +
+        // Accesos rápidos
+        '<div class="grid grid-cols-2 gap-3">' +
+          '<button class="bodega-quick bg-white border border-gray-200 rounded-xl p-4 text-left" data-sec="consumo">' +
+            '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0F766E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mb-2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>' +
+            '<p class="text-sm font-semibold text-gray-900">Registrar consumo</p>' +
+            '<p class="text-xs text-gray-400 mt-0.5">Material usado</p>' +
+          '</button>' +
+          '<button class="bodega-quick bg-white border border-gray-200 rounded-xl p-4 text-left" data-sec="solicitar">' +
+            '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0F766E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mb-2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
+            '<p class="text-sm font-semibold text-gray-900">Solicitar material</p>' +
+            '<p class="text-xs text-gray-400 mt-0.5">Pedir a bodega</p>' +
+          '</button>' +
+        '</div>' +
+        // Material asignado
+        '<div class="bg-white rounded-xl border border-gray-200 overflow-hidden">' +
+          '<div class="px-4 py-3 border-b border-gray-100">' +
+            '<p class="font-semibold text-sm text-gray-900">Material asignado</p>' +
+          '</div>' +
+          (items.length ?
+            '<div class="divide-y divide-gray-50">' +
+              items.map(function(i) {
+                return '<div class="px-4 py-3 flex items-center justify-between">' +
+                  '<p class="text-sm text-gray-800">' + safeStr(i.nombre) + '</p>' +
+                  '<span class="text-sm font-bold text-gray-900">' + i.cantidad + ' <span class="text-xs text-gray-400 font-normal">' + safeStr(i.unit) + '</span></span>' +
+                '</div>';
+              }).join('') +
+            '</div>'
+          : '<p class="text-sm text-gray-400 text-center py-6">Sin material asignado</p>') +
+        '</div>' +
+      '</div>';
+
+    // Wire quick access buttons
+    el.querySelectorAll('.bodega-quick').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        const sec = btn.dataset.sec;
+        // Trigger the sub-nav button
+        const subBtn = document.querySelector('.bodega-sub[data-sec="' + sec + '"]');
+        if (subBtn) subBtn.click();
+      });
+    });
+
+  } catch(e) { el.innerHTML = errHtml(); console.error(e); }
+}
+
+// ── Consumo ─────────────────────────────
+async function bodegaConsumo(db, session, destino, el) {
+  try {
+    const usuario = session.asignacionActual?.destino || destino;
+    const snap    = await getDocs(collection(db, 'kardex/inventario/items'));
+    const items   = snap.docs
+      .map(function(d) { return Object.assign({ id: d.id }, d.data()); })
+      .filter(function(i) { return i.area === 'CAMBIOS' || !i.area; });
+
+    if (!items.length) {
+      el.innerHTML = '<div class="text-center py-10 text-sm text-gray-400">No hay materiales configurados en bodega.</div>';
+      return;
+    }
+
+    let sel = []; // { itemId, name, unit, cantidad }
+
+    function renderConsumo() {
+      el.innerHTML =
+        '<div class="space-y-3">' +
+          '<p class="text-xs text-gray-500">Selecciona los materiales que usaste:</p>' +
+          '<div class="space-y-2">' +
+            items.map(function(item) {
+              const s = sel.find(function(x) { return x.itemId === item.id; });
+              return '<div class="bg-white rounded-xl border border-gray-200 px-4 py-3 flex items-center justify-between gap-3">' +
+                '<div class="min-w-0">' +
+                  '<p class="text-sm font-medium text-gray-900">' + safeStr(item.nombre) + '</p>' +
+                  '<p class="text-xs text-gray-400">' + safeStr(item.unit) + '</p>' +
+                '</div>' +
+                '<div class="flex items-center gap-2 flex-shrink-0">' +
+                  '<button class="btn-minus w-7 h-7 rounded-lg border border-gray-200 text-gray-600 font-bold flex items-center justify-center" data-id="' + item.id + '">−</button>' +
+                  '<span class="text-sm font-bold w-6 text-center">' + (s ? s.cantidad : 0) + '</span>' +
+                  '<button class="btn-plus w-7 h-7 rounded-lg text-white font-bold flex items-center justify-center" style="background:#0F766E" data-id="' + item.id + '" data-name="' + safeStr(item.nombre) + '" data-unit="' + safeStr(item.unit) + '">+</button>' +
+                '</div>' +
+              '</div>';
+            }).join('') +
+          '</div>' +
+          (sel.filter(function(x) { return x.cantidad > 0; }).length ?
+            '<button id="btn-guardar-consumo" class="w-full py-3 rounded-xl text-white font-bold text-sm" style="background:#0F766E">Registrar consumo (' + sel.filter(function(x){ return x.cantidad>0;}).length + ' materiales)</button>'
+          : '') +
+        '</div>';
+
+      el.querySelectorAll('.btn-plus').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          const id = btn.dataset.id; let s = sel.find(function(x){ return x.itemId===id; });
+          if (!s) { s = { itemId:id, name:btn.dataset.name, unit:btn.dataset.unit, cantidad:0 }; sel.push(s); }
+          s.cantidad++; renderConsumo();
+        });
+      });
+      el.querySelectorAll('.btn-minus').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          const id = btn.dataset.id; const s = sel.find(function(x){ return x.itemId===id; });
+          if (s && s.cantidad > 0) { s.cantidad--; renderConsumo(); }
+        });
+      });
+      el.querySelector('#btn-guardar-consumo')?.addEventListener('click', async function() {
+        const btn = el.querySelector('#btn-guardar-consumo');
+        const materiales = sel.filter(function(x){ return x.cantidad>0; });
+        btn.textContent = 'Guardando...'; btn.disabled = true;
+        try {
+          await addDoc(collection(db, 'kardex/movimientos/consumos'), {
+            usuarioUid:      session.uid,
+            usuarioNombre:   session.displayName,
+            usuarioOperativo: usuario,
+            area:            'CAMBIOS',
+            materiales:      materiales,
+            fecha:           serverTimestamp(),
+          });
+          sel = [];
+          showToast('Consumo registrado.', 'success');
+          renderConsumo();
+        } catch(e) { showToast('Error al guardar.','error'); btn.disabled=false; btn.textContent='Registrar consumo'; }
+      });
+    }
+    renderConsumo();
+
+  } catch(e) { el.innerHTML = errHtml(); console.error(e); }
+}
+
+// ── Solicitar ────────────────────────────
+async function bodegaSolicitar(db, session, el) {
+  try {
+    const snap  = await getDocs(collection(db, 'kardex/inventario/items'));
+    const items = snap.docs
+      .map(function(d) { return Object.assign({ id: d.id }, d.data()); })
+      .filter(function(i) { return i.area === 'CAMBIOS' || !i.area; });
+
+    if (!items.length) {
+      el.innerHTML = '<div class="text-center py-10 text-sm text-gray-400">No hay materiales configurados en bodega.</div>';
+      return;
+    }
+
+    let sel = [];
+
+    function renderSolicitar() {
+      el.innerHTML =
+        '<div class="space-y-3">' +
+          '<p class="text-xs text-gray-500">Selecciona el material que necesitas:</p>' +
+          '<div class="space-y-2">' +
+            items.map(function(item) {
+              const s = sel.find(function(x){ return x.itemId===item.id; });
+              const stock = item.stockActual || 0;
+              return '<div class="bg-white rounded-xl border border-gray-200 px-4 py-3 ' + (stock <= 0 ? 'opacity-50' : '') + '">' +
+                '<div class="flex items-center justify-between gap-3">' +
+                  '<div class="min-w-0">' +
+                    '<p class="text-sm font-medium text-gray-900">' + safeStr(item.nombre) + '</p>' +
+                    '<p class="text-xs text-gray-400">Stock: ' + stock + ' ' + safeStr(item.unit) + '</p>' +
+                  '</div>' +
+                  '<div class="flex items-center gap-2 flex-shrink-0">' +
+                    '<button class="btn-sminus w-7 h-7 rounded-lg border border-gray-200 text-gray-600 font-bold flex items-center justify-center" data-id="' + item.id + '"' + (stock<=0?'disabled':'') + '>−</button>' +
+                    '<span class="text-sm font-bold w-6 text-center">' + (s ? s.cantidad : 0) + '</span>' +
+                    '<button class="btn-splus w-7 h-7 rounded-lg text-white font-bold flex items-center justify-center" style="background:#0F766E" data-id="' + item.id + '" data-name="' + safeStr(item.nombre) + '" data-unit="' + safeStr(item.unit) + '"' + (stock<=0?'disabled':'') + '>+</button>' +
+                  '</div>' +
+                '</div>' +
+              '</div>';
+            }).join('') +
+          '</div>' +
+          (sel.filter(function(x){ return x.cantidad>0; }).length ?
+            '<button id="btn-enviar-solicitud" class="w-full py-3 rounded-xl text-white font-bold text-sm" style="background:#1B4F8A">Enviar solicitud (' + sel.filter(function(x){ return x.cantidad>0;}).length + ' materiales)</button>'
+          : '') +
+        '</div>';
+
+      el.querySelectorAll('.btn-splus').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          const id = btn.dataset.id; let s = sel.find(function(x){ return x.itemId===id; });
+          if (!s) { s = { itemId:id, name:btn.dataset.name, unit:btn.dataset.unit, cantidad:0 }; sel.push(s); }
+          s.cantidad++; renderSolicitar();
+        });
+      });
+      el.querySelectorAll('.btn-sminus').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          const id = btn.dataset.id; const s = sel.find(function(x){ return x.itemId===id; });
+          if (s && s.cantidad > 0) { s.cantidad--; renderSolicitar(); }
+        });
+      });
+      el.querySelector('#btn-enviar-solicitud')?.addEventListener('click', async function() {
+        const btn = el.querySelector('#btn-enviar-solicitud');
+        const materiales = sel.filter(function(x){ return x.cantidad>0; });
+        btn.textContent = 'Enviando...'; btn.disabled = true;
+        try {
+          await addDoc(collection(db, 'solicitudes_material'), {
+            usuarioUid:    session.uid,
+            usuarioNombre: session.displayName,
+            usuarioRole:   session.role,
+            area:          'CAMBIOS',
+            materiales:    materiales.map(function(s){ return { itemId:s.itemId, nombre:s.name, unit:s.unit, cantidad:s.cantidad }; }),
+            estado:        'pendiente',
+            fecha:         serverTimestamp(),
+            notas:         '',
+          });
+          sel = [];
+          showToast('Solicitud enviada.', 'success');
+          renderSolicitar();
+        } catch(e) { showToast('Error al enviar.','error'); btn.disabled=false; btn.textContent='Enviar solicitud'; }
+      });
+    }
+    renderSolicitar();
+
+  } catch(e) { el.innerHTML = errHtml(); console.error(e); }
+}
+
+// ── Pedidos ──────────────────────────────
+async function bodegaPedidos(db, session, el) {
+  try {
+    const snap = await getDocs(
+      query(collection(db, 'solicitudes_material'),
+        where('usuarioUid', '==', session.uid),
+        where('area', '==', 'CAMBIOS'),
+        orderBy('fecha', 'desc')
+      )
+    );
+
+    const pedidos = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+
+    if (!pedidos.length) {
+      el.innerHTML = '<div class="text-center py-10 text-sm text-gray-400">No has hecho solicitudes aún.</div>';
+      return;
+    }
+
+    const estadoColors = { pendiente: { bg:'#FEF3C7', color:'#B45309', label:'Pendiente' }, aprobada: { bg:'#DCFCE7', color:'#166534', label:'Aprobada' }, rechazada: { bg:'#FEF2F2', color:'#C62828', label:'Rechazada' } };
+
+    el.innerHTML =
+      '<div class="space-y-2">' +
+        pedidos.map(function(p) {
+          const e = estadoColors[p.estado] || estadoColors.pendiente;
+          return '<div class="bg-white rounded-xl border border-gray-200 px-4 py-3">' +
+            '<div class="flex items-center justify-between mb-1.5">' +
+              '<p class="text-xs text-gray-400">' + fmtDate(p.fecha) + '</p>' +
+              '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:' + e.bg + ';color:' + e.color + '">' + e.label + '</span>' +
+            '</div>' +
+            '<div class="space-y-0.5">' +
+              (p.materiales || []).map(function(m) {
+                return '<p class="text-sm text-gray-700">' + safeStr(m.nombre) + ' · <span class="font-semibold">' + m.cantidad + ' ' + safeStr(m.unit) + '</span></p>';
+              }).join('') +
+            '</div>' +
+            (p.notas ? '<p class="text-xs text-gray-400 mt-1.5">' + safeStr(p.notas) + '</p>' : '') +
+          '</div>';
+        }).join('') +
+      '</div>';
+
+  } catch(e) { el.innerHTML = errHtml(); console.error(e); }
 }
