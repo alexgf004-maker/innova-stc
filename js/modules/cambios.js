@@ -1,3 +1,4 @@
+
 /**
  * cambios.js — Módulo Cambio de Medidores
  * Fase 2: Gestión de órdenes, asignación por parejas, vista campo/admin
@@ -671,28 +672,8 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
     return marker;
   });
 
-  // ── clustering ──
-  if (window.markerClusterer && window.markerClusterer.MarkerClusterer) {
-    new window.markerClusterer.MarkerClusterer({
-      map, markers,
-      algorithmOptions: { maxZoom: 15 },
-      renderer: {
-        render: function(cluster) {
-          const count = cluster.count;
-          const size  = count > 50 ? 48 : count > 10 ? 40 : 34;
-          const bg    = count > 50 ? '#0F766E' : count > 10 ? '#0d9488' : '#14b8a6';
-          return new G.Marker({
-            position: cluster.position,
-            icon: { url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size + '"><circle cx="' + (size/2) + '" cy="' + (size/2) + '" r="' + (size/2-2) + '" fill="' + bg + '" stroke="white" stroke-width="2"/><text x="50%" y="50%" text-anchor="middle" dy=".35em" fill="white" font-size="' + (size > 40 ? 14 : 12) + '" font-family="Inter,sans-serif" font-weight="700">' + count + '</text></svg>'),
-              scaledSize: new G.Size(size, size), anchor: new G.Point(size/2, size/2) },
-            zIndex: 1000,
-          });
-        },
-      },
-    });
-  } else {
-    markers.forEach(function(m) { m.setMap(map); });
-  }
+  // Add markers directly to map
+  markers.forEach(function(m) { m.setMap(map); });
 
   // ── user location ──
   if (navigator.geolocation) {
