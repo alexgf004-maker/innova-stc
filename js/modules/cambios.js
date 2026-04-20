@@ -1227,7 +1227,6 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
   contenedor.appendChild(btnAssign);
   btnAssign.addEventListener('click', function() { assignMode ? exitAssignMode() : enterAssignMode(); });
 
-  const wrapper = contenedor.parentElement;
   const panelEl = document.createElement('div');
   panelEl.id = 'assign-panel';
   panelEl.style.cssText = 'display:none;flex-direction:column;gap:8px;background:white;border:1px solid #e5e7eb;border-radius:12px;padding:12px;margin-top:8px;';
@@ -1867,4 +1866,3 @@ function showDesasignarPareja(db, ordenes, onDone) {
   });
   ov.querySelector('#dp-all').addEventListener('click', function() { desasignar(null); });
 }
-
