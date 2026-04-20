@@ -50,8 +50,13 @@ function mkOverlay(inner) {
 // Determinar si una orden está bloqueada por lectura
 function esBloqueada(orden, calendarioMap) {
   const ul = safeStr(orden.unidadLectura);
-  if (!ul || !calendarioMap[ul]) return false;
-  const fecha = calendarioMap[ul].toDate ? calendarioMap[ul].toDate() : new Date(calendarioMap[ul]);
+  if (!ul) return false;
+  // Exact match first, then prefix match (OP_15 blocks OP_15_01, OP_15_02, etc.)
+  const matchKey = Object.keys(calendarioMap).find(function(k) {
+    return ul === k || ul.startsWith(k + '_') || ul.startsWith(k + '-');
+  });
+  if (!matchKey) return false;
+  const fecha = calendarioMap[matchKey].toDate ? calendarioMap[matchKey].toDate() : new Date(calendarioMap[matchKey]);
   const ahora = new Date();
   const diff  = (fecha - ahora) / (1000 * 60 * 60 * 24);
   return diff <= 2 && diff >= -2;
