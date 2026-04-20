@@ -1078,25 +1078,36 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
     const statusColor = bloqueada ? '#9CA3AF' : hecha ? '#166534' : o.estadoCampo === 'visita' ? '#374151' : '#0F766E';
     const statusLabel = bloqueada ? '🔒 Bloqueada' : hecha ? '✓ Realizada' : o.estadoCampo === 'visita' ? '👁 Visita' : '● Disponible';
 
-    function chip(label, val) {
+    function row(label, val) {
       if (!val) return '';
-      return '<div style="background:#f3f4f6;border-radius:8px;padding:6px 10px"><p style="font-size:10px;color:#9ca3af;margin-bottom:2px">' + label + '</p><p style="font-size:12px;font-weight:600;color:#111827;word-break:break-word">' + safeStr(val) + '</p></div>';
+      return '<div style="display:flex;padding:8px 0;border-bottom:1px solid #f3f4f6;gap:12px;align-items:baseline">' +
+        '<span style="font-size:11px;color:#9ca3af;min-width:80px;flex-shrink:0">' + label + '</span>' +
+        '<span style="font-size:13px;color:#111827;font-weight:500;flex:1;word-break:break-word">' + safeStr(val) + '</span>' +
+      '</div>';
     }
 
     sheetBody.innerHTML =
-      '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:12px">' +
-        '<div style="flex:1;min-width:0"><p style="font-size:10px;color:#9ca3af;font-family:monospace">' + safeStr(o.wo) + '</p><p style="font-size:16px;font-weight:800;color:#111827;margin-top:2px;line-height:1.25">' + safeStr(o.cliente) + '</p></div>' +
+      // Header
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:14px">' +
+        '<div style="flex:1;min-width:0">' +
+          '<p style="font-size:10px;color:#9ca3af;font-family:monospace;margin-bottom:3px">' + safeStr(o.wo) + '</p>' +
+          '<p style="font-size:17px;font-weight:800;color:#111827;line-height:1.2">' + safeStr(o.cliente) + '</p>' +
+        '</div>' +
         '<span style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;background:' + statusColor + '18;color:' + statusColor + ';white-space:nowrap;flex-shrink:0">' + statusLabel + '</span>' +
       '</div>' +
-      '<div style="display:flex;gap:8px;align-items:flex-start;background:#f9fafb;border-radius:10px;padding:9px 12px;margin-bottom:10px">' +
-        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>' +
-        '<p style="font-size:12px;color:#374151;line-height:1.4">' + safeStr(o.direccion || '—') + '</p>' +
-      '</div>' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px">' +
-        chip('Medidor', o.serie) + chip('DS', o.dsct) + chip('MRU', o.unidadLectura) + chip('Concepto', o.concepto) + chip('NC', o.nc) + chip('Teléfono', o.telefono) +
-        (o.pareja && isAdminUser ? chip('Pareja', o.pareja) : '') +
-        (o.observaciones ? '<div style="grid-column:1/-1;background:#f3f4f6;border-radius:8px;padding:6px 10px"><p style="font-size:10px;color:#9ca3af;margin-bottom:2px">Observaciones</p><p style="font-size:12px;color:#374151">' + safeStr(o.observaciones) + '</p></div>' : '') +
-        (o.observacion ? '<div style="grid-column:1/-1;background:#FEF3C7;border-radius:8px;padding:6px 10px"><p style="font-size:10px;color:#B45309;margin-bottom:2px">Nota visita</p><p style="font-size:12px;color:#374151">' + safeStr(o.observacion) + '</p></div>' : '') +
+      // Info rows — MyMaps style
+      '<div style="margin-bottom:14px">' +
+        row('Dirección', o.direccion) +
+        row('Medidor', o.serie) +
+        row('DS', o.dsct) +
+        row('MRU', o.unidadLectura) +
+        row('Concepto', o.concepto) +
+        row('NC', o.nc) +
+        row('Teléfono', o.telefono) +
+        (o.pareja && isAdminUser ? row('Pareja', o.pareja) : '') +
+        (o.observaciones ? row('Observaciones', o.observaciones) : '') +
+        (o.observacion ? row('Nota visita', o.observacion) : '') +
+        (o.hechaPor ? row('Realizada por', o.hechaPor) : '') +
       '</div>' +
       (bloqueada ? '<div style="background:#F3F4F6;color:#6B7280;padding:12px;border-radius:10px;font-size:13px;font-weight:500;margin-bottom:10px;text-align:center">🔒 Orden en período de lectura<br><span style="font-size:11px;font-weight:400">No se puede ejecutar en este momento</span></div>' : '') +
       '<div style="display:flex;flex-direction:column;gap:7px">' +
