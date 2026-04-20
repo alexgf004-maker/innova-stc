@@ -985,18 +985,11 @@ async function showMapa(db, session, isCampo, destino) {
     }
 
     content.innerHTML =
-      '<div style="position:relative;width:100%;height:calc(100vh - 220px);min-height:400px;">' +
+      '<div id="mapa-wrapper" style="position:relative;width:100%;height:calc(100vh - 220px);min-height:400px;">' +
         '<div id="mapa-contenedor" style="width:100%;height:100%;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">' +
           '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#9ca3af;font-size:14px;gap:8px">' +
             '<svg style="width:16px;height:16px;animation:spin 1s linear infinite" viewBox="0 0 24 24" fill="none"><circle opacity=".25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path opacity=".75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>Cargando mapa...' +
           '</div>' +
-        '</div>' +
-        '<div id="mapa-sheet" style="position:absolute;bottom:0;left:0;right:0;background:white;border-radius:16px 16px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,0.15);transform:translateY(100%);transition:transform 0.3s ease;z-index:10;max-height:70%;overflow-y:auto;pointer-events:none;">' +
-          '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px 4px">' +
-            '<div style="width:36px;height:4px;background:#e5e7eb;border-radius:2px"></div>' +
-            '<button id="sheet-close-btn" style="width:28px;height:28px;border-radius:50%;background:#f3f4f6;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;color:#6b7280;line-height:1">✕</button>' +
-          '</div>' +
-          '<div id="mapa-sheet-content" style="padding:0 16px 24px"></div>' +
         '</div>' +
       '</div>';
 
@@ -1008,9 +1001,33 @@ async function showMapa(db, session, isCampo, destino) {
 
 function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
   const contenedor = document.getElementById('mapa-contenedor');
-  const sheet      = document.getElementById('mapa-sheet');
-  const sheetBody  = document.getElementById('mapa-sheet-content');
+  const wrapper    = document.getElementById('mapa-wrapper') || contenedor.parentElement;
   if (!contenedor) return;
+  let sheet = null;
+  let sheetBody = null;
+
+  function createSheet() {
+    // Remove existing sheet if any
+    const old = document.getElementById('mapa-sheet');
+    if (old) old.remove();
+    const el = document.createElement('div');
+    el.id = 'mapa-sheet';
+    el.style.cssText = 'position:absolute;bottom:0;left:0;right:0;background:white;border-radius:16px 16px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,0.15);z-index:10;max-height:70%;overflow-y:auto;';
+    el.innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px 4px">' +
+        '<div style="width:36px;height:4px;background:#e5e7eb;border-radius:2px"></div>' +
+        '<button id="sheet-close-btn" style="width:28px;height:28px;border-radius:50%;background:#f3f4f6;border:none;cursor:pointer;font-size:14px;color:#6b7280">✕</button>' +
+      '</div>' +
+      '<div id="mapa-sheet-content" style="padding:0 16px 24px"></div>';
+    wrapper.appendChild(el);
+    sheet = el;
+    sheetBody = el.querySelector('#mapa-sheet-content');
+    el.querySelector('#sheet-close-btn').addEventListener('click', function(e) {
+      e.stopPropagation();
+      closeSheet();
+    });
+    return el;
+  }
 
   const G   = google.maps;
   const map = new G.Map(contenedor, {
@@ -1029,7 +1046,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
   map.addListener('click', function() { closeSheet(); });
 
   function closeSheet() {
-    if (sheet) { sheet.style.display = 'none'; sheet.style.pointerEvents = 'none'; }
+    if (sheet) { sheet.remove(); sheet = null; sheetBody = null; }
     if (activeMarker) { activeMarker.setIcon(buildIcon(activeMarker.__color, false, assignMode)); activeMarker = null; }
   }
 
@@ -1053,6 +1070,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
   }
 
   function openSheet(o, marker) {
+    createSheet();
     if (!sheet || !sheetBody) return;
     const bloqueada = esBloqueada(o, calendarioMap);
     const hecha = o.estadoCampo === 'hecha' || o.estadoCampo === 'aprobada';
@@ -1092,12 +1110,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
         (isAdminUser && o.estadoCampo === 'hecha' ? '<button id="sheet-aprobar" style="width:100%;padding:11px;background:#166534;color:white;border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer">✓ Confirmar realizada</button>' : '') +
       '</div>';
 
-    sheet.style.display = 'block';
-    sheet.style.pointerEvents = 'auto';
-    document.getElementById('sheet-close-btn')?.addEventListener('click', function(e) {
-      e.stopPropagation();
-      closeSheet();
-    });
+
     if (activeMarker && activeMarker !== marker) { activeMarker.setIcon(buildIcon(activeMarker.__color, false, false)); }
     marker.setIcon(buildIcon(marker.__color, true, false));
     activeMarker = marker;
@@ -1854,3 +1867,4 @@ function showDesasignarPareja(db, ordenes, onDone) {
   });
   ov.querySelector('#dp-all').addEventListener('click', function() { desasignar(null); });
 }
+
