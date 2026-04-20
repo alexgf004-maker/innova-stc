@@ -152,43 +152,52 @@ async function initDashboardAdmin(session) {
 
         // ── Stats cambios ──
         '<div>' +
-          '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Cambios de medidores · Hoy</p>' +
-          '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">' +
-            statCard(realizadasHoy, 'Realizadas hoy', '#166534', '#F0FDF4') +
-            statCard(pendConfirm, 'Por confirmar', '#B45309', '#FEF3C7') +
-            statCard(totalOrdenes, 'Total activas', '#1B4F8A', '#EFF6FF') +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+            '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em">Cambios de medidores · Hoy</p>' +
+            '<a data-route="/cm" style="font-size:11px;color:#0F766E;font-weight:600;text-decoration:none">Ver más →</a>' +
           '</div>' +
+          '<a data-route="/cm" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-decoration:none">' +
+            statCard(realizadasHoy, 'Realizadas hoy', '#166534', '#F0FDF4') +
+            statCard(pendConfirm, 'Pendientes aprobación', pendConfirm > 0 ? '#B45309' : '#166534', pendConfirm > 0 ? '#FEF3C7' : '#F0FDF4') +
+            statCard(totalOrdenes, 'Total activas', '#1B4F8A', '#EFF6FF') +
+          '</a>' +
         '</div>' +
 
         // ── Parejas activas ──
         (campoCambios.length > 0 ?
           '<div>' +
-            '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Parejas activas · Cambios (' + campoCambios.length + ' personas)</p>' +
+            '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+            '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em">Parejas activas · Cambios (' + campoCambios.length + ' personas)</p>' +
+            '<a data-route="/cm" style="font-size:11px;color:#0F766E;font-weight:600;text-decoration:none">Seguimiento →</a>' +
+          '</div>' +
             '<div class="space-y-2">' +
               PAREJAS.filter(p => parejaStats[p].miembros.length > 0).map(p => {
                 const s = parejaStats[p];
                 const color = PAREJA_COLORS[p];
                 const pct = Math.min(100, Math.round(((s.hechasHoy + s.visitasHoy) / 15) * 100));
-                return '<div style="background:white;border:1px solid #e5e7eb;border-radius:12px;padding:12px">' +
+                return '<a data-route="/cm" style="background:white;border:1px solid #e5e7eb;border-radius:12px;padding:12px;display:block;cursor:pointer;text-decoration:none">' +
                   '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
                     '<div style="display:flex;align-items:center;gap:6px">' +
                       '<span style="width:10px;height:10px;border-radius:50%;background:' + color + ';display:inline-block"></span>' +
                       '<p style="font-size:13px;font-weight:700;color:#111827">' + p + '</p>' +
                     '</div>' +
-                    '<p style="font-size:11px;color:#6b7280">' + (s.hechasHoy + s.visitasHoy) + ' / 15</p>' +
+                    '<div style="display:flex;align-items:center;gap:8px">' +
+                      (s.sinActualizar > 0 ? '<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;background:#FEF3C7;color:#B45309">⚠ ' + s.sinActualizar + ' sin actualizar</span>' : '') +
+                      '<p style="font-size:11px;color:#6b7280">' + (s.hechasHoy + s.visitasHoy) + '/15</p>' +
+                    '</div>' +
                   '</div>' +
                   '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">' +
                     s.miembros.map(miembroChip).join('') +
                   '</div>' +
-                  '<div style="height:6px;background:#f3f4f6;border-radius:3px;overflow:hidden">' +
+                  '<div style="height:6px;background:#f3f4f6;border-radius:3px;overflow:hidden;margin-bottom:6px">' +
                     '<div style="height:100%;width:' + pct + '%;background:' + color + ';border-radius:3px;transition:width .3s"></div>' +
                   '</div>' +
-                  '<div style="display:flex;gap:12px;margin-top:6px">' +
+                  '<div style="display:flex;gap:12px">' +
                     '<p style="font-size:11px;color:#166534">✓ ' + s.hechasHoy + ' realizadas</p>' +
                     (s.visitasHoy ? '<p style="font-size:11px;color:#374151">👁 ' + s.visitasHoy + ' visitas</p>' : '') +
                     '<p style="font-size:11px;color:#9ca3af">' + s.total + ' asignadas</p>' +
                   '</div>' +
-                '</div>';
+                '</a>';
               }).join('') +
             '</div>' +
           '</div>'
@@ -196,7 +205,10 @@ async function initDashboardAdmin(session) {
 
         // ── OTC ──
         '<div>' +
-          '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">OTC' + (campoOTC.length ? ' (' + campoOTC.length + ' personas)' : '') + '</p>' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+            '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em">OTC' + (campoOTC.length ? ' (' + campoOTC.length + ' personas)' : '') + '</p>' +
+            '<a data-route="/kardex" style="font-size:11px;color:#1B4F8A;font-weight:600;text-decoration:none">Ver Kardex →</a>' +
+          '</div>' +
           (campoOTC.length > 0 ?
             '<div style="background:white;border:1px solid #e5e7eb;border-radius:12px;padding:12px">' +
               '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">' +
@@ -215,7 +227,10 @@ async function initDashboardAdmin(session) {
 
         // ── Bodega ──
         '<div>' +
-          '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Bodega</p>' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+            '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em">Bodega</p>' +
+            '<a data-route="/kardex" style="font-size:11px;color:#1B4F8A;font-weight:600;text-decoration:none">Ver Kardex →</a>' +
+          '</div>' +
           '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">' +
             statCard(items.length, 'Items en inventario', '#1B4F8A', '#EFF6FF') +
             statCard(solicsPend, 'Solicitudes pendientes', solicsPend > 0 ? '#B45309' : '#166534', solicsPend > 0 ? '#FEF3C7' : '#F0FDF4') +
