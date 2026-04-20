@@ -992,7 +992,10 @@ async function showMapa(db, session, isCampo, destino) {
           '</div>' +
         '</div>' +
         '<div id="mapa-sheet" style="position:absolute;bottom:0;left:0;right:0;background:white;border-radius:16px 16px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,0.15);transform:translateY(100%);transition:transform 0.3s ease;z-index:10;max-height:70%;overflow-y:auto;pointer-events:none;">' +
-          '<div style="display:flex;justify-content:center;padding:10px 0 4px"><div style="width:36px;height:4px;background:#e5e7eb;border-radius:2px"></div></div>' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px 4px">' +
+            '<div style="width:36px;height:4px;background:#e5e7eb;border-radius:2px"></div>' +
+            '<button id="sheet-close-btn" style="width:28px;height:28px;border-radius:50%;background:#f3f4f6;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;color:#6b7280;line-height:1">✕</button>' +
+          '</div>' +
           '<div id="mapa-sheet-content" style="padding:0 16px 24px"></div>' +
         '</div>' +
       '</div>';
@@ -1091,6 +1094,10 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
 
     sheet.style.transform = 'translateY(0)';
     sheet.style.pointerEvents = 'auto';
+    document.getElementById('sheet-close-btn')?.addEventListener('click', function(e) {
+      e.stopPropagation();
+      closeSheet();
+    });
     if (activeMarker && activeMarker !== marker) { activeMarker.setIcon(buildIcon(activeMarker.__color, false, false)); }
     marker.setIcon(buildIcon(marker.__color, true, false));
     activeMarker = marker;
