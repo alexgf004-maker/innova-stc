@@ -134,7 +134,7 @@ function renderShell(container, session, db, isCampo, destino) {
       '<div class="flex gap-1 bg-gray-100 rounded-xl p-1">' +
         (isAdmin ? '<button class="ctab flex-1 py-2 text-xs font-medium rounded-lg transition-colors" data-ctab="listado">Órdenes</button>' : '') +
         (isAdmin ? '<button class="ctab flex-1 py-2 text-xs font-medium rounded-lg transition-colors" data-ctab="mapa">Mapa</button>' : '') +
-        (isAdmin ? '<button class="ctab flex-1 py-2 text-xs font-medium rounded-lg transition-colors" data-ctab="seguimiento">Seguimiento</button>' : '') +
+        (isAdmin ? '<button class="ctab flex-1 py-2 text-xs font-medium rounded-lg transition-colors" data-ctab="dia">Día</button>' : '') +
         (isCampo ? '<button class="ctab flex-1 py-2 text-xs font-medium rounded-lg transition-colors" data-ctab="listado">Órdenes</button>' : '') +
         (isCampo ? '<button class="ctab flex-1 py-2 text-xs font-medium rounded-lg transition-colors" data-ctab="mapa">Mapa</button>' : '') +
         (isCampo ? '<button class="ctab flex-1 py-2 text-xs font-medium rounded-lg transition-colors" data-ctab="bodega">Bodega</button>' : '') +
@@ -153,6 +153,7 @@ function renderShell(container, session, db, isCampo, destino) {
       if (t === 'listado')     await showListado(db, session, isCampo, destino);
       if (t === 'mapa')        await showMapa(db, session, isCampo, destino);
       if (t === 'seguimiento') await showSeguimiento(db, session);
+      if (t === 'dia')          await showDia(db, session);
       if (t === 'bodega')      await showBodegaCampo(db, session, destino);
     });
   });
@@ -1890,4 +1891,160 @@ function showDesasignarPareja(db, ordenes, onDone) {
     btn.addEventListener('click', function() { desasignar(btn.dataset.pareja); });
   });
   ov.querySelector('#dp-all').addEventListener('click', function() { desasignar(null); });
+}
+
+// ─────────────────────────────────────────
+// PESTAÑA DÍA — Realizadas hoy
+// ─────────────────────────────────────────
+async function showDia(db, session) {
+  const content = document.getElementById('cambios-content');
+  if (!content) return;
+  content.innerHTML = loading();
+
+  try {
+    const [snapOrdenes, calendarioMap] = await Promise.all([
+      getDocs(collection(db, COL_ORDENES)),
+      getCalendarioMap(db),
+    ]);
+
+    const ordenes = snapOrdenes.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+
+    // Today boundaries
+    const hoy    = new Date(); hoy.setHours(0,0,0,0);
+    const manana = new Date(hoy); manana.setDate(manana.getDate()+1);
+    function esHoy(ts) {
+      if (!ts) return false;
+      const d = ts.toDate ? ts.toDate() : new Date(ts);
+      return d >= hoy && d < manana;
+    }
+    function fmtHora(ts) {
+      if (!ts) return '';
+      const d = ts.toDate ? ts.toDate() : new Date(ts);
+      return d.toLocaleTimeString('es-SV', { hour:'2-digit', minute:'2-digit' });
+    }
+
+    // Realizadas hoy (hecha, no aprobadas aún)
+    const realizadasHoy = ordenes
+      .filter(function(o) { return o.estadoCampo === 'hecha' && esHoy(o.fechaHecha); })
+      .sort(function(a, b) {
+        // Sin actualizar first, then by time desc
+        if (!a.actualizadaDelsur && b.actualizadaDelsur) return -1;
+        if (a.actualizadaDelsur && !b.actualizadaDelsur) return 1;
+        const ta = a.fechaHecha?.toDate ? a.fechaHecha.toDate() : new Date(a.fechaHecha || 0);
+        const tb = b.fechaHecha?.toDate ? b.fechaHecha.toDate() : new Date(b.fechaHecha || 0);
+        return tb - ta;
+      });
+
+    const sinActualizar = realizadasHoy.filter(function(o) { return !o.actualizadaDelsur; });
+    const actualizadas  = realizadasHoy.filter(function(o) { return o.actualizadaDelsur; });
+
+    function diaCard(o) {
+      const sinAct  = !o.actualizadaDelsur;
+      const color   = o.pareja ? (PAREJA_COLORS[o.pareja] || '#6B7280') : '#6B7280';
+      const hora    = fmtHora(o.fechaHecha);
+
+      return '<div class="dia-card bg-white rounded-xl border ' + (sinAct ? 'border-yellow-300' : 'border-gray-200') + ' px-4 py-3 space-y-2" data-id="' + (o.id||'') + '" data-wo="' + o.wo + '">' +
+        // Top row
+        '<div class="flex items-start justify-between gap-2">' +
+          '<div class="min-w-0">' +
+            '<p style="font-size:10px;color:#9ca3af;font-family:monospace">' + safeStr(o.wo) + (hora ? ' · ' + hora : '') + '</p>' +
+            '<p class="text-sm font-semibold text-gray-900 leading-tight mt-0.5">' + safeStr(o.cliente) + '</p>' +
+          '</div>' +
+          (sinAct
+            ? '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:#FEF3C7;color:#B45309;white-space:nowrap;flex-shrink:0">⚠ Sin actualizar</span>'
+            : '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:#DCFCE7;color:#166534;white-space:nowrap;flex-shrink:0">✓ Actualizada</span>') +
+        '</div>' +
+        // Meta row
+        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+          (o.pareja ? '<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;color:white;background:' + color + '">' + o.pareja + '</span>' : '') +
+          (o.hechaPor ? '<span class="text-xs text-gray-500">' + safeStr(o.hechaPor) + '</span>' : '') +
+          '<span class="text-xs text-gray-400 truncate">' + safeStr(o.direccion) + '</span>' +
+        '</div>' +
+        // Action buttons
+        '<div class="flex gap-2">' +
+          '<button class="btn-rechazar flex-1 py-2 rounded-xl border-2 border-gray-200 text-gray-600 text-xs font-bold">✗ Rechazar</button>' +
+          '<button class="btn-confirmar flex-1 py-2 rounded-xl text-white text-xs font-bold" style="background:#166534">✓ Confirmar</button>' +
+        '</div>' +
+      '</div>';
+    }
+
+    const totalHoy   = realizadasHoy.length;
+    const metaTotal  = 15 * PAREJAS.length;
+
+    content.innerHTML =
+      '<div class="space-y-4">' +
+        // Header stats
+        '<div class="flex items-center justify-between">' +
+          '<div>' +
+            '<p class="font-bold text-gray-900">Realizadas hoy</p>' +
+            '<p class="text-xs text-gray-400">' + totalHoy + ' órdenes · meta ' + metaTotal + '</p>' +
+          '</div>' +
+          '<button id="btn-reload-dia" style="padding:6px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:12px;color:#374151;background:white;cursor:pointer">↻ Actualizar</button>' +
+        '</div>' +
+        // Progress bar
+        '<div style="height:8px;background:#f3f4f6;border-radius:4px;overflow:hidden">' +
+          '<div style="height:100%;width:' + Math.min(100, Math.round((totalHoy/metaTotal)*100)) + '%;background:#0F766E;border-radius:4px"></div>' +
+        '</div>' +
+        // Sin actualizar section
+        (sinActualizar.length > 0 ?
+          '<div>' +
+            '<p style="font-size:11px;font-weight:700;color:#B45309;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">⚠ Sin actualizar en Delsur (' + sinActualizar.length + ')</p>' +
+            '<div class="space-y-2">' + sinActualizar.map(diaCard).join('') + '</div>' +
+          '</div>'
+        : '<div class="text-center py-3 rounded-xl" style="background:#F0FDF4"><p class="text-sm font-semibold" style="color:#166534">✓ Todas actualizadas en Delsur</p></div>') +
+        // Actualizadas section
+        (actualizadas.length > 0 ?
+          '<div>' +
+            '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Confirmadas (' + actualizadas.length + ')</p>' +
+            '<div class="space-y-2">' + actualizadas.map(diaCard).join('') + '</div>' +
+          '</div>'
+        : '') +
+        // Empty state
+        (realizadasHoy.length === 0 ?
+          '<div class="text-center py-12 text-sm text-gray-400">Sin órdenes realizadas hoy</div>'
+        : '') +
+      '</div>';
+
+    // Wire reload
+    document.getElementById('btn-reload-dia')?.addEventListener('click', function() {
+      showDia(db, session);
+    });
+
+    // Wire confirm/reject buttons
+    content.querySelectorAll('.dia-card').forEach(function(card) {
+      const id = card.dataset.id;
+      const wo = card.dataset.wo;
+
+      card.querySelector('.btn-confirmar')?.addEventListener('click', async function() {
+        const btn = card.querySelector('.btn-confirmar');
+        btn.textContent = '...'; btn.disabled = true;
+        try {
+          let ref;
+          if (id) { ref = doc(db, COL_ORDENES, id); }
+          else { const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo','==',wo))); if (snap.empty) throw new Error(); ref = snap.docs[0].ref; }
+          await updateDoc(ref, { estadoCampo: 'aprobada', aprobadoPor: session.displayName, fechaAprobacion: serverTimestamp() });
+          showToast('Orden confirmada.', 'success');
+          card.style.opacity = '0.4';
+          card.style.pointerEvents = 'none';
+          setTimeout(function() { showDia(db, session); }, 800);
+        } catch(e) { showToast('Error.','error'); btn.textContent='✓ Confirmar'; btn.disabled=false; }
+      });
+
+      card.querySelector('.btn-rechazar')?.addEventListener('click', async function() {
+        const btn = card.querySelector('.btn-rechazar');
+        btn.textContent = '...'; btn.disabled = true;
+        try {
+          let ref;
+          if (id) { ref = doc(db, COL_ORDENES, id); }
+          else { const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo','==',wo))); if (snap.empty) throw new Error(); ref = snap.docs[0].ref; }
+          await updateDoc(ref, { estadoCampo: null, actualizadaDelsur: null, fechaHecha: null, hechaPor: null });
+          showToast('Orden devuelta a campo.', 'success');
+          card.style.opacity = '0.4';
+          card.style.pointerEvents = 'none';
+          setTimeout(function() { showDia(db, session); }, 800);
+        } catch(e) { showToast('Error.','error'); btn.textContent='✗ Rechazar'; btn.disabled=false; }
+      });
+    });
+
+  } catch(e) { content.innerHTML = errHtml(); console.error(e); }
 }
