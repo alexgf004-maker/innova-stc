@@ -1,4 +1,4 @@
-const CACHE = 'innova-stc-v1';
+const CACHE = 'innova-stc-v2';
 const PRECACHE = [
   '/innova-stc/',
   '/innova-stc/index.html',
