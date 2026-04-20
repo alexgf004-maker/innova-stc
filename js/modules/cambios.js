@@ -1968,12 +1968,29 @@ async function showDia(db, session) {
       '</div>';
     }
 
-    const totalHoy   = realizadasHoy.length;
-    const metaTotal  = 15 * PAREJAS.length;
+    const totalHoy  = realizadasHoy.length;
+    const META_DIA  = 15;
+    const metaTotal = META_DIA * PAREJAS.length;
+
+    // Stats por pareja
+    const porPareja = {};
+    PAREJAS.forEach(function(p) { porPareja[p] = { hechas: 0, sinAct: 0 }; });
+    realizadasHoy.forEach(function(o) {
+      if (o.pareja && porPareja[o.pareja]) {
+        porPareja[o.pareja].hechas++;
+        if (!o.actualizadaDelsur) porPareja[o.pareja].sinAct++;
+      }
+    });
+
+    // Also count visitas today for progress
+    const visitasHoy = ordenes.filter(function(o) { return o.estadoCampo === 'visita' && esHoy(o.fechaVisita); });
+    const porParejaVisitas = {};
+    PAREJAS.forEach(function(p) { porParejaVisitas[p] = 0; });
+    visitasHoy.forEach(function(o) { if (o.pareja && porParejaVisitas[o.pareja] !== undefined) porParejaVisitas[o.pareja]++; });
 
     content.innerHTML =
       '<div class="space-y-4">' +
-        // Header stats
+        // Header
         '<div class="flex items-center justify-between">' +
           '<div>' +
             '<p class="font-bold text-gray-900">Realizadas hoy</p>' +
@@ -1981,9 +1998,30 @@ async function showDia(db, session) {
           '</div>' +
           '<button id="btn-reload-dia" style="padding:6px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:12px;color:#374151;background:white;cursor:pointer">↻ Actualizar</button>' +
         '</div>' +
-        // Progress bar
+        // Progress bar global
         '<div style="height:8px;background:#f3f4f6;border-radius:4px;overflow:hidden">' +
           '<div style="height:100%;width:' + Math.min(100, Math.round((totalHoy/metaTotal)*100)) + '%;background:#0F766E;border-radius:4px"></div>' +
+        '</div>' +
+        // Por pareja
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+          PAREJAS.map(function(p) {
+            const s    = porPareja[p];
+            const vis  = porParejaVisitas[p];
+            const logros = s.hechas + vis;
+            const pct  = Math.min(100, Math.round((logros / META_DIA) * 100));
+            const col  = PAREJA_COLORS[p];
+            return '<div style="background:white;border:1px solid #e5e7eb;border-radius:10px;padding:10px">' +
+              '<div style="display:flex;align-items:center;gap:5px;margin-bottom:6px">' +
+                '<span style="width:8px;height:8px;border-radius:50%;background:' + col + ';display:inline-block;flex-shrink:0"></span>' +
+                '<p style="font-size:12px;font-weight:700;color:#111827">' + p + '</p>' +
+                (s.sinAct > 0 ? '<span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;background:#FEF3C7;color:#B45309;margin-left:auto">⚠' + s.sinAct + '</span>' : '') +
+              '</div>' +
+              '<div style="height:5px;background:#f3f4f6;border-radius:3px;overflow:hidden;margin-bottom:4px">' +
+                '<div style="height:100%;width:' + pct + '%;background:' + col + ';border-radius:3px"></div>' +
+              '</div>' +
+              '<p style="font-size:11px;color:#6b7280">' + logros + '/' + META_DIA + (vis > 0 ? ' <span style="color:#374151">(+' + vis + ' visitas)</span>' : '') + '</p>' +
+            '</div>';
+          }).join('') +
         '</div>' +
         // Sin actualizar section
         (sinActualizar.length > 0 ?
