@@ -1029,7 +1029,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
   map.addListener('click', function() { closeSheet(); });
 
   function closeSheet() {
-    if (sheet) { sheet.style.transform = 'translateY(100%)'; sheet.style.pointerEvents = 'none'; }
+    if (sheet) { sheet.style.display = 'none'; sheet.style.pointerEvents = 'none'; }
     if (activeMarker) { activeMarker.setIcon(buildIcon(activeMarker.__color, false, assignMode)); activeMarker = null; }
   }
 
@@ -1092,7 +1092,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
         (isAdminUser && o.estadoCampo === 'hecha' ? '<button id="sheet-aprobar" style="width:100%;padding:11px;background:#166534;color:white;border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer">✓ Confirmar realizada</button>' : '') +
       '</div>';
 
-    sheet.style.transform = 'translateY(0)';
+    sheet.style.display = 'block';
     sheet.style.pointerEvents = 'auto';
     document.getElementById('sheet-close-btn')?.addEventListener('click', function(e) {
       e.stopPropagation();
