@@ -1096,10 +1096,19 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
       '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:14px">' +
         '<div style="flex:1;min-width:0">' +
           '<p style="font-size:10px;color:#9ca3af;font-family:monospace;margin-bottom:3px">' + safeStr(o.wo) + '</p>' +
-          '<p style="font-size:17px;font-weight:800;color:#111827;line-height:1.2">' + safeStr(o.cliente) + '</p>' +
+          (!bloqueada || isAdminUser ? '<p style="font-size:17px;font-weight:800;color:#111827;line-height:1.2">' + safeStr(o.cliente) + '</p>' : '<p style="font-size:13px;color:#9ca3af">Información no disponible</p>') +
         '</div>' +
         '<span style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;background:' + statusColor + '18;color:' + statusColor + ';white-space:nowrap;flex-shrink:0">' + statusLabel + '</span>' +
       '</div>' +
+      // Bloqueada — solo aviso para campo
+      (bloqueada && !isAdminUser ?
+        '<div style="background:#F3F4F6;border-radius:12px;padding:16px;text-align:center;margin-bottom:14px">' +
+          '<p style="font-size:32px;margin-bottom:8px">🔒</p>' +
+          '<p style="font-size:14px;font-weight:700;color:#374151">Período de lectura</p>' +
+          '<p style="font-size:12px;color:#9ca3af;margin-top:4px">Esta orden no puede ejecutarse en este momento.</p>' +
+          '<p style="font-size:11px;font-family:monospace;color:#9ca3af;margin-top:8px">MRU: ' + safeStr(o.unidadLectura) + '</p>' +
+        '</div>'
+      :
       // Info rows — MyMaps style
       '<div style="margin-bottom:14px">' +
         row('Dirección', o.direccion) +
@@ -1113,7 +1122,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
         (o.observaciones ? row('Observaciones', o.observaciones) : '') +
         (o.observacion ? row('Nota visita', o.observacion) : '') +
         (o.hechaPor ? row('Realizada por', o.hechaPor) : '') +
-      '</div>' +
+      '</div>') +
       (bloqueada ? '<div style="background:#F3F4F6;color:#6B7280;padding:12px;border-radius:10px;font-size:13px;font-weight:500;margin-bottom:10px;text-align:center">🔒 Orden en período de lectura<br><span style="font-size:11px;font-weight:400">No se puede ejecutar en este momento</span></div>' : '') +
       '<div style="display:flex;flex-direction:column;gap:7px">' +
         '<div style="display:flex;gap:7px">' +
