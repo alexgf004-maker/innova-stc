@@ -9,20 +9,54 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 export async function initHome(session) {
-  if (session.role === 'admin') {
-    await initDashboardAdmin(session);
-  }
-  // coordinadora y campo usan el script inline de home.html
-}
-
-async function initDashboardAdmin(session) {
-  const db = window.__firebase.db;
-
-  // Greeting
+  // Greeting for all roles
   const hour  = new Date().getHours();
   const greet = hour < 12 ? 'Buenos días' : hour < 19 ? 'Buenas tardes' : 'Buenas noches';
   const greetEl = document.getElementById('home-greeting');
   if (greetEl) greetEl.textContent = greet + ', ' + session.displayName.split(' ')[0];
+
+  if (session.role === 'admin') {
+    await initDashboardAdmin(session);
+  } else {
+    initHomeSimple(session);
+  }
+}
+
+function initHomeSimple(session) {
+  const el = document.getElementById('home-modules');
+  if (!el) return;
+
+  const isCampo = session.role === 'campo';
+  const area    = session.asignacionActual?.area || (session.usuarioOperativoAsignado ? 'OTC' : null);
+  const destino = session.asignacionActual?.destino || session.usuarioOperativoAsignado || null;
+  const color   = area === 'CAMBIOS' ? '#0F766E' : '#1B4F8A';
+
+  el.innerHTML =
+    '<div class="space-y-4">' +
+      // Asignación actual
+      (isCampo && area ?
+        '<div style="background:' + color + ';border-radius:14px;padding:16px;color:white">' +
+          '<p style="font-size:11px;font-weight:600;opacity:.8;text-transform:uppercase;letter-spacing:.05em">Trabajando como</p>' +
+          '<p style="font-size:22px;font-weight:900;margin-top:2px">' + (destino || '—') + '</p>' +
+          '<p style="font-size:12px;opacity:.7;margin-top:2px">Área: ' + area + '</p>' +
+        '</div>'
+      : '') +
+      // Accesos rápidos
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+        (session.role === 'coordinadora' ?
+          ['<a data-route="/kardex" style="background:white;border:1px solid #e5e7eb;border-radius:12px;padding:14px;cursor:pointer;text-decoration:none;display:block"><p style="font-size:13px;font-weight:600;color:#111827">Kardex</p><p style="font-size:11px;color:#9ca3af;margin-top:2px">Bodega y materiales</p></a>',
+           '<a data-route="/cm" style="background:white;border:1px solid #e5e7eb;border-radius:12px;padding:14px;cursor:pointer;text-decoration:none;display:block"><p style="font-size:13px;font-weight:600;color:#111827">Cambios</p><p style="font-size:11px;color:#9ca3af;margin-top:2px">Gestión de órdenes</p></a>'].join('')
+        : area === 'CAMBIOS' ?
+          '<a data-route="/cm" style="background:white;border:1px solid #e5e7eb;border-radius:12px;padding:14px;cursor:pointer;text-decoration:none;display:block"><p style="font-size:13px;font-weight:600;color:#111827">Mis órdenes</p><p style="font-size:11px;color:#9ca3af;margin-top:2px">Cambio de medidores</p></a>'
+        : area === 'OTC' ?
+          '<a data-route="/otc" style="background:white;border:1px solid #e5e7eb;border-radius:12px;padding:14px;cursor:pointer;text-decoration:none;display:block"><p style="font-size:13px;font-weight:600;color:#111827">OTC</p><p style="font-size:11px;color:#9ca3af;margin-top:2px">Mis órdenes y bodega</p></a>'
+        : '<p style="font-size:13px;color:#9ca3af;grid-column:1/-1;text-align:center;padding:20px">Sin área asignada. Contacta a administración.</p>') +
+      '</div>' +
+    '</div>';
+}
+
+async function initDashboardAdmin(session) {
+  const db = window.__firebase.db;
 
   const dashboard = document.getElementById('home-modules');
   if (!dashboard) return;
@@ -179,16 +213,15 @@ async function initDashboardAdmin(session) {
           : '<div style="background:#f9fafb;border-radius:12px;padding:14px;text-align:center"><p style="font-size:13px;color:#9ca3af">Sin personal asignado a OTC hoy</p></div>') +
         '</div>' +
 
-        // ── Bodega alerts ──
-        (itemsBajos.length > 0 || solicsPend > 0 ?
-          '<div>' +
-            '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Bodega</p>' +
-            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
-              (solicsPend > 0 ? statCard(solicsPend, 'Solicitudes pendientes', '#B45309', '#FEF3C7') : '') +
-              (itemsBajos.length > 0 ? statCard(itemsBajos.length, 'Materiales con stock bajo', '#C62828', '#FEF2F2') : '') +
-            '</div>' +
-          '</div>'
-        : '') +
+        // ── Bodega ──
+        '<div>' +
+          '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Bodega</p>' +
+          '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">' +
+            statCard(items.length, 'Items en inventario', '#1B4F8A', '#EFF6FF') +
+            statCard(solicsPend, 'Solicitudes pendientes', solicsPend > 0 ? '#B45309' : '#166534', solicsPend > 0 ? '#FEF3C7' : '#F0FDF4') +
+            statCard(itemsBajos.length, 'Stock bajo', itemsBajos.length > 0 ? '#C62828' : '#166534', itemsBajos.length > 0 ? '#FEF2F2' : '#F0FDF4') +
+          '</div>' +
+        '</div>' +
 
         // ── Accesos rápidos ──
         '<div>' +
@@ -212,4 +245,3 @@ async function initDashboardAdmin(session) {
     console.error(e);
   }
 }
-
