@@ -161,7 +161,7 @@
     window.__firebase = { app, auth, db };
 
     // Verificar sesión
-    const sessionRaw = sessionStorage.getItem('innova_session');
+    const sessionRaw = localStorage.getItem('innova_session');
     if (!sessionRaw) {
       window.location.href = 'login.html';
     } else {
@@ -196,7 +196,7 @@
         try {
           await signOut(auth);
         } catch (_) {}
-        sessionStorage.removeItem('innova_session');
+        localStorage.removeItem('innova_session');
         window.location.href = 'login.html';
       }
 
@@ -224,7 +224,7 @@
       // Verificar que Firebase Auth sigue activo
       onAuthStateChanged(auth, (user) => {
         if (!user) {
-          sessionStorage.removeItem('innova_session');
+          localStorage.removeItem('innova_session');
           window.location.href = 'login.html';
         }
       });
