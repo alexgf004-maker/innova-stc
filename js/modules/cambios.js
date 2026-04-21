@@ -41,7 +41,8 @@ function errHtml(msg = 'Error al cargar datos') {
 }
 function mkOverlay(inner) {
   const ov = document.createElement('div');
-  ov.className = 'fixed inset-0 bg-black/50 z-50 flex flex-col items-center justify-center p-4';
+  ov.className = 'fixed inset-0 flex flex-col items-center justify-center p-4';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;';
   ov.innerHTML = '<div class="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">' + inner + '</div>';
   document.body.appendChild(ov);
   return ov;
