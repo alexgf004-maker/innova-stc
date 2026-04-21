@@ -1383,15 +1383,42 @@ function showConfirmarHecha(db, session, orden) {
   ov.querySelector('#ch-close').onclick = () => ov.remove();
 
   async function guardarHecha(actualizada) {
+    const btnSi = ov.querySelector('#ch-si');
+    const btnNo = ov.querySelector('#ch-no');
+    if (btnSi) { btnSi.disabled = true; btnSi.textContent = 'Guardando...'; }
+    if (btnNo) btnNo.disabled = true;
     try {
       let ref;
-      if (orden.id) { ref = doc(db, COL_ORDENES, orden.id); }
-      else { const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo','==',orden.wo))); if (snap.empty) throw new Error('No encontrada'); ref = snap.docs[0].ref; }
-      await updateDoc(ref, { estadoCampo: 'hecha', actualizadaDelsur: actualizada, fechaHecha: serverTimestamp(), hechaPor: session.displayName });
+      if (orden.id) {
+        ref = doc(db, COL_ORDENES, orden.id);
+      } else {
+        const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo','==',orden.wo)));
+        if (snap.empty) throw new Error('Orden no encontrada en Firestore');
+        ref = snap.docs[0].ref;
+        orden.id = snap.docs[0].id; // save id for future use
+      }
+      await updateDoc(ref, {
+        estadoCampo: 'hecha',
+        actualizadaDelsur: actualizada,
+        fechaHecha: serverTimestamp(),
+        hechaPor: session.displayName
+      });
       ov.remove();
       showToast('Orden marcada como realizada.', 'success');
-      if (orden.__marker) { orden.__marker.setMap(null); }
-    } catch(e) { showToast('Error al guardar.', 'error'); console.error(e); }
+      // Remove from map
+      if (orden.__marker) { try { orden.__marker.remove(); } catch(err) {} }
+      // Refresh listado if visible
+      const activeTab = document.querySelector('.ctab[data-ctab="listado"]');
+      if (activeTab) {
+        const destino = session.asignacionActual?.destino || null;
+        showListado(db, session, true, destino);
+      }
+    } catch(e) {
+      showToast('Error al guardar: ' + e.message, 'error');
+      console.error(e);
+      if (btnSi) { btnSi.disabled = false; btnSi.textContent = 'Sí'; }
+      if (btnNo) { btnNo.disabled = false; btnNo.textContent = 'No'; }
+    }
   }
 
   ov.querySelector('#ch-si').onclick = () => guardarHecha(true);
