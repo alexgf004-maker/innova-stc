@@ -185,8 +185,9 @@ function buildNav(session) {
     </a>
   `).join('');
 
-  // Bottom nav (móvil) — máximo 4 items para no saturar
+  // Bottom nav (móvil) — máximo 4 items + logout
   const bottomItems = visible.slice(0, 4);
+  const logoutIcon = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`;
   bottomNav.innerHTML = bottomItems.map(item => `
     <a data-route="${item.path}"
        class="nav-link bottom-link flex flex-col items-center gap-1 px-3 py-2 text-xs font-medium transition-colors cursor-pointer min-w-0"
@@ -194,7 +195,31 @@ function buildNav(session) {
       <span>${item.icon}</span>
       <span class="truncate">${item.label}</span>
     </a>
-  `).join('');
+  `).join('') + `
+    <button id="btn-logout-bottom" class="flex flex-col items-center gap-1 px-3 py-2 text-xs font-medium cursor-pointer min-w-0 text-red-500 bg-transparent border-none">
+      <span>${logoutIcon}</span>
+      <span class="truncate">Salir</span>
+    </button>`;
+
+  // Sidebar logout button
+  sidebarNav.innerHTML += `
+    <button id="btn-logout-sidebar" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-red-500 cursor-pointer bg-transparent border-none w-full mt-4">
+      ${logoutIcon}
+      <span>Cerrar sesión</span>
+    </button>`;
+
+  // Wire logout buttons
+  document.getElementById('btn-logout-bottom')?.addEventListener('click', doLogout);
+  document.getElementById('btn-logout-sidebar')?.addEventListener('click', doLogout);
+}
+
+function doLogout() {
+  if (!confirm('¿Cerrar sesión?')) return;
+  // Clear session
+  try { window.__firebase?.auth?.signOut(); } catch(e) {}
+  sessionStorage.clear();
+  localStorage.removeItem('innova_session');
+  window.location.href = '/innova-stc/login.html';
 }
 
 function updateActiveNav(currentPath) {
