@@ -368,7 +368,7 @@
           btnPin.disabled = false;
           return;
         }
-        sessionStorage.setItem('innova_session', JSON.stringify({
+        localStorage.setItem('innova_session', JSON.stringify({
           uid:                      profile.uid,
           username:                 profile.username,
           displayName:              profile.displayName,
@@ -404,7 +404,7 @@
       inputUsername.focus();
     });
 
-    const existing = sessionStorage.getItem('innova_session');
+    const existing = localStorage.getItem('innova_session');
     if (existing) window.location.href = 'index.html';
     inputUsername.focus();
   </script>
