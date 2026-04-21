@@ -216,96 +216,167 @@ async function showListado(db, session, isCampo, destino) {
     ordenes.sort(function(a, b) { return safeStr(a.cliente).localeCompare(safeStr(b.cliente)); });
 
     if (isCampo) {
-      // ── CAMPO LISTADO ──
-      const pendientes = ordenes.filter(function(o) { return o.estadoCampo !== 'hecha' && o.estadoCampo !== 'aprobada'; });
-      const realizadas = ordenes.filter(function(o) { return o.estadoCampo === 'hecha' || o.estadoCampo === 'aprobada'; });
+      let busqCampo = '';
 
-      function campoCard(o) {
+      const hoy    = new Date(); hoy.setHours(0,0,0,0);
+      const manana = new Date(hoy); manana.setDate(manana.getDate()+1);
+      function esHoyCampo(ts) {
+        if (!ts) return false;
+        const d = ts.toDate ? ts.toDate() : new Date(ts);
+        return d >= hoy && d < manana;
+      }
+      function fmtHoraCampo(ts) {
+        if (!ts) return '';
+        const d = ts.toDate ? ts.toDate() : new Date(ts);
+        return d.toLocaleTimeString('es-SV',{hour:'2-digit',minute:'2-digit'});
+      }
+
+      const realizadasHoy = ordenes.filter(function(o){ return o.estadoCampo==='hecha' && esHoyCampo(o.fechaHecha); });
+      const sinActualizar = realizadasHoy.filter(function(o){ return !o.actualizadaDelsur; });
+      const pendientes    = ordenes.filter(function(o){ return !o.estadoCampo && !esBloqueada(o,calendarioMap); });
+      const visitasList   = ordenes.filter(function(o){ return o.estadoCampo==='visita'; });
+      const bloqueadsList = ordenes.filter(function(o){ return esBloqueada(o,calendarioMap); });
+
+      function campoCard(o, showHora) {
         const bloqueada = esBloqueada(o, calendarioMap);
+        const sinAct    = o.estadoCampo === 'hecha' && !o.actualizadaDelsur;
         const realizada = o.estadoCampo === 'hecha' || o.estadoCampo === 'aprobada';
         const visita    = o.estadoCampo === 'visita';
-        const statusBadge = bloqueada
-          ? '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:#f3f4f6;color:#9ca3af">🔒 Bloqueada</span>'
-          : realizada && !o.actualizadaDelsur
-            ? '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:#FEF3C7;color:#B45309">✓ Realizada · Sin actualizar ⚠</span>'
-            : realizada
-              ? '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:#DCFCE7;color:#166534">✓ Realizada</span>'
-              : visita
-                ? '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:#111827;color:white">👁 Visita</span>'
-                : '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:#F0FDFA;color:#0F766E">Pendiente</span>';
+        const hora      = showHora ? fmtHoraCampo(o.fechaHecha || o.fechaVisita) : '';
 
-        const sinActualizar = (o.estadoCampo === 'hecha') && !o.actualizadaDelsur;
-        return '<div class="bg-white rounded-xl border ' + (sinActualizar ? 'border-yellow-300' : 'border-gray-200') + ' px-4 py-3 ' + (bloqueada ? 'opacity-60' : '') + '" data-wo="' + o.wo + '">' +
-          '<div class="flex items-start justify-between gap-2 mb-1 cursor-pointer" data-wo-tap="' + o.wo + '">' +
-            '<div class="min-w-0">' +
-              '<p style="font-size:10px;color:#9ca3af;font-family:monospace">' + safeStr(o.wo) + '</p>' +
+        const badge = bloqueada
+          ? '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;background:#f3f4f6;color:#9ca3af">🔒</span>'
+          : sinAct
+            ? '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;background:#FEF3C7;color:#B45309">⚠ Sin actualizar</span>'
+            : realizada
+              ? '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;background:#DCFCE7;color:#166534">✓ Realizada</span>'
+              : visita
+                ? '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;background:#111827;color:white">👁 Visita</span>'
+                : '';
+
+        return '<div class="bg-white rounded-xl border ' + (sinAct?'border-yellow-300':'border-gray-200') + ' px-4 py-3 ' + (bloqueada?'opacity-60':'') + '" data-wo="' + o.wo + '">' +
+          '<div class="flex items-start justify-between gap-2 mb-1">' +
+            '<div class="min-w-0 cursor-pointer" data-wo-tap="' + o.wo + '">' +
+              '<p style="font-size:10px;color:#9ca3af;font-family:monospace">' + safeStr(o.wo) + (hora?' · '+hora:'') + '</p>' +
               '<p class="text-sm font-semibold text-gray-900 leading-tight mt-0.5">' + safeStr(o.cliente) + '</p>' +
             '</div>' +
-            statusBadge +
+            badge +
           '</div>' +
-          '<p class="text-xs text-gray-500 truncate mb-1.5" data-wo-tap="' + o.wo + '">' + safeStr(o.direccion) + '</p>' +
-          (o.concepto ? '<span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 inline-block mb-1.5">' + safeStr(o.concepto) + '</span>' : '') +
-          (sinActualizar ?
-            '<button class="btn-actualizar w-full mt-1 py-2 rounded-xl text-xs font-bold border-2 border-yellow-400 text-yellow-700 bg-yellow-50" data-wo="' + o.wo + '" data-id="' + (o.id||'') + '">✓ Ya actualicé en Delsur</button>'
+          '<p class="text-xs text-gray-500 truncate cursor-pointer" data-wo-tap="' + o.wo + '">' + safeStr(o.direccion) + '</p>' +
+          (sinAct ?
+            '<button class="btn-actualizar w-full mt-2 py-2.5 rounded-xl text-xs font-bold border-2 border-yellow-400 text-yellow-700 bg-yellow-50" data-wo="' + o.wo + '" data-id="' + (o.id||'') + '">✓ Ya actualicé en Delsur</button>'
           : '') +
         '</div>';
       }
 
+      function renderCampoListado() {
+        const q = busqCampo.toLowerCase();
+        const listaEl = document.getElementById('campo-lista');
+        if (!listaEl) return;
+
+        if (q) {
+          const filtrado = ordenes.filter(function(o){
+            return safeStr(o.wo).toLowerCase().includes(q) ||
+                   safeStr(o.cliente).toLowerCase().includes(q) ||
+                   safeStr(o.direccion).toLowerCase().includes(q);
+          });
+          listaEl.innerHTML = filtrado.length
+            ? '<div class="space-y-2">' + filtrado.map(function(o){ return campoCard(o, false); }).join('') + '</div>'
+            : '<div class="text-center py-8 text-sm text-gray-400">Sin resultados</div>';
+        } else {
+          listaEl.innerHTML =
+            '<div class="space-y-5">' +
+              (sinActualizar.length > 0 ?
+                '<div>' +
+                  '<p style="font-size:11px;font-weight:700;color:#B45309;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">⚠ Falta actualizar en Delsur (' + sinActualizar.length + ')</p>' +
+                  '<div class="space-y-2">' + sinActualizar.map(function(o){ return campoCard(o, true); }).join('') + '</div>' +
+                '</div>'
+              : '') +
+              (realizadasHoy.filter(function(o){ return o.actualizadaDelsur; }).length > 0 ?
+                '<div>' +
+                  '<p style="font-size:11px;font-weight:700;color:#166534;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">✓ Realizadas hoy (' + realizadasHoy.filter(function(o){ return o.actualizadaDelsur; }).length + ')</p>' +
+                  '<div class="space-y-2">' + realizadasHoy.filter(function(o){ return o.actualizadaDelsur; }).map(function(o){ return campoCard(o, true); }).join('') + '</div>' +
+                '</div>'
+              : '') +
+              (visitasList.length > 0 ?
+                '<div>' +
+                  '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">👁 Visitas (' + visitasList.length + ')</p>' +
+                  '<div class="space-y-2">' + visitasList.map(function(o){ return campoCard(o, false); }).join('') + '</div>' +
+                '</div>'
+              : '') +
+              '<div>' +
+                '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Por realizar (' + pendientes.length + ')</p>' +
+                (pendientes.length > 0
+                  ? '<div class="space-y-2">' + pendientes.map(function(o){ return campoCard(o, false); }).join('') + '</div>'
+                  : '<div class="text-center py-4 bg-white rounded-xl border border-gray-200"><p class="text-sm font-semibold text-green-700">¡Todo realizado! 🎉</p></div>') +
+              '</div>' +
+              (bloqueadsList.length > 0 ?
+                '<div>' +
+                  '<p style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">🔒 Bloqueadas (' + bloqueadsList.length + ')</p>' +
+                  '<div class="space-y-2">' + bloqueadsList.map(function(o){ return campoCard(o, false); }).join('') + '</div>' +
+                '</div>'
+              : '') +
+            '</div>';
+        }
+
+        listaEl.querySelectorAll('[data-wo-tap]').forEach(function(el) {
+          el.addEventListener('click', function() {
+            const orden = ordenes.find(function(o){ return o.wo === el.dataset.woTap; });
+            if (orden) showDetalleOrden(db, session, orden, isCampo, calendarioMap);
+          });
+        });
+
+        listaEl.querySelectorAll('.btn-actualizar').forEach(function(btn) {
+          btn.addEventListener('click', async function(e) {
+            e.stopPropagation();
+            btn.textContent = 'Guardando...'; btn.disabled = true;
+            try {
+              const wo = btn.dataset.wo; const id = btn.dataset.id;
+              let ref;
+              if (id) { ref = doc(db, COL_ORDENES, id); }
+              else { const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo','==',wo))); if(snap.empty) throw new Error(); ref=snap.docs[0].ref; }
+              await updateDoc(ref, { actualizadaDelsur: true });
+              showToast('Actualizada en Delsur.', 'success');
+              showListado(db, session, true, destino);
+            } catch(e) { showToast('Error.','error'); btn.textContent='✓ Ya actualicé en Delsur'; btn.disabled=false; }
+          });
+        });
+      }
+
       content.innerHTML =
-        '<div class="space-y-4">' +
-          '<div class="grid grid-cols-3 gap-2">' +
-            '<div class="bg-white rounded-xl border border-gray-200 p-3 text-center">' +
-              '<p class="text-xl font-black" style="color:#0F766E">' + pendientes.filter(function(o){ return !esBloqueada(o,calendarioMap) && o.estadoCampo !== 'visita'; }).length + '</p>' +
-              '<p class="text-xs text-gray-400 mt-0.5">Pendientes</p>' +
+        '<div class="space-y-3">' +
+          '<div class="relative">' +
+            '<svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' +
+            '<input id="campo-buscar" type="text" placeholder="Buscar WO, cliente, dirección..." class="w-full border border-gray-200 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none"/>' +
+          '</div>' +
+          '<div class="grid grid-cols-4 gap-2">' +
+            '<div class="bg-white rounded-xl border ' + (sinActualizar.length>0?'border-yellow-300':'border-gray-200') + ' p-2.5 text-center">' +
+              '<p class="text-lg font-black" style="color:' + (sinActualizar.length>0?'#B45309':'#166534') + '">' + sinActualizar.length + '</p>' +
+              '<p class="text-xs text-gray-400 leading-tight">Sin act.</p>' +
             '</div>' +
-            '<div class="bg-white rounded-xl border border-gray-200 p-3 text-center">' +
-              '<p class="text-xl font-black" style="color:#166534">' + realizadas.length + '</p>' +
-              '<p class="text-xs text-gray-400 mt-0.5">Realizadas</p>' +
+            '<div class="bg-white rounded-xl border border-gray-200 p-2.5 text-center">' +
+              '<p class="text-lg font-black" style="color:#166534">' + realizadasHoy.length + '</p>' +
+              '<p class="text-xs text-gray-400 leading-tight">Hoy</p>' +
             '</div>' +
-            '<div class="bg-white rounded-xl border border-gray-200 p-3 text-center">' +
-              '<p class="text-xl font-black" style="color:#B45309">' + ordenes.filter(function(o){ return o.estadoCampo === 'visita'; }).length + '</p>' +
-              '<p class="text-xs text-gray-400 mt-0.5">Visitas</p>' +
+            '<div class="bg-white rounded-xl border border-gray-200 p-2.5 text-center">' +
+              '<p class="text-lg font-black" style="color:#0F766E">' + pendientes.length + '</p>' +
+              '<p class="text-xs text-gray-400 leading-tight">Pendientes</p>' +
+            '</div>' +
+            '<div class="bg-white rounded-xl border border-gray-200 p-2.5 text-center">' +
+              '<p class="text-lg font-black" style="color:#374151">' + visitasList.length + '</p>' +
+              '<p class="text-xs text-gray-400 leading-tight">Visitas</p>' +
             '</div>' +
           '</div>' +
-          (pendientes.length > 0 ?
-            '<div>' +
-              '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Por realizar (' + pendientes.length + ')</p>' +
-              '<div class="space-y-2">' + pendientes.map(campoCard).join('') + '</div>' +
-            '</div>'
-          : '<div class="text-center py-6 bg-white rounded-xl border border-gray-200"><p class="text-sm font-semibold text-green-700">¡Todo realizado! 🎉</p></div>') +
-          (realizadas.length > 0 ?
-            '<div>' +
-              '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Realizadas (' + realizadas.length + ')</p>' +
-              '<div class="space-y-2">' + realizadas.map(campoCard).join('') + '</div>' +
-            '</div>'
-          : '') +
+          '<div id="campo-lista"></div>' +
         '</div>';
 
-      // Wire tap on card (not on actualizar button)
-      content.querySelectorAll('[data-wo-tap]').forEach(function(el) {
-        el.addEventListener('click', function() {
-          const orden = ordenes.find(function(o) { return o.wo === el.dataset.woTap; });
-          if (orden) showDetalleOrden(db, session, orden, isCampo, calendarioMap);
-        });
+      renderCampoListado();
+
+      document.getElementById('campo-buscar').addEventListener('input', function(e) {
+        busqCampo = e.target.value.trim();
+        renderCampoListado();
       });
 
-      // Wire "ya actualicé" buttons
-      content.querySelectorAll('.btn-actualizar').forEach(function(btn) {
-        btn.addEventListener('click', async function(e) {
-          e.stopPropagation();
-          btn.textContent = 'Guardando...'; btn.disabled = true;
-          try {
-            const wo  = btn.dataset.wo;
-            const id  = btn.dataset.id;
-            let ref;
-            if (id) { ref = doc(db, COL_ORDENES, id); }
-            else { const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo','==',wo))); if (snap.empty) throw new Error(); ref = snap.docs[0].ref; }
-            await updateDoc(ref, { actualizadaDelsur: true });
-            showToast('Orden marcada como actualizada.', 'success');
-            showListado(db, session, true, destino);
-          } catch(e) { showToast('Error al guardar.','error'); btn.textContent = '✓ Ya actualicé en Delsur'; btn.disabled = false; }
-        });
-      });
 
     } else {
       // ── ADMIN LISTADO — Órdenes ──
