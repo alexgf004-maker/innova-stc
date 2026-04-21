@@ -1,27 +1,19 @@
-const CACHE = 'innova-stc-v2';
-const PRECACHE = [
-  '/innova-stc/',
-  '/innova-stc/index.html',
-  '/innova-stc/login.html',
-  '/innova-stc/css/base.css',
-  '/innova-stc/css/layout.css',
-  '/innova-stc/css/components.css',
-];
+const CACHE = 'innova-stc-v3';
 
-self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(PRECACHE)).then(() => self.skipWaiting()));
+self.addEventListener('install', function(e) {
+  self.skipWaiting();
 });
 
-self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
-});
-
-self.addEventListener('fetch', e => {
-  // Network first for Firebase and API calls
-  if (e.request.url.includes('firebase') || e.request.url.includes('googleapis') || e.request.url.includes('gstatic')) {
-    return;
-  }
-  e.respondWith(
-    fetch(e.request).catch(() => caches.match(e.request))
+self.addEventListener('activate', function(e) {
+  e.waitUntil(
+    caches.keys().then(function(keys) {
+      return Promise.all(keys.filter(function(k) { return k !== CACHE; }).map(function(k) { return caches.delete(k); }));
+    }).then(function() { return self.clients.claim(); })
   );
+});
+
+// Network only — no caching to avoid stale issues
+self.addEventListener('fetch', function(e) {
+  // Just pass through all requests
+  return;
 });
