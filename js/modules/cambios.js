@@ -1455,10 +1455,14 @@ async function _guardarHechaLogic(db, session, orden, actualizada, ov) {
     const sheet = document.getElementById('mapa-sheet');
     if (sheet) sheet.remove();
     showToast('Orden marcada como realizada.', 'success');
+    // Remove marker from map if present
     if (orden.__marker) { try { orden.__marker.remove(); } catch(e) {} }
-    // Refresh listado
-    const destino = session.asignacionActual?.destino || null;
-    showListado(db, session, true, destino);
+    // Only refresh listado if we're NOT in map view
+    const mapaContenedor = document.getElementById('mapa-contenedor');
+    if (!mapaContenedor) {
+      const destino = session.asignacionActual?.destino || null;
+      showListado(db, session, true, destino);
+    }
   } catch(e) {
     showToast('Error al guardar: ' + e.message, 'error');
     console.error(e);
