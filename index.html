@@ -232,13 +232,36 @@
   </script>
 
   <script>
+    // Service Worker
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function() {
         navigator.serviceWorker.register('/innova-stc/sw.js')
-          .then(function(reg) { console.log('SW registered'); })
+          .then(function(reg) { console.log('SW registered:', reg.scope); })
           .catch(function(err) { console.log('SW error:', err); });
       });
     }
+
+    // PWA Install prompt
+    let deferredPrompt;
+    window.addEventListener('beforeinstallprompt', function(e) {
+      e.preventDefault();
+      deferredPrompt = e;
+      // Show install button
+      const btn = document.getElementById('btn-install-pwa');
+      if (btn) btn.style.display = 'flex';
+    });
+
+    window.addEventListener('appinstalled', function() {
+      const btn = document.getElementById('btn-install-pwa');
+      if (btn) btn.style.display = 'none';
+      deferredPrompt = null;
+    });
+
+    window.__installPWA = function() {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then(function() { deferredPrompt = null; });
+    };
   </script>
 </body>
 </html>
