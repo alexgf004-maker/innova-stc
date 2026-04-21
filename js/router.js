@@ -211,6 +211,15 @@ function buildNav(session) {
   // Wire logout buttons
   document.getElementById('btn-logout-bottom')?.addEventListener('click', doLogout);
   document.getElementById('btn-logout-sidebar')?.addEventListener('click', doLogout);
+
+  // PWA install button in sidebar
+  const installBtn = document.createElement('button');
+  installBtn.id = 'btn-install-pwa';
+  installBtn.style.cssText = 'display:none;align-items:center;gap:8px;width:100%;padding:8px 12px;border-radius:10px;font-size:12px;font-weight:600;color:#0F766E;background:#F0FDFA;border:1px solid #99F6E4;cursor:pointer;margin-top:8px;';
+  installBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Instalar app';
+  installBtn.addEventListener('click', function() { window.__installPWA && window.__installPWA(); });
+  const sidebarNav = document.getElementById('sidebar-nav');
+  if (sidebarNav) sidebarNav.appendChild(installBtn);
 }
 
 function doLogout() {
