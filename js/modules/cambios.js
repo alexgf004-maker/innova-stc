@@ -144,17 +144,20 @@ function renderShell(container, session, db, isCampo, destino) {
     '</div>';
 
   // Bind tabs
-  setActiveTab('listado');
-  showListado(db, session, isCampo, destino);
+  const defaultTab = isAdmin ? 'panel' : 'listado';
+  setActiveTab(defaultTab);
+  if (isAdmin) showPanel(db, session);
+  else showListado(db, session, isCampo, destino);
 
   container.querySelectorAll('.ctab').forEach(function(btn) {
     btn.addEventListener('click', async function() {
       const t = btn.dataset.ctab;
       setActiveTab(t);
+      if (t === 'panel')       await showPanel(db, session);
       if (t === 'listado')     await showListado(db, session, isCampo, destino);
       if (t === 'mapa')        await showMapa(db, session, isCampo, destino);
       if (t === 'seguimiento') await showSeguimiento(db, session);
-      if (t === 'dia')          await showDia(db, session);
+      if (t === 'dia')         await showDia(db, session);
       if (t === 'bodega')      await showBodegaCampo(db, session, destino);
     });
   });
@@ -2149,6 +2152,250 @@ async function showDia(db, session) {
         } catch(e) { showToast('Error.','error'); btn.textContent='✗ Rechazar'; btn.disabled=false; }
       });
     });
+
+  } catch(e) { content.innerHTML = errHtml(); console.error(e); }
+}
+
+// ─────────────────────────────────────────
+// PANEL PRINCIPAL — Admin/Coordinadora
+// ─────────────────────────────────────────
+async function showPanel(db, session) {
+  const content = document.getElementById('cambios-content');
+  if (!content) return;
+  content.innerHTML = loading();
+
+  const META_DIA = 15;
+
+  try {
+    const [snapOrdenes, snapUsers, calendarioMap] = await Promise.all([
+      getDocs(collection(db, COL_ORDENES)),
+      getDocs(collection(db, 'users')),
+      getCalendarioMap(db),
+    ]);
+
+    const ordenes = snapOrdenes.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+    const users   = snapUsers.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); }).filter(function(u) { return u.active && u.role === 'campo'; });
+
+    // Date helpers
+    function startOf(date) { const d = new Date(date); d.setHours(0,0,0,0); return d; }
+    function endOf(date)   { const d = new Date(date); d.setHours(23,59,59,999); return d; }
+    function tsToDate(ts)  { if (!ts) return null; return ts.toDate ? ts.toDate() : new Date(ts); }
+    function inDay(ts, date) {
+      const d = tsToDate(ts);
+      if (!d) return false;
+      return d >= startOf(date) && d <= endOf(date);
+    }
+    function fmtHora(ts) {
+      const d = tsToDate(ts); if (!d) return '';
+      return d.toLocaleTimeString('es-SV', { hour:'2-digit', minute:'2-digit' });
+    }
+
+    const hoy   = new Date();
+    const ayer  = new Date(hoy); ayer.setDate(ayer.getDate()-1);
+    const hace2 = new Date(hoy); hace2.setDate(hace2.getDate()-2);
+
+    // Current fecha selected — default hoy
+    let fechaSelIdx = 0; // 0=hoy, 1=ayer, 2=hace2días
+    const fechas = [hoy, ayer, hace2];
+    const fechaLabels = ['Hoy', 'Ayer', hace2.toLocaleDateString('es-SV',{day:'2-digit',month:'short'})];
+
+    // Build pareja stats for today
+    function buildStats(fecha) {
+      const stats = {};
+      PAREJAS.forEach(function(p) {
+        const miembros = users.filter(function(u) { return u.asignacionActual?.area==='CAMBIOS' && u.asignacionActual?.destino===p; });
+        const ords     = ordenes.filter(function(o) { return o.pareja===p && o.estadoCampo!=='aprobada'; });
+        const realizadas = ords.filter(function(o) { return (o.estadoCampo==='hecha'||o.estadoCampo==='aprobada') && inDay(o.fechaHecha, fecha); });
+        const visitas    = ords.filter(function(o) { return o.estadoCampo==='visita' && inDay(o.fechaVisita, fecha); });
+        const sinAct     = ordenes.filter(function(o) { return o.pareja===p && o.estadoCampo==='hecha' && !o.actualizadaDelsur; });
+        stats[p] = { miembros, total: ords.length, realizadas: realizadas.length, visitas: visitas.length, sinAct, logros: realizadas.length + visitas.length };
+      });
+      return stats;
+    }
+
+    // All sin actualizar (not just today)
+    const todosSinAct = ordenes.filter(function(o) { return o.estadoCampo==='hecha' && !o.actualizadaDelsur; });
+
+    function renderContent() {
+      const fecha = fechas[fechaSelIdx];
+      const stats = buildStats(fecha);
+
+      // Realizadas on selected date
+      const realizadasFecha = ordenes.filter(function(o) {
+        return o.estadoCampo==='hecha' && inDay(o.fechaHecha, fecha);
+      }).sort(function(a,b) {
+        if (!a.actualizadaDelsur && b.actualizadaDelsur) return -1;
+        if (a.actualizadaDelsur && !b.actualizadaDelsur) return 1;
+        const ta = tsToDate(a.fechaHecha)||new Date(0);
+        const tb = tsToDate(b.fechaHecha)||new Date(0);
+        return tb - ta;
+      });
+
+      function parejaCard(p) {
+        const s = stats[p];
+        const color = PAREJA_COLORS[p];
+        const pct = Math.min(100, Math.round((s.logros/META_DIA)*100));
+        const barColor = pct>=100?'#166534':pct>=60?'#0F766E':pct>=30?'#B45309':'#C62828';
+        return '<div style="background:white;border:1px solid #e5e7eb;border-radius:12px;padding:12px">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
+            '<div style="display:flex;align-items:center;gap:6px">' +
+              '<span style="width:10px;height:10px;border-radius:50%;background:' + color + ';display:inline-block"></span>' +
+              '<p style="font-size:13px;font-weight:700;color:#111827">' + p + '</p>' +
+            '</div>' +
+            '<div style="display:flex;align-items:center;gap:6px">' +
+              (s.sinAct.length>0 ? '<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;background:#FEF3C7;color:#B45309">⚠ ' + s.sinAct.length + '</span>' : '') +
+              '<span style="font-size:11px;color:#6b7280">' + s.logros + '/' + META_DIA + '</span>' +
+            '</div>' +
+          '</div>' +
+          // Progress bar
+          '<div style="height:5px;background:#f3f4f6;border-radius:3px;overflow:hidden;margin-bottom:6px">' +
+            '<div style="height:100%;width:' + pct + '%;background:' + barColor + ';border-radius:3px"></div>' +
+          '</div>' +
+          // Members
+          (s.miembros.length>0 ?
+            '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">' +
+              s.miembros.map(function(u) {
+                return '<span style="font-size:11px;background:#f3f4f6;border-radius:20px;padding:2px 8px;color:#374151">' + safeStr(u.displayName||u.username) + '</span>';
+              }).join('') +
+            '</div>'
+          : '<p style="font-size:11px;color:#9ca3af;margin-bottom:6px">Sin personal asignado</p>') +
+          // Stats row
+          '<div style="display:flex;gap:10px">' +
+            '<p style="font-size:11px;color:#166534">✓ ' + s.realizadas + ' realizadas</p>' +
+            (s.visitas>0 ? '<p style="font-size:11px;color:#374151">👁 ' + s.visitas + ' visitas</p>' : '') +
+            '<p style="font-size:11px;color:#9ca3af">' + s.total + ' asignadas</p>' +
+          '</div>' +
+        '</div>';
+      }
+
+      function diaCard(o) {
+        const color = o.pareja ? (PAREJA_COLORS[o.pareja]||'#6B7280') : '#6B7280';
+        const sinAct = !o.actualizadaDelsur;
+        return '<div class="dia-card-p bg-white rounded-xl border ' + (sinAct?'border-yellow-300':'border-gray-200') + ' px-4 py-3 space-y-2" data-id="' + (o.id||'') + '" data-wo="' + o.wo + '">' +
+          '<div class="flex items-start justify-between gap-2">' +
+            '<div class="min-w-0">' +
+              '<p style="font-size:10px;color:#9ca3af;font-family:monospace">' + safeStr(o.wo) + (fmtHora(o.fechaHecha) ? ' · '+fmtHora(o.fechaHecha) : '') + '</p>' +
+              '<p class="text-sm font-semibold text-gray-900 leading-tight mt-0.5">' + safeStr(o.cliente) + '</p>' +
+            '</div>' +
+            (sinAct
+              ? '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:#FEF3C7;color:#B45309;white-space:nowrap;flex-shrink:0">⚠ Sin actualizar</span>'
+              : '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:#DCFCE7;color:#166534;white-space:nowrap;flex-shrink:0">✓ Actualizada</span>') +
+          '</div>' +
+          '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+            (o.pareja ? '<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;color:white;background:' + color + '">' + o.pareja + '</span>' : '') +
+            (o.hechaPor ? '<span class="text-xs text-gray-500">' + safeStr(o.hechaPor) + '</span>' : '') +
+          '</div>' +
+          '<div class="flex gap-2">' +
+            '<button class="btn-rechazar-p flex-1 py-2 rounded-xl border-2 border-gray-200 text-gray-600 text-xs font-bold">✗ Rechazar</button>' +
+            '<button class="btn-confirmar-p flex-1 py-2 rounded-xl text-white text-xs font-bold" style="background:#166534">✓ Confirmar</button>' +
+          '</div>' +
+        '</div>';
+      }
+
+      const inner = document.getElementById('panel-inner');
+      if (!inner) return;
+
+      inner.innerHTML =
+        '<div class="space-y-4">' +
+          // Parejas
+          '<div>' +
+            '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Por pareja</p>' +
+            '<div class="space-y-2">' + PAREJAS.map(parejaCard).join('') + '</div>' +
+          '</div>' +
+
+          // Sin actualizar
+          (todosSinAct.length>0 ?
+            '<div>' +
+              '<p style="font-size:11px;font-weight:700;color:#B45309;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">⚠ Sin actualizar en Delsur (' + todosSinAct.length + ')</p>' +
+              '<div class="space-y-2">' +
+                todosSinAct.sort(function(a,b){
+                  const ca = a.pareja||''; const cb = b.pareja||'';
+                  return ca.localeCompare(cb);
+                }).map(function(o) {
+                  const color = o.pareja ? (PAREJA_COLORS[o.pareja]||'#6B7280') : '#6B7280';
+                  return '<div style="background:white;border:1.5px solid #FDE68A;border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:8px">' +
+                    (o.pareja ? '<span style="width:8px;height:8px;border-radius:50%;background:' + color + ';display:inline-block;flex-shrink:0"></span>' : '') +
+                    '<div style="flex:1;min-width:0">' +
+                      '<p style="font-size:12px;font-weight:600;color:#111827">' + safeStr(o.cliente) + '</p>' +
+                      '<p style="font-size:11px;color:#9ca3af">' + safeStr(o.wo) + (o.hechaPor ? ' · ' + safeStr(o.hechaPor) : '') + '</p>' +
+                    '</div>' +
+                    (o.pareja ? '<span style="font-size:11px;font-weight:700;color:' + color + '">' + o.pareja + '</span>' : '') +
+                  '</div>';
+                }).join('') +
+              '</div>' +
+            '</div>'
+          : '<div style="background:#F0FDF4;border-radius:10px;padding:12px;text-align:center"><p style="font-size:13px;font-weight:600;color:#166534">✓ Todo actualizado en Delsur</p></div>') +
+
+          // Realizadas por fecha
+          '<div>' +
+            '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+              '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em">Realizadas · ' + fechaLabels[fechaSelIdx] + ' (' + realizadasFecha.length + ')</p>' +
+              '<button id="btn-reload-panel" style="padding:4px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:12px;color:#374151;background:white;cursor:pointer">↻</button>' +
+            '</div>' +
+            // Date selector
+            '<div style="display:flex;gap:6px;margin-bottom:10px">' +
+              fechaLabels.map(function(label, idx) {
+                const active = idx === fechaSelIdx;
+                return '<button class="fecha-btn text-xs font-semibold px-3 py-1.5 rounded-full border ' + (active?'border-transparent text-white':'border-gray-200 text-gray-600') + '" style="' + (active?'background:#1B4F8A':'') + '" data-idx="' + idx + '">' + label + '</button>';
+              }).join('') +
+            '</div>' +
+            (realizadasFecha.length>0 ?
+              '<div class="space-y-2">' + realizadasFecha.map(diaCard).join('') + '</div>'
+            : '<div class="text-center py-6 text-sm text-gray-400">Sin órdenes realizadas ' + fechaLabels[fechaSelIdx].toLowerCase() + '</div>') +
+          '</div>' +
+        '</div>';
+
+      // Wire fecha buttons
+      inner.querySelectorAll('.fecha-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          fechaSelIdx = parseInt(btn.dataset.idx);
+          renderContent();
+        });
+      });
+
+      // Wire reload
+      inner.querySelector('#btn-reload-panel')?.addEventListener('click', function() {
+        showPanel(db, session);
+      });
+
+      // Wire confirm/reject
+      inner.querySelectorAll('.dia-card-p').forEach(function(card) {
+        const id = card.dataset.id;
+        const wo = card.dataset.wo;
+
+        card.querySelector('.btn-confirmar-p')?.addEventListener('click', async function() {
+          const btn = card.querySelector('.btn-confirmar-p');
+          btn.textContent='...'; btn.disabled=true;
+          try {
+            let ref;
+            if (id) { ref = doc(db, COL_ORDENES, id); }
+            else { const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo','==',wo))); if(snap.empty) throw new Error(); ref=snap.docs[0].ref; }
+            await updateDoc(ref, { estadoCampo:'aprobada', aprobadoPor:session.displayName, fechaAprobacion:serverTimestamp() });
+            showToast('Orden confirmada.','success');
+            card.style.opacity='0.4'; card.style.pointerEvents='none';
+            setTimeout(function(){ showPanel(db, session); }, 600);
+          } catch(e) { showToast('Error.','error'); btn.textContent='✓ Confirmar'; btn.disabled=false; }
+        });
+
+        card.querySelector('.btn-rechazar-p')?.addEventListener('click', async function() {
+          const btn = card.querySelector('.btn-rechazar-p');
+          btn.textContent='...'; btn.disabled=true;
+          try {
+            let ref;
+            if (id) { ref = doc(db, COL_ORDENES, id); }
+            else { const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo','==',wo))); if(snap.empty) throw new Error(); ref=snap.docs[0].ref; }
+            await updateDoc(ref, { estadoCampo:null, actualizadaDelsur:null, fechaHecha:null, hechaPor:null });
+            showToast('Orden devuelta a campo.','success');
+            card.style.opacity='0.4'; card.style.pointerEvents='none';
+            setTimeout(function(){ showPanel(db, session); }, 600);
+          } catch(e) { showToast('Error.','error'); btn.textContent='✗ Rechazar'; btn.disabled=false; }
+        });
+      });
+    }
+
+    // Shell with inner container
+    content.innerHTML = '<div id="panel-inner"></div>';
+    renderContent();
 
   } catch(e) { content.innerHTML = errHtml(); console.error(e); }
 }
