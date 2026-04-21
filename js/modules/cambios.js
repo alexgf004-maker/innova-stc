@@ -1365,6 +1365,44 @@ function showDetalleOrden(db, session, orden, isCampo, calendarioMap) {
 // CONFIRMAR REALIZADA (campo)
 // ─────────────────────────────────────────
 function showConfirmarHecha(db, session, orden) {
+  // Use sheet if in map context, otherwise use overlay
+  const sheet = document.getElementById('mapa-sheet');
+  const sheetBody = document.getElementById('mapa-sheet-content');
+  const inMap = sheet && sheetBody;
+
+  if (inMap) {
+    // Show directly in the bottom sheet
+    sheetBody.innerHTML =
+      '<p style="font-size:13px;font-weight:600;color:#111827;margin-bottom:4px">Marcar como realizada</p>' +
+      '<p style="font-size:12px;color:#6b7280;margin-bottom:16px">WO ' + safeStr(orden.wo) + ' · ' + safeStr(orden.cliente) + '</p>' +
+      '<div style="background:#F0FDFA;border-radius:12px;padding:14px;margin-bottom:14px">' +
+        '<p style="font-size:13px;font-weight:600;color:#111827;margin-bottom:10px">¿Ya está actualizada en Delsur?</p>' +
+        '<div style="display:flex;gap:8px">' +
+          '<button id="ch-si" style="flex:1;padding:12px;background:#0F766E;color:white;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer">Sí</button>' +
+          '<button id="ch-no" style="flex:1;padding:12px;border:2px solid #e5e7eb;background:white;color:#374151;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer">No</button>' +
+        '</div>' +
+      '</div>' +
+      '<button id="ch-cancel" style="width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:12px;font-size:13px;color:#6b7280;background:white;cursor:pointer">Cancelar</button>';
+
+    document.getElementById('ch-cancel').addEventListener('click', function() {
+      // Restore original sheet content by reopening
+      sheet.remove();
+    });
+
+    async function guardarHechaSheet(actualizada) {
+      const btnSi = document.getElementById('ch-si');
+      const btnNo = document.getElementById('ch-no');
+      if (btnSi) { btnSi.disabled=true; btnSi.textContent='Guardando...'; }
+      if (btnNo) btnNo.disabled=true;
+      await _guardarHechaLogic(db, session, orden, actualizada);
+    }
+
+    document.getElementById('ch-si').addEventListener('click', () => guardarHechaSheet(true));
+    document.getElementById('ch-no').addEventListener('click', () => guardarHechaSheet(false));
+    return;
+  }
+
+  // Fallback: overlay (for listado context)
   const ov = mkOverlay(
     '<div class="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">' +
       '<h2 class="font-semibold text-gray-900">Marcar como realizada</h2>' +
@@ -1386,44 +1424,45 @@ function showConfirmarHecha(db, session, orden) {
   async function guardarHecha(actualizada) {
     const btnSi = ov.querySelector('#ch-si');
     const btnNo = ov.querySelector('#ch-no');
-    if (btnSi) { btnSi.disabled = true; btnSi.textContent = 'Guardando...'; }
-    if (btnNo) btnNo.disabled = true;
-    try {
-      let ref;
-      if (orden.id) {
-        ref = doc(db, COL_ORDENES, orden.id);
-      } else {
-        const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo','==',orden.wo)));
-        if (snap.empty) throw new Error('Orden no encontrada en Firestore');
-        ref = snap.docs[0].ref;
-        orden.id = snap.docs[0].id; // save id for future use
-      }
-      await updateDoc(ref, {
-        estadoCampo: 'hecha',
-        actualizadaDelsur: actualizada,
-        fechaHecha: serverTimestamp(),
-        hechaPor: session.displayName
-      });
-      ov.remove();
-      showToast('Orden marcada como realizada.', 'success');
-      // Remove from map
-      if (orden.__marker) { try { orden.__marker.remove(); } catch(err) {} }
-      // Refresh listado if visible
-      const activeTab = document.querySelector('.ctab[data-ctab="listado"]');
-      if (activeTab) {
-        const destino = session.asignacionActual?.destino || null;
-        showListado(db, session, true, destino);
-      }
-    } catch(e) {
-      showToast('Error al guardar: ' + e.message, 'error');
-      console.error(e);
-      if (btnSi) { btnSi.disabled = false; btnSi.textContent = 'Sí'; }
-      if (btnNo) { btnNo.disabled = false; btnNo.textContent = 'No'; }
-    }
+    if (btnSi) { btnSi.disabled=true; btnSi.textContent='Guardando...'; }
+    if (btnNo) btnNo.disabled=true;
+    await _guardarHechaLogic(db, session, orden, actualizada, ov);
   }
 
   ov.querySelector('#ch-si').onclick = () => guardarHecha(true);
   ov.querySelector('#ch-no').onclick = () => guardarHecha(false);
+}
+
+async function _guardarHechaLogic(db, session, orden, actualizada, ov) {
+  try {
+    let ref;
+    if (orden.id) {
+      ref = doc(db, COL_ORDENES, orden.id);
+    } else {
+      const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo','==',orden.wo)));
+      if (snap.empty) throw new Error('Orden no encontrada');
+      ref = snap.docs[0].ref;
+      orden.id = snap.docs[0].id;
+    }
+    await updateDoc(ref, {
+      estadoCampo: 'hecha',
+      actualizadaDelsur: actualizada,
+      fechaHecha: serverTimestamp(),
+      hechaPor: session.displayName
+    });
+    if (ov) ov.remove();
+    // Remove sheet if in map
+    const sheet = document.getElementById('mapa-sheet');
+    if (sheet) sheet.remove();
+    showToast('Orden marcada como realizada.', 'success');
+    if (orden.__marker) { try { orden.__marker.remove(); } catch(e) {} }
+    // Refresh listado
+    const destino = session.asignacionActual?.destino || null;
+    showListado(db, session, true, destino);
+  } catch(e) {
+    showToast('Error al guardar: ' + e.message, 'error');
+    console.error(e);
+  }
 }
 
 // ─────────────────────────────────────────
