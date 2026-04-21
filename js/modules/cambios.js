@@ -251,7 +251,7 @@ async function showListado(db, session, isCampo, destino) {
             : realizada
               ? '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;background:#DCFCE7;color:#166534">✓ Realizada</span>'
               : visita
-                ? '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;background:#111827;color:white">👁 Visita</span>'
+                ? '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;background:#111827;color:white">Visita</span>'
                 : '';
 
         return '<div class="bg-white rounded-xl border ' + (sinAct?'border-yellow-300':'border-gray-200') + ' px-4 py-3 ' + (bloqueada?'opacity-60':'') + '" data-wo="' + o.wo + '">' +
@@ -300,7 +300,7 @@ async function showListado(db, session, isCampo, destino) {
               : '') +
               (visitasList.length > 0 ?
                 '<div>' +
-                  '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">👁 Visitas (' + visitasList.length + ')</p>' +
+                  '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Visitas (' + visitasList.length + ')</p>' +
                   '<div class="space-y-2">' + visitasList.map(function(o){ return campoCard(o, false); }).join('') + '</div>' +
                 '</div>'
               : '') +
@@ -1173,7 +1173,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
     const hecha     = o.estadoCampo === 'hecha' || o.estadoCampo === 'aprobada';
     const isAdminUser = !isCampo;
     const statusColor = bloqueada ? '#9CA3AF' : hecha ? '#166534' : o.estadoCampo === 'visita' ? '#374151' : '#0F766E';
-    const statusLabel = bloqueada ? '🔒 Bloqueada' : hecha ? '✓ Realizada' : o.estadoCampo === 'visita' ? '👁 Visita' : '● Disponible';
+    const statusLabel = bloqueada ? '🔒 Bloqueada' : hecha ? '✓ Realizada' : o.estadoCampo === 'visita' ? 'Visita' : '● Disponible';
 
     function row(label, val) {
       if (!val) return '';
