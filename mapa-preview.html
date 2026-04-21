@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Mapa Preview — Leaflet</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: system-ui, sans-serif; background:#f5f5f5; }
+  #app { display:flex; flex-direction:column; height:100vh; max-width:430px; margin:0 auto; background:white; }
+  #header { padding:12px 16px; background:#1B4F8A; color:white; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+  #header h1 { font-size:15px; font-weight:700; }
+  #header p { font-size:11px; opacity:.7; margin-top:1px; }
+  #map-wrap { position:relative; flex:1; }
+  #map { width:100%; height:100%; }
+  /* Bottom sheet */
+  #sheet { position:absolute; bottom:0; left:0; right:0; background:white; border-radius:16px 16px 0 0; box-shadow:0 -4px 24px rgba(0,0,0,0.15); z-index:1000; display:none; max-height:65%; overflow-y:auto; }
+  #sheet-handle { display:flex; align-items:center; justify-content:space-between; padding:10px 16px 4px; }
+  #sheet-handle-bar { width:36px; height:4px; background:#e5e7eb; border-radius:2px; }
+  #sheet-close { width:28px; height:28px; border-radius:50%; background:#f3f4f6; border:none; cursor:pointer; font-size:14px; color:#6b7280; }
+  #sheet-body { padding:0 16px 24px; }
+  .row { display:flex; padding:8px 0; border-bottom:1px solid #f3f4f6; gap:12px; align-items:baseline; }
+  .row-label { font-size:11px; color:#9ca3af; min-width:80px; flex-shrink:0; }
+  .row-val { font-size:13px; color:#111827; font-weight:500; flex:1; word-break:break-word; }
+  .sheet-name { font-size:17px; font-weight:800; color:#111827; line-height:1.2; margin-bottom:14px; }
+  .sheet-wo { font-size:10px; color:#9ca3af; font-family:monospace; margin-bottom:3px; }
+  .sheet-badge { font-size:11px; font-weight:600; padding:4px 10px; border-radius:20px; white-space:nowrap; flex-shrink:0; }
+  .btns { display:flex; flex-direction:column; gap:8px; margin-top:14px; }
+  .btn-maps { display:flex; align-items:center; justify-content:center; gap:6px; padding:12px; border:1.5px solid #e5e7eb; border-radius:12px; font-size:13px; font-weight:500; color:#374151; text-decoration:none; }
+  .btn-ruta { padding:12px; background:#0F766E; color:white; border:none; border-radius:12px; font-size:13px; font-weight:600; cursor:pointer; }
+  /* Assign panel */
+  #assign-panel { display:none; flex-direction:column; gap:8px; background:white; border:1px solid #e5e7eb; border-radius:12px; padding:12px; margin:8px; }
+  #assign-panel.visible { display:flex; }
+  .btn-assign-mode { position:absolute; top:10px; left:10px; z-index:999; background:white; border:1.5px solid #e5e7eb; border-radius:10px; padding:8px 14px; font-size:13px; font-weight:600; color:#1B4F8A; box-shadow:0 2px 8px rgba(0,0,0,0.15); cursor:pointer; }
+  .btn-assign-mode.active { background:#1B4F8A; color:white; }
+  .pareja-btn { flex:1; padding:10px; color:white; border:none; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer; }
+  .draw-btn { flex:1; padding:9px; border:1.5px solid #e5e7eb; border-radius:10px; font-size:12px; color:#374151; background:white; cursor:pointer; }
+  .your-loc { width:14px; height:14px; border-radius:50%; background:#2563EB; border:3px solid white; box-shadow:0 0 0 3px rgba(37,99,235,.3); display:inline-block; }
+  .legend { position:absolute; bottom:12px; right:12px; z-index:999; background:white; border-radius:10px; padding:8px 10px; box-shadow:0 2px 8px rgba(0,0,0,0.15); font-size:11px; }
+  .legend-item { display:flex; align-items:center; gap:6px; margin-bottom:4px; }
+  .legend-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="header">
+    <div>
+      <h1>Cambio de Medidores</h1>
+      <p>Mapa interactivo · Vista previa Leaflet</p>
+    </div>
+    <span style="font-size:11px;background:rgba(255,255,255,.15);padding:4px 8px;border-radius:8px">Pareja 1</span>
+  </div>
+  <div id="map-wrap">
+    <div id="map"></div>
+    <!-- Assign mode button -->
+    <button class="btn-assign-mode" id="btn-assign">🗂 Asignar</button>
+    <!-- Legend -->
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#1B4F8A"></div>Pareja 1</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#EA580C"></div>Pareja 2</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#7C3AED"></div>Pareja 3</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#DB2777"></div>Pareja 4</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#111827"></div>Visita</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#9CA3AF"></div>Bloqueada</div>
+      <div class="legend-item"><span class="your-loc"></span>Tu posición</div>
+    </div>
+    <!-- Bottom sheet -->
+    <div id="sheet">
+      <div id="sheet-handle">
+        <div id="sheet-handle-bar"></div>
+        <button id="sheet-close">✕</button>
+      </div>
+      <div id="sheet-body"></div>
+    </div>
+  </div>
+  <!-- Assign panel -->
+  <div id="assign-panel">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <p id="assign-count" style="font-size:13px;font-weight:600;color:#374151">0 órdenes seleccionadas</p>
+      <button id="btn-clear" style="font-size:12px;color:#6b7280;background:none;border:1px solid #e5e7eb;border-radius:8px;padding:4px 10px;cursor:pointer">Limpiar</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+      <button class="pareja-btn" style="background:#1B4F8A" data-pareja="Pareja 1">Pareja 1</button>
+      <button class="pareja-btn" style="background:#EA580C" data-pareja="Pareja 2">Pareja 2</button>
+      <button class="pareja-btn" style="background:#7C3AED" data-pareja="Pareja 3">Pareja 3</button>
+      <button class="pareja-btn" style="background:#DB2777" data-pareja="Pareja 4">Pareja 4</button>
+    </div>
+    <button id="btn-desasignar" style="width:100%;padding:9px;background:#FEF2F2;color:#C62828;border:1.5px solid #FECACA;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">✕ Desasignar</button>
+    <div style="display:flex;gap:6px">
+      <button class="draw-btn" id="btn-rect">⬜ Rectángulo</button>
+      <button class="draw-btn" id="btn-poly">✏️ Polígono</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+<script>
+// Sample orders — simulating real data
+const PAREJA_COLORS = { 'Pareja 1':'#1B4F8A','Pareja 2':'#EA580C','Pareja 3':'#7C3AED','Pareja 4':'#DB2877' };
+const ORDENES = [
+  { wo:'802357818', cliente:'VILMA LEMUS DE JIMENEZ', direccion:'CASERIO LA LAGUNETA, CALLE PRINCIPAL', serie:'279688-HXE12', dsct:'DS113111', mru:'LL_03_01', concepto:'CMM - Anomalias', lat:13.48504, lng:-89.21224, pareja:'Pareja 1', estado:null },
+  { wo:'802357819', cliente:'CARLOS MARTINEZ', direccion:'COL. SAN JOSE, CALLE 5, CASA 12', serie:'280001-ABC', dsct:'DS113112', mru:'LL_03_01', concepto:'CMM - Normal', lat:13.48700, lng:-89.21500, pareja:'Pareja 1', estado:'visita' },
+  { wo:'802357820', cliente:'MARIA GONZALEZ', direccion:'RESIDENCIAL EL BOSQUE, BLOQUE B', serie:'281234-XYZ', dsct:'DS113113', mru:'LL_03_02', concepto:'CMM - Anomalias', lat:13.48200, lng:-89.20900, pareja:'Pareja 2', estado:null },
+  { wo:'802357821', cliente:'JOSE HERNANDEZ', direccion:'BARRIO SANTA LUCIA, CALLE REAL', serie:'282345-DEF', dsct:'DS113114', mru:'LL_03_02', concepto:'CMM - Normal', lat:13.48900, lng:-89.21800, pareja:'Pareja 2', estado:'hecha' },
+  { wo:'802357822', cliente:'ANA FLORES', direccion:'URB. LOS PINOS, CASA 45', serie:'283456-GHI', dsct:'DS113115', mru:'LL_04_01', concepto:'CMM - Anomalias', lat:13.48100, lng:-89.21100, pareja:'Pareja 3', estado:null },
+  { wo:'802357823', cliente:'PEDRO RAMIREZ', direccion:'COL. NUEVA ESPERANZA, CALLE 3', serie:'284567-JKL', dsct:'DS113116', mru:'LL_04_01', concepto:'CMM - Normal', lat:13.48600, lng:-89.20700, pareja:'Pareja 4', estado:null },
+  { wo:'802357824', cliente:'LUCIA PEREZ', direccion:'CASERIO EL CARMEN, ENTRADA', serie:'285678-MNO', dsct:'DS113117', mru:'LL_03_01', concepto:'CMM - Bloqueada', lat:13.48400, lng:-89.21600, pareja:null, estado:'bloqueada' },
+];
+
+function getColor(o) {
+  if (o.estado === 'bloqueada') return '#9CA3AF';
+  if (o.estado === 'visita') return '#111827';
+  if (o.pareja) return PAREJA_COLORS[o.pareja] || '#6B7280';
+  return '#6B7280';
+}
+
+function makeIcon(color, selected) {
+  const size = selected ? 18 : 13;
+  const stroke = selected ? '#FBBF24' : 'white';
+  const sw = selected ? 3 : 2;
+  return L.divIcon({
+    className:'',
+    html: `<svg width="${size*2}" height="${size*2}" viewBox="0 0 ${size*2} ${size*2}" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="${size}" cy="${size}" r="${size-sw}" fill="${color}" stroke="${stroke}" stroke-width="${sw}"/>
+    </svg>`,
+    iconSize:[size*2,size*2], iconAnchor:[size,size]
+  });
+}
+
+// Init map centered on El Salvador sample area
+const map = L.map('map', { zoomControl:true }).setView([13.486, -89.212], 14);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution:'© OpenStreetMap', maxZoom:19
+}).addTo(map);
+
+// User location
+let userMarker = null;
+if (navigator.geolocation) {
+  navigator.geolocation.getCurrentPosition(function(pos) {
+    const latlng = [pos.coords.latitude, pos.coords.longitude];
+    userMarker = L.circleMarker(latlng, {
+      radius:9, fillColor:'#2563EB', fillOpacity:1, color:'white', weight:2.5
+    }).addTo(map).bindTooltip('Tu ubicación', {permanent:false});
+    map.setView(latlng, 14);
+  }, function() {});
+}
+
+// Place markers
+let assignMode = false;
+let selectedWOs = new Set();
+const markerMap = {};
+
+function renderMarkers() {
+  ORDENES.forEach(function(o) {
+    if (markerMap[o.wo]) { markerMap[o.wo].remove(); }
+    const color = getColor(o);
+    const sel   = selectedWOs.has(o.wo);
+    const m = L.marker([o.lat, o.lng], { icon: makeIcon(color, sel) }).addTo(map);
+    m._orden = o;
+    m._color = color;
+    m.on('click', function(e) {
+      L.DomEvent.stopPropagation(e);
+      if (assignMode) {
+        if (selectedWOs.has(o.wo)) selectedWOs.delete(o.wo);
+        else selectedWOs.add(o.wo);
+        renderMarkers();
+        updateAssignCount();
+      } else {
+        openSheet(o, m);
+      }
+    });
+    markerMap[o.wo] = m;
+  });
+}
+renderMarkers();
+
+// Close sheet on map click
+map.on('click', closeSheet);
+
+function closeSheet() {
+  document.getElementById('sheet').style.display = 'none';
+}
+
+document.getElementById('sheet-close').addEventListener('click', closeSheet);
+
+function openSheet(o, m) {
+  const sheet = document.getElementById('sheet');
+  const body  = document.getElementById('sheet-body');
+  const color = getColor(o);
+  const statusLabel = o.estado === 'bloqueada' ? '🔒 Bloqueada' : o.estado === 'hecha' ? '✓ Realizada' : o.estado === 'visita' ? '👁 Visita' : '● Disponible';
+  const statusColor = o.estado === 'bloqueada' ? '#9CA3AF' : o.estado === 'hecha' ? '#166534' : o.estado === 'visita' ? '#374151' : '#0F766E';
+
+  function row(label, val) {
+    if (!val) return '';
+    return `<div class="row"><span class="row-label">${label}</span><span class="row-val">${val}</span></div>`;
+  }
+
+  body.innerHTML = `
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:14px">
+      <div style="flex:1;min-width:0">
+        <p class="sheet-wo">${o.wo}</p>
+        <p class="sheet-name">${o.cliente}</p>
+      </div>
+      <span class="sheet-badge" style="background:${statusColor}18;color:${statusColor}">${statusLabel}</span>
+    </div>
+    <div style="margin-bottom:14px">
+      ${row('Dirección', o.direccion)}
+      ${row('Medidor', o.serie)}
+      ${row('DS', o.dsct)}
+      ${row('MRU', o.mru)}
+      ${row('Concepto', o.concepto)}
+      ${o.pareja ? row('Pareja', o.pareja) : ''}
+    </div>
+    <div class="btns">
+      <a class="btn-maps" href="https://www.google.com/maps/dir/?api=1&destination=${o.lat},${o.lng}" target="_blank">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+        Abrir en Google Maps
+      </a>
+      ${o.estado !== 'bloqueada' && o.estado !== 'hecha' ? `
+      <div style="display:flex;gap:8px">
+        <button style="flex:1;padding:11px;border:2px solid #e5e7eb;border-radius:12px;font-size:13px;font-weight:600;color:#374151;background:white;cursor:pointer">Visita</button>
+        <button style="flex:1;padding:11px;background:#166534;color:white;border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer">✓ Realizada</button>
+      </div>` : ''}
+    </div>`;
+
+  sheet.style.display = 'block';
+}
+
+// Assign mode
+let drawControl = null;
+const drawnItems = new L.FeatureGroup().addTo(map);
+
+document.getElementById('btn-assign').addEventListener('click', function() {
+  assignMode = !assignMode;
+  this.classList.toggle('active', assignMode);
+  this.textContent = assignMode ? '✕ Salir' : '🗂 Asignar';
+  document.getElementById('assign-panel').classList.toggle('visible', assignMode);
+  if (assignMode) {
+    if (!drawControl) {
+      drawControl = new L.Control.Draw({
+        draw: {
+          rectangle: { shapeOptions:{ color:'#FBBF24', fillOpacity:.15 } },
+          polygon:   { shapeOptions:{ color:'#FBBF24', fillOpacity:.15 } },
+          polyline:false, circle:false, marker:false, circlemarker:false
+        },
+        edit: { featureGroup: drawnItems, edit:false, remove:false }
+      });
+      map.addControl(drawControl);
+      map.on(L.Draw.Event.CREATED, function(e) {
+        const layer = e.layer;
+        drawnItems.addLayer(layer);
+        ORDENES.forEach(function(o) {
+          const latlng = L.latLng(o.lat, o.lng);
+          let inside = false;
+          if (e.layerType === 'rectangle' || e.layerType === 'polygon') {
+            inside = layer.getBounds().contains(latlng);
+          }
+          if (inside) { selectedWOs.add(o.wo); }
+        });
+        renderMarkers();
+        updateAssignCount();
+      });
+    }
+  } else {
+    selectedWOs.clear();
+    drawnItems.clearLayers();
+    renderMarkers();
+    updateAssignCount();
+  }
+});
+
+document.getElementById('btn-rect').addEventListener('click', function() {
+  new L.Draw.Rectangle(map, { shapeOptions:{ color:'#FBBF24', fillOpacity:.15 } }).enable();
+});
+document.getElementById('btn-poly').addEventListener('click', function() {
+  new L.Draw.Polygon(map, { shapeOptions:{ color:'#FBBF24', fillOpacity:.15 } }).enable();
+});
+document.getElementById('btn-clear').addEventListener('click', function() {
+  selectedWOs.clear(); drawnItems.clearLayers(); renderMarkers(); updateAssignCount();
+});
+document.querySelectorAll('.pareja-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    const p = btn.dataset.pareja;
+    selectedWOs.forEach(function(wo) {
+      const o = ORDENES.find(function(x){ return x.wo === wo; });
+      if (o) o.pareja = p;
+    });
+    selectedWOs.clear(); drawnItems.clearLayers(); renderMarkers(); updateAssignCount();
+    alert('✓ Asignadas a ' + p);
+  });
+});
+document.getElementById('btn-desasignar').addEventListener('click', function() {
+  selectedWOs.forEach(function(wo) {
+    const o = ORDENES.find(function(x){ return x.wo === wo; });
+    if (o) o.pareja = null;
+  });
+  selectedWOs.clear(); drawnItems.clearLayers(); renderMarkers(); updateAssignCount();
+});
+
+function updateAssignCount() {
+  document.getElementById('assign-count').textContent = selectedWOs.size + ' orden' + (selectedWOs.size !== 1 ? 'es' : '') + ' seleccionada' + (selectedWOs.size !== 1 ? 's' : '');
+}
+</script>
+</body>
+</html>
