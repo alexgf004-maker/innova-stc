@@ -949,15 +949,39 @@ async function parseExcelCalendario(file) {
 // ─────────────────────────────────────────
 // MAPA
 // ─────────────────────────────────────────
-const GMAPS_KEY = 'AIzaSyAjaEXeu_4PDedaZhLfrwWvatu5RN9q1SU';
-
-function loadGoogleMaps() {
+// ─────────────────────────────────────────
+// MAPA — Leaflet + Google Hybrid
+// ─────────────────────────────────────────
+function loadLeaflet() {
   return new Promise(function(resolve) {
-    if (window.google && window.google.maps) { resolve(); return; }
-    window.__gmapsCallback = resolve;
+    if (window.L) { resolve(); return; }
+    // CSS
+    if (!document.getElementById('leaflet-css')) {
+      const link = document.createElement('link');
+      link.id = 'leaflet-css';
+      link.rel = 'stylesheet';
+      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      document.head.appendChild(link);
+    }
+    // Draw CSS
+    if (!document.getElementById('leaflet-draw-css')) {
+      const link = document.createElement('link');
+      link.id = 'leaflet-draw-css';
+      link.rel = 'stylesheet';
+      link.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css';
+      document.head.appendChild(link);
+    }
+    // Leaflet JS
     const s = document.createElement('script');
-    s.src = 'https://maps.googleapis.com/maps/api/js?key=' + GMAPS_KEY + '&callback=__gmapsCallback&libraries=places,geometry,drawing';
-    s.async = true;
+    s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    s.onload = function() {
+      // Leaflet.draw
+      const sd = document.createElement('script');
+      sd.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js';
+      sd.onload = resolve;
+      sd.onerror = resolve;
+      document.head.appendChild(sd);
+    };
     document.head.appendChild(s);
   });
 }
@@ -984,22 +1008,12 @@ async function showMapa(db, session, isCampo, destino) {
       return;
     }
 
-    if (!document.getElementById('cambios-spin-style')) {
-      const s = document.createElement('style'); s.id = 'cambios-spin-style';
-      s.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
-      document.head.appendChild(s);
-    }
-
     content.innerHTML =
       '<div id="mapa-wrapper" style="position:relative;width:100%;height:calc(100vh - 220px);min-height:400px;">' +
-        '<div id="mapa-contenedor" style="width:100%;height:100%;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">' +
-          '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#9ca3af;font-size:14px;gap:8px">' +
-            '<svg style="width:16px;height:16px;animation:spin 1s linear infinite" viewBox="0 0 24 24" fill="none"><circle opacity=".25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path opacity=".75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>Cargando mapa...' +
-          '</div>' +
-        '</div>' +
+        '<div id="mapa-contenedor" style="width:100%;height:100%;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;"></div>' +
       '</div>';
 
-    await loadGoogleMaps();
+    await loadLeaflet();
     initMapaCambios(conCoords, calendarioMap, session, isCampo, db);
 
   } catch(e) { content.innerHTML = errHtml(); console.error(e); }
@@ -1007,18 +1021,35 @@ async function showMapa(db, session, isCampo, destino) {
 
 function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
   const contenedor = document.getElementById('mapa-contenedor');
-  const wrapper    = document.getElementById('mapa-wrapper') || contenedor.parentElement;
+  const wrapper    = document.getElementById('mapa-wrapper');
   if (!contenedor) return;
-  let sheet = null;
-  let sheetBody = null;
 
+  // Destroy existing map
+  if (contenedor._leaflet_id) { contenedor._leaflet_id = null; contenedor.innerHTML = ''; }
+
+  const L = window.L;
+  let sheet = null, sheetBody = null;
+  let assignMode = false, selectedWOs = new Set(), drawnItems = null, drawControl = null;
+  let userMarker = null;
+
+  const center = [safeNum(ordenes[0].latitud), safeNum(ordenes[0].longitud)];
+  const map = L.map(contenedor, { zoomControl: true }).setView(center, 14);
+
+  // Google Maps Hybrid tiles
+  L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+    attribution: '© Google Maps', maxZoom: 20
+  }).addTo(map);
+
+  // Close sheet on map click
+  map.on('click', closeSheet);
+
+  // ── Sheet helpers ──
   function createSheet() {
-    // Remove existing sheet if any
     const old = document.getElementById('mapa-sheet');
     if (old) old.remove();
     const el = document.createElement('div');
     el.id = 'mapa-sheet';
-    el.style.cssText = 'position:absolute;bottom:0;left:0;right:0;background:white;border-radius:16px 16px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,0.15);z-index:10;max-height:70%;overflow-y:auto;';
+    el.style.cssText = 'position:absolute;bottom:0;left:0;right:0;background:white;border-radius:16px 16px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,0.15);z-index:1000;max-height:65%;overflow-y:auto;';
     el.innerHTML =
       '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px 4px">' +
         '<div style="width:36px;height:4px;background:#e5e7eb;border-radius:2px"></div>' +
@@ -1029,40 +1060,18 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
     sheet = el;
     sheetBody = el.querySelector('#mapa-sheet-content');
     el.querySelector('#sheet-close-btn').addEventListener('click', function(e) {
-      e.stopPropagation();
-      closeSheet();
+      e.stopPropagation(); closeSheet();
     });
-    return el;
   }
-
-  const G   = google.maps;
-  const map = new G.Map(contenedor, {
-    zoom: 13,
-    center: { lat: safeNum(ordenes[0].latitud), lng: safeNum(ordenes[0].longitud) },
-    mapTypeId: 'hybrid',
-    mapTypeControl: false, fullscreenControl: false, streetViewControl: false,
-    zoomControlOptions: { position: G.ControlPosition.RIGHT_CENTER },
-  });
-
-  const directionsService  = new G.DirectionsService();
-  const directionsRenderer = new G.DirectionsRenderer({ map, suppressMarkers: true, polylineOptions: { strokeColor: '#0F766E', strokeWeight: 5, strokeOpacity: 0.85 } });
-
-  let userMarker = null, activeMarker = null, assignMode = false, selectedWOs = new Set(), drawnShapes = [], drawingMgr = null, routeActive = false;
-
-  map.addListener('click', function() { closeSheet(); });
 
   function closeSheet() {
     if (sheet) { sheet.remove(); sheet = null; sheetBody = null; }
-    if (activeMarker) { activeMarker.setIcon(buildIcon(activeMarker.__color, false, assignMode)); activeMarker = null; }
+    if (activeMarker) { activeMarker.setIcon(makeIcon(activeMarker._color, false, assignMode)); activeMarker = null; }
   }
 
-  function clearRoute() {
-    directionsRenderer.setDirections({ routes: [] }); routeActive = false;
-    const cb = document.getElementById('sheet-cancel-ruta'); if (cb) cb.style.display = 'none';
-    const rb = document.getElementById('sheet-ruta');
-    if (rb) { rb.disabled = false; rb.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>Trazar ruta'; }
-  }
+  let activeMarker = null;
 
+  // ── Marker helpers ──
   function getMarkerColor(o) {
     const bl = esBloqueada(o, calendarioMap);
     if (bl) return '#9CA3AF';
@@ -1071,15 +1080,22 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
     return '#6B7280';
   }
 
-  function buildIcon(color, selected, inAssign) {
-    return { path: G.SymbolPath.CIRCLE, scale: selected ? 13 : 10, fillColor: color, fillOpacity: 1, strokeColor: inAssign && selected ? '#FBBF24' : '#fff', strokeWeight: inAssign && selected ? 4 : selected ? 3 : 2 };
+  function makeIcon(color, selected, inAssign) {
+    const size = selected ? 18 : 13;
+    const stroke = inAssign && selected ? '#FBBF24' : 'white';
+    const sw = inAssign && selected ? 3 : 2;
+    return L.divIcon({
+      className: '',
+      html: '<svg width="' + (size*2) + '" height="' + (size*2) + '" viewBox="0 0 ' + (size*2) + ' ' + (size*2) + '" xmlns="http://www.w3.org/2000/svg"><circle cx="' + size + '" cy="' + size + '" r="' + (size-sw) + '" fill="' + color + '" stroke="' + stroke + '" stroke-width="' + sw + '"/></svg>',
+      iconSize: [size*2, size*2], iconAnchor: [size, size]
+    });
   }
 
+  // ── Open sheet ──
   function openSheet(o, marker) {
     createSheet();
-    if (!sheet || !sheetBody) return;
     const bloqueada = esBloqueada(o, calendarioMap);
-    const hecha = o.estadoCampo === 'hecha' || o.estadoCampo === 'aprobada';
+    const hecha     = o.estadoCampo === 'hecha' || o.estadoCampo === 'aprobada';
     const isAdminUser = !isCampo;
     const statusColor = bloqueada ? '#9CA3AF' : hecha ? '#166534' : o.estadoCampo === 'visita' ? '#374151' : '#0F766E';
     const statusLabel = bloqueada ? '🔒 Bloqueada' : hecha ? '✓ Realizada' : o.estadoCampo === 'visita' ? '👁 Visita' : '● Disponible';
@@ -1093,7 +1109,6 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
     }
 
     sheetBody.innerHTML =
-      // Header
       '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:14px">' +
         '<div style="flex:1;min-width:0">' +
           '<p style="font-size:10px;color:#9ca3af;font-family:monospace;margin-bottom:3px">' + safeStr(o.wo) + '</p>' +
@@ -1101,7 +1116,6 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
         '</div>' +
         '<span style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;background:' + statusColor + '18;color:' + statusColor + ';white-space:nowrap;flex-shrink:0">' + statusLabel + '</span>' +
       '</div>' +
-      // Bloqueada — solo aviso para campo
       (bloqueada && !isAdminUser ?
         '<div style="background:#F3F4F6;border-radius:12px;padding:16px;text-align:center;margin-bottom:14px">' +
           '<p style="font-size:32px;margin-bottom:8px">🔒</p>' +
@@ -1110,40 +1124,32 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
           '<p style="font-size:11px;font-family:monospace;color:#9ca3af;margin-top:8px">MRU: ' + safeStr(o.unidadLectura) + '</p>' +
         '</div>'
       :
-      // Info rows — MyMaps style
-      '<div style="margin-bottom:14px">' +
-        row('Dirección', o.direccion) +
-        row('Medidor', o.serie) +
-        row('DS', o.dsct) +
-        row('MRU', o.unidadLectura) +
-        row('Concepto', o.concepto) +
-        row('NC', o.nc) +
-        row('Teléfono', o.telefono) +
-        (o.pareja && isAdminUser ? row('Pareja', o.pareja) : '') +
-        (o.observaciones ? row('Observaciones', o.observaciones) : '') +
-        (o.observacion ? row('Nota visita', o.observacion) : '') +
-        (o.hechaPor ? row('Realizada por', o.hechaPor) : '') +
-      '</div>') +
-      (bloqueada ? '<div style="background:#F3F4F6;color:#6B7280;padding:12px;border-radius:10px;font-size:13px;font-weight:500;margin-bottom:10px;text-align:center">🔒 Orden en período de lectura<br><span style="font-size:11px;font-weight:400">No se puede ejecutar en este momento</span></div>' : '') +
+        '<div style="margin-bottom:14px">' +
+          row('Dirección', o.direccion) + row('Medidor', o.serie) + row('DS', o.dsct) +
+          row('MRU', o.unidadLectura) + row('Concepto', o.concepto) + row('NC', o.nc) +
+          row('Teléfono', o.telefono) +
+          (o.pareja && isAdminUser ? row('Pareja', o.pareja) : '') +
+          (o.observaciones ? row('Observaciones', o.observaciones) : '') +
+          (o.observacion ? row('Nota visita', o.observacion) : '') +
+          (o.hechaPor ? row('Realizada por', o.hechaPor) : '') +
+        '</div>') +
       '<div style="display:flex;flex-direction:column;gap:7px">' +
-        '<div style="display:flex;gap:7px">' +
-          '<button id="sheet-ruta" style="flex:1;padding:12px;background:#0F766E;color:white;border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>Trazar ruta</button>' +
-          '<a href="https://www.google.com/maps/dir/?api=1&destination=' + o.latitud + ',' + o.longitud + '" target="_blank" style="flex:1;padding:12px;border:1.5px solid #e5e7eb;border-radius:12px;font-size:13px;font-weight:500;color:#374151;text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center">↗ Maps</a>' +
-        '</div>' +
-        '<button id="sheet-cancel-ruta" style="width:100%;padding:9px;background:#FEF2F2;color:#C62828;border:1.5px solid #FECACA;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer;display:' + (routeActive ? 'flex' : 'none') + ';align-items:center;justify-content:center">✕ Cancelar ruta</button>' +
-        (!bloqueada && !hecha && isCampo ? '<div style="display:flex;gap:7px"><button id="sheet-visita" style="flex:1;padding:11px;border:2px solid #e5e7eb;border-radius:12px;font-size:13px;font-weight:600;color:#374151;background:white;cursor:pointer">Visita</button><button id="sheet-hecha" style="flex:1;padding:11px;background:#166534;color:white;border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer">✓ Realizada</button></div>' : '') +
+        '<a href="https://www.google.com/maps/dir/?api=1&destination=' + o.latitud + ',' + o.longitud + '" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:6px;padding:12px;border:1.5px solid #e5e7eb;border-radius:12px;font-size:13px;font-weight:500;color:#374151;text-decoration:none">↗ Abrir en Google Maps</a>' +
+        (!bloqueada && !hecha && isCampo ?
+          '<div style="display:flex;gap:7px">' +
+            '<button id="sheet-visita" style="flex:1;padding:11px;border:2px solid #e5e7eb;border-radius:12px;font-size:13px;font-weight:600;color:#374151;background:white;cursor:pointer">Visita</button>' +
+            '<button id="sheet-hecha" style="flex:1;padding:11px;background:#166534;color:white;border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer">✓ Realizada</button>' +
+          '</div>'
+        : '') +
         (isAdminUser ? '<button id="sheet-asignar-1" style="width:100%;padding:10px;border:1.5px solid #e5e7eb;border-radius:12px;font-size:13px;font-weight:500;color:#374151;background:white;cursor:pointer">Asignar pareja</button>' : '') +
         (isAdminUser && o.estadoCampo === 'hecha' ? '<button id="sheet-aprobar" style="width:100%;padding:11px;background:#166534;color:white;border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer">✓ Confirmar realizada</button>' : '') +
       '</div>';
 
-
-    if (activeMarker && activeMarker !== marker) { activeMarker.setIcon(buildIcon(activeMarker.__color, false, false)); }
-    marker.setIcon(buildIcon(marker.__color, true, false));
+    if (activeMarker && activeMarker !== marker) { activeMarker.setIcon(makeIcon(activeMarker._color, false, false)); }
+    marker.setIcon(makeIcon(marker._color, true, false));
     activeMarker = marker;
-    marker.__orden.__marker = marker;
+    marker._orden.__marker = marker;
 
-    document.getElementById('sheet-ruta')?.addEventListener('click', function() { trazarRuta(safeNum(o.latitud), safeNum(o.longitud)); });
-    document.getElementById('sheet-cancel-ruta')?.addEventListener('click', clearRoute);
     document.getElementById('sheet-hecha')?.addEventListener('click', function() { closeSheet(); showConfirmarHecha(db, session, o); });
     document.getElementById('sheet-visita')?.addEventListener('click', function() { closeSheet(); showRegistrarVisita(db, session, o); });
     document.getElementById('sheet-asignar-1')?.addEventListener('click', function() { closeSheet(); showAsignarPareja(db, [o.wo], null); });
@@ -1153,35 +1159,45 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
       try {
         let ref;
         if (o.id) { ref = doc(db, COL_ORDENES, o.id); }
-        else { const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo','==',o.wo))); if (snap.empty) throw new Error('No encontrada'); ref = snap.docs[0].ref; }
-        await updateDoc(ref, { estadoCampo: 'aprobada', aprobadoPor: session.displayName, fechaAprobacion: serverTimestamp() });
+        else { const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo','==',o.wo))); if (snap.empty) throw new Error(); ref = snap.docs[0].ref; }
+        await updateDoc(ref, { estadoCampo:'aprobada', aprobadoPor:session.displayName, fechaAprobacion:serverTimestamp() });
         closeSheet();
-        if (marker) marker.setMap(null);
-        showToast('Orden confirmada. Punto eliminado.', 'success');
+        if (marker) marker.remove();
+        showToast('Orden confirmada.','success');
       } catch(e) { showToast('Error.','error'); if (btn) { btn.disabled=false; btn.textContent='✓ Confirmar realizada'; } }
     });
   }
 
+  // ── Place markers ──
   const markers = ordenes.map(function(o) {
     const color  = getMarkerColor(o);
-    const marker = new G.Marker({ position: { lat: safeNum(o.latitud), lng: safeNum(o.longitud) }, title: o.cliente, icon: buildIcon(color, false, false) });
-    marker.__color = color; marker.__orden = o; marker.__sel = false;
-    marker.addListener('click', function() { assignMode ? toggleSel(marker) : openSheet(o, marker); });
+    const marker = L.marker([safeNum(o.latitud), safeNum(o.longitud)], { icon: makeIcon(color, false, false) }).addTo(map);
+    marker._color = color;
+    marker._orden = o;
+    marker._sel   = false;
+    marker.on('click', function(e) {
+      L.DomEvent.stopPropagation(e);
+      if (assignMode) { toggleSel(marker); }
+      else { openSheet(o, marker); }
+    });
     return marker;
   });
 
-  markers.forEach(function(m) { m.setMap(map); });
-
+  // ── User location ──
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(function(pos) {
-      userMarker = new G.Marker({ position: { lat: pos.coords.latitude, lng: pos.coords.longitude }, map, title: 'Tu ubicación', zIndex: 999, icon: { path: G.SymbolPath.CIRCLE, scale: 9, fillColor: '#2563EB', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2.5 } });
+      userMarker = L.circleMarker([pos.coords.latitude, pos.coords.longitude], {
+        radius: 9, fillColor: '#2563EB', fillOpacity: 1, color: 'white', weight: 2.5
+      }).addTo(map).bindTooltip('Tu ubicación', { permanent: false });
     }, function() {});
   }
 
+  // ── Assign mode ──
   function toggleSel(marker) {
-    const wo = marker.__orden.wo;
-    if (selectedWOs.has(wo)) { selectedWOs.delete(wo); marker.__sel = false; } else { selectedWOs.add(wo); marker.__sel = true; }
-    marker.setIcon(buildIcon(marker.__color, marker.__sel, true));
+    const wo = marker._orden.wo;
+    if (selectedWOs.has(wo)) { selectedWOs.delete(wo); marker._sel = false; }
+    else { selectedWOs.add(wo); marker._sel = true; }
+    marker.setIcon(makeIcon(marker._color, marker._sel, true));
     updateAssignPanel();
   }
 
@@ -1191,27 +1207,36 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
   }
 
   function clearSel() {
-    selectedWOs.clear(); drawnShapes.forEach(function(s) { s.setMap(null); }); drawnShapes = [];
-    markers.forEach(function(m) { m.__sel = false; m.setIcon(buildIcon(m.__color, false, assignMode)); });
-    if (drawingMgr) drawingMgr.setDrawingMode(null);
+    selectedWOs.clear();
+    if (drawnItems) drawnItems.clearLayers();
+    markers.forEach(function(m) { m._sel = false; m.setIcon(makeIcon(m._color, false, assignMode)); });
     updateAssignPanel();
   }
 
   function enterAssignMode() {
     assignMode = true; closeSheet();
     const p = document.getElementById('assign-panel'); if (p) p.style.display = 'flex';
-    const btn = document.getElementById('btn-assign-mode'); if (btn) { btn.style.background = '#1B4F8A'; btn.style.color = 'white'; btn.textContent = '✕ Salir'; }
-    markers.forEach(function(m) { m.setIcon(buildIcon(m.__color, m.__sel, true)); });
-    if (!drawingMgr && G.drawing) {
-      drawingMgr = new G.drawing.DrawingManager({ drawingMode: null, drawingControl: false, rectangleOptions: { fillColor:'#FBBF24', fillOpacity:0.15, strokeColor:'#FBBF24', strokeWeight:2, clickable:false, editable:false }, polygonOptions: { fillColor:'#FBBF24', fillOpacity:0.15, strokeColor:'#FBBF24', strokeWeight:2, clickable:false, editable:false } });
-      drawingMgr.setMap(map);
-      G.event.addListener(drawingMgr, 'overlaycomplete', function(e) {
-        drawnShapes.push(e.overlay); drawingMgr.setDrawingMode(null);
+    const btn = document.getElementById('btn-assign-mode'); if (btn) { btn.style.background='#1B4F8A'; btn.style.color='white'; btn.textContent='✕ Salir'; }
+    markers.forEach(function(m) { m.setIcon(makeIcon(m._color, m._sel, true)); });
+
+    if (!drawnItems) { drawnItems = new L.FeatureGroup().addTo(map); }
+    if (!drawControl && L.Control.Draw) {
+      drawControl = new L.Control.Draw({
+        draw: {
+          rectangle: { shapeOptions:{ color:'#FBBF24', fillOpacity:.15 } },
+          polygon:   { shapeOptions:{ color:'#FBBF24', fillOpacity:.15 } },
+          polyline:false, circle:false, marker:false, circlemarker:false
+        },
+        edit: { featureGroup: drawnItems, edit:false, remove:false }
+      });
+      map.addControl(drawControl);
+      map.on(L.Draw.Event.CREATED, function(e) {
+        drawnItems.addLayer(e.layer);
         markers.forEach(function(m) {
-          const pos = m.getPosition(); let inside = false;
-          if (e.type === 'rectangle') inside = e.overlay.getBounds().contains(pos);
-          else if (e.type === 'polygon' && G.geometry) inside = G.geometry.poly.containsLocation(pos, e.overlay);
-          if (inside) { selectedWOs.add(m.__orden.wo); m.__sel = true; m.setIcon(buildIcon(m.__color, true, true)); }
+          if (e.layer.getBounds().contains(m.getLatLng())) {
+            selectedWOs.add(m._orden.wo); m._sel = true;
+            m.setIcon(makeIcon(m._color, true, true));
+          }
         });
         updateAssignPanel();
       });
@@ -1221,8 +1246,8 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
   function exitAssignMode() {
     assignMode = false; clearSel();
     const p = document.getElementById('assign-panel'); if (p) p.style.display = 'none';
-    const btn = document.getElementById('btn-assign-mode'); if (btn) { btn.style.background = 'white'; btn.style.color = '#1B4F8A'; btn.textContent = '🗂 Asignar'; }
-    markers.forEach(function(m) { m.setIcon(buildIcon(m.__color, false, false)); });
+    const btn = document.getElementById('btn-assign-mode'); if (btn) { btn.style.background='white'; btn.style.color='#1B4F8A'; btn.textContent='🗂 Asignar'; }
+    markers.forEach(function(m) { m.setIcon(makeIcon(m._color, false, false)); });
   }
 
   async function doAssign(pareja) {
@@ -1230,29 +1255,30 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
     const isDesasignar = pareja === null;
     const btnId = isDesasignar ? 'ap-btn-desasignar' : 'ap-btn-' + pareja.replace(' ','_');
     const btn = document.getElementById(btnId);
-    if (btn) { btn.textContent = '...'; btn.disabled = true; }
+    if (btn) { btn.textContent='...'; btn.disabled=true; }
     try {
       const color = isDesasignar ? '#6B7280' : (PAREJA_COLORS[pareja] || '#0F766E');
       await Promise.all(Array.from(selectedWOs).map(async function(wo) {
         const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo','==',wo)));
-        if (!snap.empty) await updateDoc(snap.docs[0].ref, isDesasignar ? { pareja: null } : { pareja, asignadoEn: serverTimestamp() });
-        const m = markers.find(function(mk) { return mk.__orden.wo === wo; });
-        if (m) { m.__orden.pareja = isDesasignar ? null : pareja; m.__color = color; m.__sel = false; m.setIcon(buildIcon(color, false, true)); }
+        if (!snap.empty) await updateDoc(snap.docs[0].ref, isDesasignar ? { pareja:null } : { pareja, asignadoEn:serverTimestamp() });
+        const m = markers.find(function(mk) { return mk._orden.wo === wo; });
+        if (m) { m._orden.pareja = isDesasignar ? null : pareja; m._color = color; m._sel = false; m.setIcon(makeIcon(color, false, true)); }
       }));
       showToast(isDesasignar ? selectedWOs.size + ' órdenes desasignadas' : selectedWOs.size + ' órdenes → ' + pareja, 'success');
       selectedWOs.clear(); updateAssignPanel();
     } catch(e) { showToast('Error.','error'); console.error(e); }
-    if (btn) { btn.textContent = isDesasignar ? '✕ Desasignar seleccionadas' : pareja; btn.disabled = false; }
+    if (btn) { btn.textContent = isDesasignar ? '✕ Desasignar seleccionadas' : pareja; btn.disabled=false; }
   }
 
+  // Assign button
   const btnAssign = document.createElement('button');
   btnAssign.id = 'btn-assign-mode';
   btnAssign.textContent = '🗂 Asignar';
-  btnAssign.style.cssText = 'position:absolute;top:10px;left:10px;z-index:10;background:white;border:1.5px solid #e5e7eb;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;color:#1B4F8A;box-shadow:0 2px 8px rgba(0,0,0,0.15);cursor:pointer;';
-  contenedor.style.position = 'relative';
-  contenedor.appendChild(btnAssign);
+  btnAssign.style.cssText = 'position:absolute;top:10px;left:10px;z-index:999;background:white;border:1.5px solid #e5e7eb;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;color:#1B4F8A;box-shadow:0 2px 8px rgba(0,0,0,.15);cursor:pointer;';
+  wrapper.appendChild(btnAssign);
   btnAssign.addEventListener('click', function() { assignMode ? exitAssignMode() : enterAssignMode(); });
 
+  // Assign panel
   const panelEl = document.createElement('div');
   panelEl.id = 'assign-panel';
   panelEl.style.cssText = 'display:none;flex-direction:column;gap:8px;background:white;border:1px solid #e5e7eb;border-radius:12px;padding:12px;margin-top:8px;';
@@ -1261,44 +1287,18 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">' + PAREJAS.map(function(p) { return '<button id="ap-btn-' + p.replace(' ','_') + '" data-pareja="' + p + '" style="padding:10px;background:' + PAREJA_COLORS[p] + ';color:white;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">' + p + '</button>'; }).join('') + '</div>' +
     '<button id="ap-btn-desasignar" style="width:100%;padding:9px;background:#FEF2F2;color:#C62828;border:1.5px solid #FECACA;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">✕ Desasignar seleccionadas</button>' +
     '<div style="display:flex;gap:6px"><button id="assign-rect" style="flex:1;padding:9px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:12px;color:#374151;background:white;cursor:pointer">⬜ Rectángulo</button><button id="assign-poly" style="flex:1;padding:9px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:12px;color:#374151;background:white;cursor:pointer">✏️ Polígono</button></div>';
-  wrapper.appendChild(panelEl);
+  wrapper.parentElement.insertBefore(panelEl, wrapper.nextSibling);
 
   document.getElementById('assign-clear').addEventListener('click', clearSel);
-  document.getElementById('assign-rect').addEventListener('click', function() { if (drawingMgr) drawingMgr.setDrawingMode(G.drawing.OverlayType.RECTANGLE); });
-  document.getElementById('assign-poly').addEventListener('click', function() { if (drawingMgr) drawingMgr.setDrawingMode(G.drawing.OverlayType.POLYGON); });
+  document.getElementById('assign-rect').addEventListener('click', function() { if (L.Draw) new L.Draw.Rectangle(map, { shapeOptions:{ color:'#FBBF24', fillOpacity:.15 } }).enable(); });
+  document.getElementById('assign-poly').addEventListener('click', function() { if (L.Draw) new L.Draw.Polygon(map, { shapeOptions:{ color:'#FBBF24', fillOpacity:.15 } }).enable(); });
   panelEl.querySelectorAll('[data-pareja]').forEach(function(btn) { btn.addEventListener('click', function() { doAssign(btn.dataset.pareja); }); });
-  document.getElementById('ap-btn-desasignar')?.addEventListener('click', function() { doAssign(null); });
+  document.getElementById('ap-btn-desasignar').addEventListener('click', function() { doAssign(null); });
 
-  if (isCampo) { btnAssign.style.display = 'none'; panelEl.style.display = 'none'; }
-
-  function trazarRuta(lat, lng) {
-    const btn = document.getElementById('sheet-ruta');
-    if (!navigator.geolocation) { window.open('https://www.google.com/maps/dir/?api=1&destination=' + lat + ',' + lng, '_blank'); return; }
-    if (btn) { btn.innerHTML = '<svg style="animation:spin .8s linear infinite;width:14px;height:14px" viewBox="0 0 24 24" fill="none"><circle opacity=".25" cx="12" cy="12" r="10" stroke="white" stroke-width="4"/><path opacity=".75" fill="white" d="M4 12a8 8 0 018-8v8z"/></svg> Calculando...'; btn.disabled = true; }
-    navigator.geolocation.getCurrentPosition(function(pos) {
-      const origin = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-      const dest   = { lat: lat, lng: lng };
-      if (userMarker) userMarker.setPosition(origin);
-      directionsService.route({ origin, destination: dest, travelMode: G.TravelMode.DRIVING }, function(result, status) {
-        if (btn) btn.disabled = false;
-        if (status === 'OK') {
-          directionsRenderer.setDirections(result); routeActive = true;
-          const leg = result.routes[0].legs[0];
-          if (btn) btn.innerHTML = '✓ ' + leg.distance.text + ' · ' + leg.duration.text;
-          const cb = document.getElementById('sheet-cancel-ruta'); if (cb) cb.style.display = 'flex';
-          const bounds = new G.LatLngBounds(); result.routes[0].overview_path.forEach(function(p) { bounds.extend(p); }); map.fitBounds(bounds);
-        } else {
-          if (btn) btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>Trazar ruta';
-          window.open('https://www.google.com/maps/dir/?api=1&destination=' + lat + ',' + lng, '_blank');
-        }
-      });
-    }, function() {
-      if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>Trazar ruta'; }
-      window.open('https://www.google.com/maps/dir/?api=1&destination=' + lat + ',' + lng, '_blank');
-    });
-  }
-  window.__trazarRuta = trazarRuta;
+  if (isCampo) { btnAssign.style.display='none'; panelEl.style.display='none'; }
 }
+
+
 
 // ─────────────────────────────────────────
 // DETALLE DE ORDEN (listado overlay)
