@@ -1147,23 +1147,41 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
   let activeMarker = null;
 
   // ── Marker helpers ──
-  function getMarkerColor(o) {
+  function getMarkerInfo(o) {
     const bl = esBloqueada(o, calendarioMap);
-    if (bl) return '#9CA3AF';
-    if (o.estadoCampo === 'visita') return '#111827';
-    if (o.pareja && PAREJA_COLORS[o.pareja]) return PAREJA_COLORS[o.pareja];
-    return '#6B7280';
+    if (bl) return { color: '#4B5563', type: 'bloqueada' };
+    if (o.estadoCampo === 'visita') return { color: '#111827', type: null };
+    if (o.pareja && PAREJA_COLORS[o.pareja]) return { color: PAREJA_COLORS[o.pareja], type: null };
+    return { color: '#9CA3AF', type: 'sin_asignar' };
   }
+  function getMarkerColor(o) { return getMarkerInfo(o).color; }
 
-  function makeIcon(color, selected, inAssign) {
-    const size = selected ? 18 : 13;
+  function makeIcon(color, selected, inAssign, type) {
+    const size   = selected ? 18 : 13;
     const stroke = inAssign && selected ? '#FBBF24' : 'white';
-    const sw = inAssign && selected ? 3 : 2;
-    return L.divIcon({
-      className: '',
-      html: '<svg width="' + (size*2) + '" height="' + (size*2) + '" viewBox="0 0 ' + (size*2) + ' ' + (size*2) + '" xmlns="http://www.w3.org/2000/svg"><circle cx="' + size + '" cy="' + size + '" r="' + (size-sw) + '" fill="' + color + '" stroke="' + stroke + '" stroke-width="' + sw + '"/></svg>',
-      iconSize: [size*2, size*2], iconAnchor: [size, size]
-    });
+    const sw     = inAssign && selected ? 3 : 2;
+    const s2     = size * 2;
+
+    let inner = '';
+    if (type === 'bloqueada') {
+      // Candado blanco dentro
+      const cx = size, cy = size;
+      const lw = size * 0.5, lh = size * 0.45;
+      const lx = cx - lw/2, ly = cy - lh*0.1;
+      const ar = lw * 0.28;
+      inner = '<rect x="' + lx + '" y="' + ly + '" width="' + lw + '" height="' + lh + '" rx="' + (lw*0.15) + '" fill="white" opacity="0.9"/>' +
+              '<path d="M' + (cx-ar*0.9) + ' ' + ly + ' a' + ar + ' ' + (ar*1.1) + ' 0 0 1 ' + (ar*1.8) + ' 0" fill="none" stroke="white" stroke-width="' + (size*0.13) + '" stroke-linecap="round"/>';
+    } else if (type === 'sin_asignar') {
+      // Interrogación blanca
+      inner = '<text x="' + size + '" y="' + (size + size*0.35) + '" text-anchor="middle" fill="white" font-size="' + (size*0.95) + '" font-family="sans-serif" font-weight="700">?</text>';
+    }
+
+    const html = '<svg width="' + s2 + '" height="' + s2 + '" viewBox="0 0 ' + s2 + ' ' + s2 + '" xmlns="http://www.w3.org/2000/svg">' +
+      '<circle cx="' + size + '" cy="' + size + '" r="' + (size-sw) + '" fill="' + color + '" stroke="' + stroke + '" stroke-width="' + sw + '"/>' +
+      inner +
+      '</svg>';
+
+    return L.divIcon({ className:'', html, iconSize:[s2,s2], iconAnchor:[size,size] });
   }
 
   // ── Open sheet ──
@@ -1245,9 +1263,12 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
 
   // ── Place markers ──
   const markers = ordenes.map(function(o) {
-    const color  = getMarkerColor(o);
-    const marker = L.marker([safeNum(o.latitud), safeNum(o.longitud)], { icon: makeIcon(color, false, false) }).addTo(map);
+    const info   = getMarkerInfo(o);
+    const color  = info.color;
+    const mtype  = info.type;
+    const marker = L.marker([safeNum(o.latitud), safeNum(o.longitud)], { icon: makeIcon(color, false, false, mtype) }).addTo(map);
     marker._color = color;
+    marker._type  = mtype;
     marker._orden = o;
     marker._sel   = false;
     marker.on('click', function(e) {
@@ -1272,7 +1293,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
     const wo = marker._orden.wo;
     if (selectedWOs.has(wo)) { selectedWOs.delete(wo); marker._sel = false; }
     else { selectedWOs.add(wo); marker._sel = true; }
-    marker.setIcon(makeIcon(marker._color, marker._sel, true));
+    marker.setIcon(makeIcon(marker._color, marker._sel, true, marker._type));
     updateAssignPanel();
   }
 
@@ -1284,7 +1305,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
   function clearSel() {
     selectedWOs.clear();
     if (drawnItems) drawnItems.clearLayers();
-    markers.forEach(function(m) { m._sel = false; m.setIcon(makeIcon(m._color, false, assignMode)); });
+    markers.forEach(function(m) { m._sel = false; m.setIcon(makeIcon(m._color, false, assignMode, m._type)); });
     updateAssignPanel();
   }
 
@@ -1292,7 +1313,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
     assignMode = true; closeSheet();
     const p = document.getElementById('assign-panel'); if (p) p.style.display = 'flex';
     const btn = document.getElementById('btn-assign-mode'); if (btn) { btn.style.background='#1B4F8A'; btn.style.color='white'; btn.textContent='✕ Salir'; }
-    markers.forEach(function(m) { m.setIcon(makeIcon(m._color, m._sel, true)); });
+    markers.forEach(function(m) { m.setIcon(makeIcon(m._color, m._sel, true, m._type)); });
 
     if (!drawnItems) { drawnItems = new L.FeatureGroup().addTo(map); }
     if (!drawControl && L.Control.Draw) {
@@ -1322,7 +1343,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
     assignMode = false; clearSel();
     const p = document.getElementById('assign-panel'); if (p) p.style.display = 'none';
     const btn = document.getElementById('btn-assign-mode'); if (btn) { btn.style.background='white'; btn.style.color='#1B4F8A'; btn.textContent='🗂 Asignar'; }
-    markers.forEach(function(m) { m.setIcon(makeIcon(m._color, false, false)); });
+    markers.forEach(function(m) { m.setIcon(makeIcon(m._color, false, false, m._type)); });
   }
 
   async function doAssign(pareja) {
@@ -1337,7 +1358,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
         const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo','==',wo)));
         if (!snap.empty) await updateDoc(snap.docs[0].ref, isDesasignar ? { pareja:null } : { pareja, asignadoEn:serverTimestamp() });
         const m = markers.find(function(mk) { return mk._orden.wo === wo; });
-        if (m) { m._orden.pareja = isDesasignar ? null : pareja; m._color = color; m._sel = false; m.setIcon(makeIcon(color, false, true)); }
+        if (m) { m._orden.pareja = isDesasignar ? null : pareja; m._color = color; m._type = isDesasignar ? 'sin_asignar' : null; m._sel = false; m.setIcon(makeIcon(color, false, true, m._type)); }
       }));
       showToast(isDesasignar ? selectedWOs.size + ' órdenes desasignadas' : selectedWOs.size + ' órdenes → ' + pareja, 'success');
       selectedWOs.clear(); updateAssignPanel();
