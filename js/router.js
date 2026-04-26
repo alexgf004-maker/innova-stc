@@ -187,7 +187,6 @@ function buildNav(session) {
 
   // Bottom nav (móvil) — máximo 4 items + logout
   const bottomItems = visible.slice(0, 4);
-  const logoutIcon = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`;
   bottomNav.innerHTML = bottomItems.map(item => `
     <a data-route="${item.path}"
        class="nav-link bottom-link flex flex-col items-center gap-1 px-3 py-2 text-xs font-medium transition-colors cursor-pointer min-w-0"
@@ -195,41 +194,10 @@ function buildNav(session) {
       <span>${item.icon}</span>
       <span class="truncate">${item.label}</span>
     </a>
-  `).join('') + `
-    <button id="btn-logout-bottom" class="flex flex-col items-center gap-1 px-3 py-2 text-xs font-medium cursor-pointer min-w-0 text-red-500 bg-transparent border-none">
-      <span>${logoutIcon}</span>
-      <span class="truncate">Salir</span>
-    </button>`;
+  `).join('');
 
-  // Sidebar logout button
-  sidebarNav.innerHTML += `
-    <button id="btn-logout-sidebar" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-red-500 cursor-pointer bg-transparent border-none w-full mt-4">
-      ${logoutIcon}
-      <span>Cerrar sesión</span>
-    </button>`;
-
-  // Wire logout buttons
-  document.getElementById('btn-logout-bottom')?.addEventListener('click', doLogout);
-  document.getElementById('btn-logout-sidebar')?.addEventListener('click', doLogout);
-
-  // PWA install button in sidebar
-  const installBtn = document.createElement('button');
-  installBtn.id = 'btn-install-pwa';
-  installBtn.style.cssText = 'display:none;align-items:center;gap:8px;width:100%;padding:8px 12px;border-radius:10px;font-size:12px;font-weight:600;color:#0F766E;background:#F0FDFA;border:1px solid #99F6E4;cursor:pointer;margin-top:8px;';
-  installBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Instalar app';
-  installBtn.addEventListener('click', function() { window.__installPWA && window.__installPWA(); });
-  const sidebarNavEl = document.getElementById('sidebar-nav');
-  if (sidebarNavEl) sidebarNavEl.appendChild(installBtn);
 }
 
-function doLogout() {
-  if (!confirm('¿Cerrar sesión?')) return;
-  // Clear session
-  try { window.__firebase?.auth?.signOut(); } catch(e) {}
-  sessionStorage.clear();
-  localStorage.removeItem('innova_session');
-  window.location.href = '/innova-stc/login.html';
-}
 
 function updateActiveNav(currentPath) {
   document.querySelectorAll('.nav-link').forEach(link => {
