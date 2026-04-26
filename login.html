@@ -14,23 +14,10 @@
       font-family: 'DM Sans', sans-serif;
       min-height: 100vh;
       display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 1.25rem;
+      align-items: stretch;
       background: #0d0d0d;
       position: relative;
       overflow: hidden;
-    }
-
-    /* Subtle background glow */
-    body::before {
-      content: '';
-      position: fixed;
-      top: -100px; left: 50%;
-      transform: translateX(-50%);
-      width: 500px; height: 400px;
-      background: radial-gradient(ellipse, rgba(16,185,129,.08) 0%, transparent 65%);
-      pointer-events: none;
     }
 
     /* Top accent bar */
@@ -40,6 +27,115 @@
       top: 0; left: 0; right: 0;
       height: 2px;
       background: linear-gradient(90deg, transparent 0%, #10b981 40%, #06b6d4 60%, transparent 100%);
+      z-index: 100;
+    }
+
+    /* Left panel — branding (desktop only) */
+    .brand-panel {
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      padding: 60px;
+      position: relative;
+      overflow: hidden;
+      background: #0a0a0a;
+      border-right: 1px solid #1a1a1a;
+    }
+    .brand-panel::before {
+      content: '';
+      position: absolute;
+      bottom: -100px; right: -100px;
+      width: 400px; height: 400px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(16,185,129,.08) 0%, transparent 65%);
+    }
+    .brand-panel::after {
+      content: '';
+      position: absolute;
+      top: -60px; left: -60px;
+      width: 250px; height: 250px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(6,182,212,.05) 0%, transparent 65%);
+    }
+    .brand-logo-big {
+      width: 72px; height: 72px;
+      background: #181818;
+      border: 1px solid rgba(16,185,129,.25);
+      border-radius: 22px;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 32px;
+      box-shadow: 0 0 0 8px rgba(16,185,129,.04);
+      position: relative; z-index: 1;
+    }
+    .brand-title {
+      font-family: 'Sora', sans-serif;
+      font-size: 2.5rem;
+      font-weight: 800;
+      color: white;
+      letter-spacing: -.05em;
+      line-height: 1;
+      position: relative; z-index: 1;
+    }
+    .brand-title span { color: #10b981; }
+    .brand-sub {
+      font-size: .85rem;
+      font-weight: 300;
+      color: rgba(255,255,255,.25);
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      margin-top: 10px;
+      position: relative; z-index: 1;
+    }
+    .brand-divider {
+      width: 40px; height: 2px;
+      background: linear-gradient(90deg, #10b981, #06b6d4);
+      border-radius: 2px;
+      margin: 28px 0;
+      position: relative; z-index: 1;
+    }
+    .brand-features { position: relative; z-index: 1; }
+    .brand-feature {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 16px;
+    }
+    .brand-feature-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #10b981;
+      flex-shrink: 0;
+    }
+    .brand-feature p {
+      font-size: .8rem;
+      color: rgba(255,255,255,.3);
+      font-weight: 300;
+    }
+    .brand-footer {
+      position: absolute;
+      bottom: 32px; left: 60px;
+      font-size: .65rem;
+      color: rgba(255,255,255,.1);
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+
+    /* Right panel — form */
+    .form-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1.25rem;
+      position: relative;
+    }
+    .form-panel::before {
+      content: '';
+      position: absolute;
+      top: -100px; left: 50%;
+      transform: translateX(-50%);
+      width: 500px; height: 400px;
+      background: radial-gradient(ellipse, rgba(16,185,129,.06) 0%, transparent 65%);
+      pointer-events: none;
     }
 
     .card-wrap {
@@ -47,6 +143,10 @@
       max-width: 360px;
       position: relative;
       z-index: 10;
+    }
+
+    @media (min-width: 900px) {
+      .brand-panel { display: flex; width: 420px; flex-shrink: 0; }
     }
 
     .card {
@@ -227,6 +327,37 @@
 </head>
 <body>
 
+  <div class="brand-panel">
+    <div class="brand-logo-big">
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+        <path d="M4 8h6v16H4zM13 8h6l6 16h-6zM19 8h6" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <div class="brand-title">INNOVA<br><span>STC</span></div>
+    <div class="brand-sub">Servicios Técnicos y Comerciales</div>
+    <div class="brand-divider"></div>
+    <div class="brand-features">
+      <div class="brand-feature">
+        <div class="brand-feature-dot"></div>
+        <p>Control de órdenes de cambio de medidores</p>
+      </div>
+      <div class="brand-feature">
+        <div class="brand-feature-dot"></div>
+        <p>Gestión de bodega y materiales OTC</p>
+      </div>
+      <div class="brand-feature">
+        <div class="brand-feature-dot"></div>
+        <p>Seguimiento en tiempo real por pareja</p>
+      </div>
+      <div class="brand-feature">
+        <div class="brand-feature-dot"></div>
+        <p>Dashboard ejecutivo para coordinación</p>
+      </div>
+    </div>
+    <div class="brand-footer">DELSUR · Grupo EPM · Uso interno</div>
+  </div>
+
+  <div class="form-panel">
   <div class="card-wrap">
     <div class="card">
 
@@ -284,6 +415,7 @@
       </div>
     </div>
     <p class="footer-text">INNOVA STC &nbsp;·&nbsp; Uso interno</p>
+  </div>
   </div>
 
   <script type="module">
