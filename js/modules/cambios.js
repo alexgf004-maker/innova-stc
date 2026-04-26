@@ -1152,7 +1152,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
     if (bl) return { color: '#4B5563', type: 'bloqueada' };
     if (o.estadoCampo === 'visita') return { color: '#111827', type: null };
     if (o.pareja && PAREJA_COLORS[o.pareja]) return { color: PAREJA_COLORS[o.pareja], type: null };
-    return { color: '#9CA3AF', type: 'sin_asignar' };
+    return { color: '#9CA3AF', type: null };
   }
   function getMarkerColor(o) { return getMarkerInfo(o).color; }
 
