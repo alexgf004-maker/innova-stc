@@ -135,7 +135,7 @@ async function loadView(path, session) {
 
   contentArea.innerHTML = `
     <div class="flex items-center justify-center h-32">
-      <div class="flex items-center gap-3 text-gray-400 text-sm">
+      <div class="flex items-center gap-3 text-sm" style="color:rgba(255,255,255,.3)">
         <svg class="animate-spin w-5 h-5" viewBox="0 0 24 24" fill="none">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
@@ -155,7 +155,7 @@ async function loadView(path, session) {
     }
   } catch (err) {
     contentArea.innerHTML = `
-      <div class="flex flex-col items-center justify-center h-32 gap-2 text-gray-400">
+      <div class="flex flex-col items-center justify-center h-32 gap-2" style="color:rgba(255,255,255,.25)">
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
           <line x1="12" y1="16" x2="12.01" y2="16"/>
@@ -178,7 +178,7 @@ function buildNav(session) {
   // Sidebar (desktop) — todos los items visibles
   sidebarNav.innerHTML = visible.map(item => `
     <a data-route="${item.path}"
-       class="nav-link sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer"
+       class="nav-link sidebar-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors cursor-pointer"
        data-path="${item.path}">
       <span class="shrink-0">${item.icon}</span>
       <span>${item.label}</span>
@@ -189,7 +189,7 @@ function buildNav(session) {
   const bottomItems = visible.slice(0, 4);
   bottomNav.innerHTML = bottomItems.map(item => `
     <a data-route="${item.path}"
-       class="nav-link bottom-link flex flex-col items-center gap-1 px-3 py-2 text-xs font-medium transition-colors cursor-pointer min-w-0"
+       class="nav-link bottom-link flex flex-col items-center gap-1 px-3 py-2 text-xs transition-colors cursor-pointer min-w-0"
        data-path="${item.path}">
       <span>${item.icon}</span>
       <span class="truncate">${item.label}</span>
