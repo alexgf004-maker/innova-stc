@@ -16,7 +16,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700;800&family=DM+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/base.css" />
   <link rel="stylesheet" href="css/layout.css" />
   <link rel="stylesheet" href="css/components.css" />
@@ -25,8 +25,8 @@
       theme: {
         extend: {
           colors: {
-            primary: '#1B4F8A',
-            accent:  '#2196F3',
+            primary: '#10b981',
+            accent:  '#06b6d4',
             success: '#2E7D32',
             danger:  '#C62828',
             surface: '#F5F7FA',
@@ -42,7 +42,7 @@
 </head>
 <body class="bg-surface font-sans text-gray-900">
 
-  <div id="app-shell" class="flex h-screen overflow-hidden opacity-0 transition-opacity duration-300">
+  <div id="app-shell" class="flex h-screen overflow-hidden opacity-0 transition-opacity duration-300" style="background:#0d0d0d">
 
     <!-- ── SIDEBAR (desktop) ── -->
     <aside id="sidebar" class="hidden md:flex flex-col w-60 bg-primary text-white shrink-0 overflow-y-auto">
@@ -52,7 +52,7 @@
         <div class="flex items-center gap-3">
           <div class="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
             <svg width="20" height="20" viewBox="0 0 32 32" fill="none">
-              <path d="M4 8h6v16H4zM13 8h6l6 16h-6z" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M4 8h6v16H4zM13 8h6l6 16h-6z" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </div>
           <div class="min-w-0">
@@ -85,19 +85,19 @@
     <div class="flex flex-col flex-1 min-w-0 overflow-hidden">
 
       <!-- Topbar -->
-      <header id="topbar" class="h-14 bg-white border-b border-gray-200 flex items-center px-4 shrink-0 z-10 gap-3">
+      <header id="topbar" class="h-14 flex items-center px-4 shrink-0 z-10 gap-3" style="background:#111;border-bottom:1px solid #1e1e1e">
         <div class="flex items-center gap-2 flex-1">
           <div class="w-7 h-7 rounded flex items-center justify-center md:hidden" style="background-color:#1B4F8A">
             <svg width="14" height="14" viewBox="0 0 32 32" fill="none">
-              <path d="M4 8h6v16H4zM13 8h6l6 16h-6z" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M4 8h6v16H4zM13 8h6l6 16h-6z" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </div>
           <span class="font-semibold text-sm text-gray-900 md:hidden">INNOVA STC</span>
         </div>
         <div class="flex items-center gap-2 shrink-0">
           <div class="text-right hidden sm:block">
-            <p id="topbar-name" class="text-sm font-medium text-gray-800 leading-tight"></p>
-            <p id="topbar-role" class="text-xs text-gray-400 capitalize"></p>
+            <p id="topbar-name" class="text-sm font-medium leading-tight" style="color:white"></p>
+            <p id="topbar-role" class="text-xs capitalize" style="color:rgba(255,255,255,.3)"></p>
           </div>
           <!-- Avatar -->
           <div class="relative">
@@ -105,9 +105,9 @@
               class="w-9 h-9 rounded-full text-white text-xs font-bold flex items-center justify-center shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
               style="background-color:#1B4F8A;">
             </button>
-            <div id="avatar-menu" class="hidden absolute right-0 top-10 bg-white border border-gray-200 rounded-xl shadow-lg py-1 z-50 w-44">
-              <div id="avatar-menu-name" class="px-4 py-2 text-xs text-gray-400 border-b border-gray-100 truncate"></div>
-              <button id="btn-logout-menu" class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+            <div id="avatar-menu" class="hidden absolute right-0 top-10 rounded-xl py-1 z-50 w-44" style="background:#1a1a1a;border:1px solid #2a2a2a;box-shadow:0 16px 40px rgba(0,0,0,.6)">
+              <div id="avatar-menu-name" class="px-4 py-2 text-xs truncate" style="color:rgba(255,255,255,.25);border-bottom:1px solid #2a2a2a"></div>
+              <button id="btn-logout-menu" class="w-full text-left px-4 py-2.5 text-sm flex items-center gap-2" style="color:#f87171;background:none;border:none;cursor:pointer;font-family:'DM Sans',sans-serif">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>
                 </svg>
