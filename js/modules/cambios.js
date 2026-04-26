@@ -1162,7 +1162,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
   }
   function getMarkerColor(o) { return getMarkerInfo(o).color; }
 
-  function makeIcon(color, selected, inAssign, type) {
+  function makeIcon(color, selected, inAssign, type, wo) {
     const size   = selected ? 18 : 13;
     const stroke = inAssign && selected ? '#FBBF24' : 'white';
     const sw     = inAssign && selected ? 3 : 2;
@@ -1170,24 +1170,27 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
 
     let inner = '';
     if (type === 'bloqueada') {
-      // Candado blanco dentro
       const cx = size, cy = size;
       const lw = size * 0.5, lh = size * 0.45;
       const lx = cx - lw/2, ly = cy - lh*0.1;
       const ar = lw * 0.28;
       inner = '<rect x="' + lx + '" y="' + ly + '" width="' + lw + '" height="' + lh + '" rx="' + (lw*0.15) + '" fill="white" opacity="0.9"/>' +
               '<path d="M' + (cx-ar*0.9) + ' ' + ly + ' a' + ar + ' ' + (ar*1.1) + ' 0 0 1 ' + (ar*1.8) + ' 0" fill="none" stroke="white" stroke-width="' + (size*0.13) + '" stroke-linecap="round"/>';
-    } else if (type === 'sin_asignar') {
-      // Interrogación blanca
-      inner = '<text x="' + size + '" y="' + (size + size*0.35) + '" text-anchor="middle" fill="white" font-size="' + (size*0.95) + '" font-family="sans-serif" font-weight="700">?</text>';
     }
 
-    const html = '<svg width="' + s2 + '" height="' + s2 + '" viewBox="0 0 ' + s2 + ' ' + s2 + '" xmlns="http://www.w3.org/2000/svg">' +
-      '<circle cx="' + size + '" cy="' + size + '" r="' + (size-sw) + '" fill="' + color + '" stroke="' + stroke + '" stroke-width="' + sw + '"/>' +
-      inner +
-      '</svg>';
+    // WO label below marker
+    const label = wo ? '<div style="position:absolute;top:' + (s2+2) + 'px;left:50%;transform:translateX(-50%);background:' + color + ';color:white;font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;white-space:nowrap;font-family:monospace;box-shadow:0 1px 3px rgba(0,0,0,0.3)">' + wo + '</div>' : '';
 
-    return L.divIcon({ className:'', html, iconSize:[s2,s2], iconAnchor:[size,size] });
+    const html = '<div style="position:relative;width:' + s2 + 'px;height:' + s2 + 'px">' +
+      '<svg width="' + s2 + '" height="' + s2 + '" viewBox="0 0 ' + s2 + ' ' + s2 + '" xmlns="http://www.w3.org/2000/svg">' +
+        '<circle cx="' + size + '" cy="' + size + '" r="' + (size-sw) + '" fill="' + color + '" stroke="' + stroke + '" stroke-width="' + sw + '"/>' +
+        inner +
+      '</svg>' +
+      label +
+    '</div>';
+
+    const totalH = s2 + (wo ? 18 : 0);
+    return L.divIcon({ className:'', html, iconSize:[s2, totalH], iconAnchor:[size, size] });
   }
 
   // ── Open sheet ──
@@ -1272,7 +1275,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
     const info   = getMarkerInfo(o);
     const color  = info.color;
     const mtype  = info.type;
-    const marker = L.marker([safeNum(o.latitud), safeNum(o.longitud)], { icon: makeIcon(color, false, false, mtype) }).addTo(map);
+    const marker = L.marker([safeNum(o.latitud), safeNum(o.longitud)], { icon: makeIcon(color, false, false, mtype, o.wo) }).addTo(map);
     marker._color = color;
     marker._type  = mtype;
     marker._orden = o;
@@ -1299,7 +1302,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
     const wo = marker._orden.wo;
     if (selectedWOs.has(wo)) { selectedWOs.delete(wo); marker._sel = false; }
     else { selectedWOs.add(wo); marker._sel = true; }
-    marker.setIcon(makeIcon(marker._color, marker._sel, true, marker._type));
+    marker.setIcon(makeIcon(marker._color, marker._sel, true, marker._type, marker._orden?.wo));
     updateAssignPanel();
   }
 
@@ -1311,7 +1314,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
   function clearSel() {
     selectedWOs.clear();
     if (drawnItems) drawnItems.clearLayers();
-    markers.forEach(function(m) { m._sel = false; m.setIcon(makeIcon(m._color, false, assignMode, m._type)); });
+    markers.forEach(function(m) { m._sel = false; m.setIcon(makeIcon(m._color, false, assignMode, m._type, m._orden?.wo)); });
     updateAssignPanel();
   }
 
@@ -1319,7 +1322,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
     assignMode = true; closeSheet();
     const p = document.getElementById('assign-panel'); if (p) p.style.display = 'flex';
     const btn = document.getElementById('btn-assign-mode'); if (btn) { btn.style.background='#1B4F8A'; btn.style.color='white'; btn.textContent='✕ Salir'; }
-    markers.forEach(function(m) { m.setIcon(makeIcon(m._color, m._sel, true, m._type)); });
+    markers.forEach(function(m) { m.setIcon(makeIcon(m._color, m._sel, true, m._type, m._orden?.wo)); });
 
     if (!drawnItems) { drawnItems = new L.FeatureGroup().addTo(map); }
     if (!drawControl && L.Control.Draw) {
@@ -1349,7 +1352,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
     assignMode = false; clearSel();
     const p = document.getElementById('assign-panel'); if (p) p.style.display = 'none';
     const btn = document.getElementById('btn-assign-mode'); if (btn) { btn.style.background='white'; btn.style.color='#1B4F8A'; btn.textContent='🗂 Asignar'; }
-    markers.forEach(function(m) { m.setIcon(makeIcon(m._color, false, false, m._type)); });
+    markers.forEach(function(m) { m.setIcon(makeIcon(m._color, false, false, m._type, m._orden?.wo)); });
   }
 
   async function doAssign(pareja) {
@@ -1364,7 +1367,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
         const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo','==',wo)));
         if (!snap.empty) await updateDoc(snap.docs[0].ref, isDesasignar ? { pareja:null } : { pareja, asignadoEn:serverTimestamp() });
         const m = markers.find(function(mk) { return mk._orden.wo === wo; });
-        if (m) { m._orden.pareja = isDesasignar ? null : pareja; m._color = color; m._type = isDesasignar ? 'sin_asignar' : null; m._sel = false; m.setIcon(makeIcon(color, false, true, m._type)); }
+        if (m) { m._orden.pareja = isDesasignar ? null : pareja; m._color = color; m._type = null; m._sel = false; m.setIcon(makeIcon(color, false, true, m._type, m._orden?.wo)); }
       }));
       showToast(isDesasignar ? selectedWOs.size + ' órdenes desasignadas' : selectedWOs.size + ' órdenes → ' + pareja, 'success');
       selectedWOs.clear(); updateAssignPanel();
