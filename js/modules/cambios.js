@@ -14,6 +14,15 @@ import { showToast } from '../ui.js';
 // CONSTANTES
 // ─────────────────────────────────────────
 const PAREJAS = ['Pareja 1', 'Pareja 2', 'Pareja 3', 'Pareja 4'];
+
+// In-memory cache to reduce Firestore reads
+const _cambiosCache = {};
+function cachedGet(key, ttlMs, fetcher) {
+  const now = Date.now();
+  if (_cambiosCache[key] && (now - _cambiosCache[key].ts) < ttlMs) return Promise.resolve(_cambiosCache[key].data);
+  return fetcher().then(function(data) { _cambiosCache[key] = { data, ts: now }; return data; });
+}
+function invalidateCache() { Object.keys(_cambiosCache).forEach(function(k) { delete _cambiosCache[k]; }); }
 const PAREJA_COLORS = {
   'Pareja 1': '#1B4F8A',
   'Pareja 2': '#EA580C',
@@ -208,8 +217,8 @@ async function showListado(db, session, isCampo, destino) {
 
   try {
     const [snapOrdenes, calendarioMap] = await Promise.all([
-      getDocs(collection(db, COL_ORDENES)),
-      getCalendarioMap(db),
+      cachedGet('ordenes', 2*60*1000, () => getDocs(collection(db, COL_ORDENES))),
+      cachedGet('calendario', 30*60*1000, () => getCalendarioMap(db)),
     ]);
 
     let ordenes = snapOrdenes.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
@@ -558,8 +567,8 @@ async function showSeguimiento(db, session) {
 
   try {
     const [snapOrdenes, calendarioMap] = await Promise.all([
-      getDocs(collection(db, COL_ORDENES)),
-      getCalendarioMap(db),
+      cachedGet('ordenes', 2*60*1000, () => getDocs(collection(db, COL_ORDENES))),
+      cachedGet('calendario', 30*60*1000, () => getCalendarioMap(db)),
     ]);
 
     const ordenes = snapOrdenes.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
@@ -1074,8 +1083,8 @@ async function showMapa(db, session, isCampo, destino) {
 
   try {
     const [snapOrdenes, calendarioMap] = await Promise.all([
-      getDocs(collection(db, COL_ORDENES)),
-      getCalendarioMap(db),
+      cachedGet('ordenes', 2*60*1000, () => getDocs(collection(db, COL_ORDENES))),
+      cachedGet('calendario', 30*60*1000, () => getCalendarioMap(db)),
     ]);
 
     let ordenes = snapOrdenes.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
@@ -1459,7 +1468,7 @@ function showDetalleOrden(db, session, orden, isCampo, calendarioMap) {
       if (orden.id) { ref = doc(db, COL_ORDENES, orden.id); }
       else { const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo','==',orden.wo))); if (snap.empty) throw new Error('No encontrada'); ref = snap.docs[0].ref; }
       await updateDoc(ref, { estadoCampo: 'aprobada', aprobadoPor: session.displayName, fechaAprobacion: serverTimestamp() });
-      ov.remove(); showToast('Orden confirmada.', 'success');
+      ov.remove(); showToast('Orden confirmada.', 'success'); invalidateCache();
       showSeguimiento(db, session);
     } catch(e) { showToast('Error al confirmar.', 'error'); btn.textContent = '✓ Confirmar realizada'; btn.disabled = false; }
   });
@@ -1558,7 +1567,7 @@ async function _guardarHechaLogic(db, session, orden, actualizada, ov) {
     // Remove sheet if in map
     const sheet = document.getElementById('mapa-sheet');
     if (sheet) sheet.remove();
-    showToast('Orden marcada como realizada.', 'success');
+    showToast('Orden marcada como realizada.', 'success'); invalidateCache();
     // Remove marker from map if present
     if (orden.__marker) { try { orden.__marker.remove(); } catch(e) {} }
     // Stay on current view — user can navigate manually
@@ -1595,7 +1604,7 @@ function showRegistrarVisita(db, session, orden) {
       if (orden.id) { ref = doc(db, COL_ORDENES, orden.id); }
       else { const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo','==',orden.wo))); if (snap.empty) throw new Error('No encontrada'); ref = snap.docs[0].ref; }
       await updateDoc(ref, { estadoCampo: 'visita', observacion: obs || 'Sin observación', fechaVisita: serverTimestamp(), visitadoPor: session.displayName });
-      ov.remove(); showToast('Visita registrada.', 'success');
+      ov.remove(); showToast('Visita registrada.', 'success'); invalidateCache();
     } catch(e) { showToast('Error al guardar.', 'error'); console.error(e); }
   };
 }
@@ -2073,8 +2082,8 @@ async function showDia(db, session) {
 
   try {
     const [snapOrdenes, calendarioMap] = await Promise.all([
-      getDocs(collection(db, COL_ORDENES)),
-      getCalendarioMap(db),
+      cachedGet('ordenes', 2*60*1000, () => getDocs(collection(db, COL_ORDENES))),
+      cachedGet('calendario', 30*60*1000, () => getCalendarioMap(db)),
     ]);
 
     const ordenes = snapOrdenes.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
@@ -2231,7 +2240,7 @@ async function showDia(db, session) {
           if (id) { ref = doc(db, COL_ORDENES, id); }
           else { const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo','==',wo))); if (snap.empty) throw new Error(); ref = snap.docs[0].ref; }
           await updateDoc(ref, { estadoCampo: 'aprobada', aprobadoPor: session.displayName, fechaAprobacion: serverTimestamp() });
-          showToast('Orden confirmada.', 'success');
+          showToast('Orden confirmada.', 'success'); invalidateCache();
           card.style.opacity = '0.4';
           card.style.pointerEvents = 'none';
           setTimeout(function() { showDia(db, session); }, 800);
@@ -2246,7 +2255,7 @@ async function showDia(db, session) {
           if (id) { ref = doc(db, COL_ORDENES, id); }
           else { const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo','==',wo))); if (snap.empty) throw new Error(); ref = snap.docs[0].ref; }
           await updateDoc(ref, { estadoCampo: null, actualizadaDelsur: null, fechaHecha: null, hechaPor: null });
-          showToast('Orden devuelta a campo.', 'success');
+          showToast('Orden devuelta a campo.', 'success'); invalidateCache();
           card.style.opacity = '0.4';
           card.style.pointerEvents = 'none';
           setTimeout(function() { showDia(db, session); }, 800);
