@@ -1,46 +1,16 @@
-/* css/layout.css — Layout principal */
+/* css/layout.css — Carbon Emerald Layout */
 
-/* ─── SIDEBAR LINKS ─── */
-.sidebar-link {
-  color: rgba(255, 255, 255, 0.65);
-}
+.sidebar-link { color:rgba(255,255,255,.35);font-family:'DM Sans',sans-serif;font-weight:500; }
+.sidebar-link:hover { color:rgba(255,255,255,.8);background-color:rgba(255,255,255,.04); }
+.sidebar-link--active { color:#10b981 !important;background-color:rgba(16,185,129,.08) !important; }
 
-.sidebar-link:hover {
-  color: white;
-  background-color: rgba(255, 255, 255, 0.08);
-}
+.bottom-link { color:rgba(255,255,255,.2);flex:1;font-family:'DM Sans',sans-serif;font-size:10px;font-weight:600;letter-spacing:.04em; }
+.bottom-link:hover { color:rgba(255,255,255,.5); }
+.bottom-link--active { color:#10b981 !important; }
+.bottom-link--active svg { stroke:#10b981 !important; }
 
-.sidebar-link--active {
-  color: white !important;
-  background-color: rgba(255, 255, 255, 0.15) !important;
-}
+#content-area > * { animation:fadeInUp .2s ease-out; }
+@keyframes fadeInUp { from { opacity:0;transform:translateY(8px); } to { opacity:1;transform:translateY(0); } }
 
-/* ─── BOTTOM NAV LINKS ─── */
-.bottom-link {
-  color: #9CA3AF;
-  flex: 1;
-}
-
-.bottom-link:hover {
-  color: #4B5563;
-}
-
-.bottom-link--active {
-  color: #2196F3 !important;
-}
-
-/* ─── ANIMACIÓN DE ENTRADA DE VISTAS ─── */
-#content-area > * {
-  animation: fadeInUp 0.2s ease-out;
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
+.hide-scrollbar::-webkit-scrollbar { display:none; }
+.hide-scrollbar { -ms-overflow-style:none;scrollbar-width:none; }
