@@ -9,6 +9,8 @@ import { getFirestore, collection, getDocs, doc, setDoc,
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { getAuth, createUserWithEmailAndPassword, updatePassword }
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { FIREBASE_CONFIG } from '../firebase-config.js';
 import { showToast, showModal, showInputModal,
          roleBadge, activeBadge, setButtonLoading }
   from '../ui.js';
@@ -431,19 +433,24 @@ async function handleCreateUser(db, auth, overlay, session) {
   try {
     const internalEmail = `${username}@innova-stc.internal`;
 
-    // 1. Crear en Firebase Auth con contraseña temporal
-    const cred = await createUserWithEmailAndPassword(auth, internalEmail, 'TEMP_PASS_placeholder');
+    // 1. Crear en Firebase Auth usando una app secundaria para no perder la sesión del admin
+    const secondaryApp  = initializeApp(FIREBASE_CONFIG, 'secondary-' + Date.now());
+    const secondaryAuth = getAuth(secondaryApp);
+    const cred = await createUserWithEmailAndPassword(secondaryAuth, internalEmail, 'TEMP_PASS_placeholder');
     const uid  = cred.user.uid;
 
     // 2. Derivar contraseña única real y actualizarla
     const realPass = await derivePassword(uid, SEED);
     await updatePassword(cred.user, realPass);
 
-    // 3. Hashear PIN
+    // 3. Cerrar app secundaria
+    await secondaryApp.delete().catch(() => {});
+
+    // 4. Hashear PIN
     const salt    = generateSalt();
     const pinHash = await hashPin(salt, pin);
 
-    // 4. Guardar perfil en Firestore
+    // 5. Guardar perfil en Firestore
     await setDoc(doc(db, 'users', uid), {
       uid,
       username,
@@ -468,7 +475,11 @@ async function handleCreateUser(db, auth, overlay, session) {
     submitBtn.textContent = 'Crear usuario';
     errorEl.textContent = err.message?.includes('email-already-in-use')
       ? 'Ese nombre de usuario ya está registrado en el sistema.'
-      : 'Error al crear el usuario. Intenta de nuevo.';
+      : err.message?.includes('insufficient-permissions') || err.message?.includes('permission')
+        ? 'Sin permisos. Verifica las reglas de Firestore.'
+        : err.message?.includes('weak-password')
+          ? 'Error interno de contraseña. Contacta soporte.'
+          : ('Error: ' + (err.message || err.code || 'desconocido'));
     errorEl.classList.remove('hidden');
     console.error(err);
   }
