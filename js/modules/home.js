@@ -8,6 +8,14 @@ import {
   collection, getDocs, query, where, orderBy
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
+// Simple in-memory cache — clears on page reload
+const _cache = {};
+function cached(key, ttlMs, fetcher) {
+  const now = Date.now();
+  if (_cache[key] && (now - _cache[key].ts) < ttlMs) return Promise.resolve(_cache[key].data);
+  return fetcher().then(function(data) { _cache[key] = { data, ts: now }; return data; });
+}
+
 export async function initHome(session) {
   // Greeting for all roles
   const hour  = new Date().getHours();
