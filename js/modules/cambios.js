@@ -130,6 +130,9 @@ function renderShell(container, session, db, isCampo, destino) {
             '<button id="btn-cargar-calendario" class="text-xs font-medium px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">📅 Lectura</button>' +
           '</div>'
         : '') +
+        (isCampo ?
+          '<button id="btn-nueva-orden" class="text-xs font-semibold px-3 py-2 rounded-lg text-white" style="background:#0F766E">+ Orden generada</button>'
+        : '') +
       '</div>' +
       // Tabs
       '<div class="flex gap-1 bg-gray-100 rounded-xl p-1">' +
@@ -165,6 +168,9 @@ function renderShell(container, session, db, isCampo, destino) {
   if (isAdmin) {
     container.querySelector('#btn-cargar-ordenes')?.addEventListener('click', () => showCargarOrdenes(db));
     container.querySelector('#btn-cargar-calendario')?.addEventListener('click', () => showCargarCalendario(db));
+  }
+  if (isCampo) {
+    container.querySelector('#btn-nueva-orden')?.addEventListener('click', () => showNuevaOrdenCampo(db, session, destino));
   }
 }
 
@@ -2418,6 +2424,30 @@ async function showPanel(db, session) {
             '</div>'
           : '<div style="background:#F0FDF4;border-radius:10px;padding:12px;text-align:center"><p style="font-size:13px;font-weight:600;color:#166534">✓ Todo actualizado en Delsur</p></div>') +
 
+          // Órdenes generadas en campo
+          (function() {
+            const generadas = ordenes.filter(function(o) { return o.generadaEnCampo && o.estadoCampo !== 'aprobada'; });
+            if (!generadas.length) return '';
+            return '<div>' +
+              '<p style="font-size:11px;font-weight:700;color:#1B4F8A;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">⚡ Generadas en campo (' + generadas.length + ')</p>' +
+              '<div class="space-y-2">' +
+                generadas.map(function(o) {
+                  const color = o.pareja ? (PAREJA_COLORS[o.pareja]||'#6B7280') : '#6B7280';
+                  return '<div style="background:white;border:1.5px solid #BFDBFE;border-radius:10px;padding:10px 12px">' +
+                    '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">' +
+                      '<div style="min-width:0">' +
+                        '<p style="font-size:10px;color:#9ca3af;font-family:monospace">' + safeStr(o.wo) + '</p>' +
+                        '<p style="font-size:13px;font-weight:600;color:#111827">' + safeStr(o.concepto || 'Orden generada en campo') + '</p>' +
+                        '<p style="font-size:11px;color:#6b7280;margin-top:2px">' + safeStr(o.generadaPor || '') + (o.pareja ? ' · <span style="color:' + color + ';font-weight:700">' + o.pareja + '</span>' : '') + '</p>' +
+                      '</div>' +
+                      '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:#EFF6FF;color:#1B4F8A;white-space:nowrap;flex-shrink:0">Campo</span>' +
+                    '</div>' +
+                  '</div>';
+                }).join('') +
+              '</div>' +
+            '</div>';
+          })() +
+
           // Realizadas por fecha
           '<div>' +
             '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
@@ -2490,4 +2520,127 @@ async function showPanel(db, session) {
     renderContent();
 
   } catch(e) { content.innerHTML = errHtml(); console.error(e); }
+}
+
+// ─────────────────────────────────────────
+// NUEVA ORDEN GENERADA EN CAMPO
+// ─────────────────────────────────────────
+function showNuevaOrdenCampo(db, session, destino) {
+  const ov = mkOverlay(
+    '<div class="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">' +
+      '<div>' +
+        '<h2 class="font-semibold text-gray-900">Orden generada</h2>' +
+        '<p class="text-xs text-gray-400 mt-0.5">Orden autorizada por planificación Delsur</p>' +
+      '</div>' +
+      '<button id="nog-close" class="text-gray-400 hover:text-gray-700">✕</button>' +
+    '</div>' +
+    '<div class="flex-1 overflow-y-auto px-5 py-4 space-y-4">' +
+      // WO
+      '<div>' +
+        '<label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">WO <span style="color:#C62828">*</span></label>' +
+        '<input id="nog-wo" type="text" placeholder="Ej. 802357900" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2" style="--tw-ring-color:#0F766E"/>' +
+      '</div>' +
+      // Descripción
+      '<div>' +
+        '<label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Descripción <span class="font-normal text-gray-400">(opcional)</span></label>' +
+        '<input id="nog-desc" type="text" placeholder="Ej. Cambio medidor dañado, voltaje bajo..." class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2" style="--tw-ring-color:#0F766E"/>' +
+      '</div>' +
+      // Ubicación
+      '<div>' +
+        '<label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Ubicación <span class="font-normal text-gray-400">(opcional)</span></label>' +
+        '<div class="flex gap-2">' +
+          '<div id="nog-coords" class="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-400 bg-gray-50">Sin ubicación</div>' +
+          '<button id="nog-loc" class="px-3 py-2.5 rounded-xl text-white text-sm font-semibold flex-shrink-0" style="background:#0F766E">📍 Tomar</button>' +
+        '</div>' +
+      '</div>' +
+      '<div id="nog-err" class="hidden text-sm text-red-500 bg-red-50 rounded-xl px-3 py-2"></div>' +
+    '</div>' +
+    '<div class="px-5 py-4 border-t border-gray-100 flex gap-2 shrink-0">' +
+      '<button id="nog-cancel" class="flex-1 border border-gray-200 text-gray-600 rounded-xl py-2.5 text-sm font-medium">Cancelar</button>' +
+      '<button id="nog-save" class="flex-1 text-white rounded-xl py-2.5 text-sm font-semibold" style="background:#0F766E">Guardar orden</button>' +
+    '</div>'
+  );
+
+  ov.querySelector('#nog-close').onclick = ov.querySelector('#nog-cancel').onclick = () => ov.remove();
+
+  let lat = null, lng = null;
+
+  ov.querySelector('#nog-loc').addEventListener('click', function() {
+    const btn = ov.querySelector('#nog-loc');
+    btn.textContent = '...'; btn.disabled = true;
+    if (!navigator.geolocation) {
+      ov.querySelector('#nog-coords').textContent = 'No disponible';
+      btn.textContent = '📍 Tomar'; btn.disabled = false;
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(function(pos) {
+      lat = pos.coords.latitude.toFixed(6);
+      lng = pos.coords.longitude.toFixed(6);
+      ov.querySelector('#nog-coords').textContent = lat + ', ' + lng;
+      ov.querySelector('#nog-coords').style.color = '#0F766E';
+      btn.textContent = '✓'; btn.disabled = false;
+    }, function() {
+      ov.querySelector('#nog-coords').textContent = 'Error al obtener ubicación';
+      btn.textContent = '📍 Tomar'; btn.disabled = false;
+    });
+  });
+
+  ov.querySelector('#nog-save').addEventListener('click', async function() {
+    const wo   = ov.querySelector('#nog-wo').value.trim();
+    const desc = ov.querySelector('#nog-desc').value.trim();
+    const errEl = ov.querySelector('#nog-err');
+    const btn   = ov.querySelector('#nog-save');
+
+    errEl.classList.add('hidden');
+
+    if (!wo) {
+      errEl.textContent = 'El WO es obligatorio.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+
+    btn.textContent = 'Guardando...'; btn.disabled = true;
+
+    try {
+      // Check for duplicate WO
+      const snap = await getDocs(query(collection(db, COL_ORDENES), where('wo', '==', wo)));
+      if (!snap.empty) {
+        errEl.textContent = 'Ya existe una orden con ese WO.';
+        errEl.classList.remove('hidden');
+        btn.textContent = 'Guardar orden'; btn.disabled = false;
+        return;
+      }
+
+      await addDoc(collection(db, COL_ORDENES), {
+        wo,
+        concepto:       desc || 'Orden generada en campo',
+        pareja:         destino || null,
+        latitud:        lat ? parseFloat(lat) : null,
+        longitud:       lng ? parseFloat(lng) : null,
+        estadoCampo:    null,
+        generadaEnCampo: true,
+        generadaPor:    session.displayName,
+        generadaEn:     serverTimestamp(),
+        cliente:        '',
+        direccion:      '',
+        serie:          '',
+        nc:             '',
+        dsct:           '',
+        unidadLectura:  '',
+        observaciones:  '',
+      });
+
+      ov.remove();
+      showToast('Orden generada guardada.', 'success');
+      // Refresh listado
+      const destFinal = session.asignacionActual?.destino || destino;
+      showListado(db, session, true, destFinal);
+
+    } catch(e) {
+      errEl.textContent = 'Error al guardar. Intenta de nuevo.';
+      errEl.classList.remove('hidden');
+      btn.textContent = 'Guardar orden'; btn.disabled = false;
+      console.error(e);
+    }
+  });
 }
