@@ -443,8 +443,7 @@ async function handleCreateUser(db, auth, overlay, session) {
     const realPass = await derivePassword(uid, SEED);
     await updatePassword(cred.user, realPass);
 
-    // 3. Cerrar app secundaria
-    await secondaryApp.delete().catch(() => {});
+    // 3. App secundaria usada solo para crear — no necesita cerrarse
 
     // 4. Hashear PIN
     const salt    = generateSalt();
