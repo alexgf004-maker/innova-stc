@@ -303,31 +303,31 @@ async function showListado(db, session, isCampo, destino) {
             '<div class="space-y-5">' +
               (sinActualizar.length > 0 ?
                 '<div>' +
-                  '<p style="font-size:11px;font-weight:700;color:#B45309;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">⚠ Falta actualizar en Delsur (' + sinActualizar.length + ')</p>' +
+                  '<p style="font-size:11px;font-weight:700;color:#B45309;text-transform:uppercase;letter-spacing:.05em;font-family:'Sora',sans-serif;margin-bottom:8px">⚠ Falta actualizar en Delsur (' + sinActualizar.length + ')</p>' +
                   '<div class="space-y-2">' + sinActualizar.map(function(o){ return campoCard(o, true); }).join('') + '</div>' +
                 '</div>'
               : '') +
               (realizadasHoy.filter(function(o){ return o.actualizadaDelsur; }).length > 0 ?
                 '<div>' +
-                  '<p style="font-size:11px;font-weight:700;color:#166534;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">✓ Realizadas hoy (' + realizadasHoy.filter(function(o){ return o.actualizadaDelsur; }).length + ')</p>' +
+                  '<p style="font-size:11px;font-weight:700;color:#166534;text-transform:uppercase;letter-spacing:.05em;font-family:'Sora',sans-serif;margin-bottom:8px">✓ Realizadas hoy (' + realizadasHoy.filter(function(o){ return o.actualizadaDelsur; }).length + ')</p>' +
                   '<div class="space-y-2">' + realizadasHoy.filter(function(o){ return o.actualizadaDelsur; }).map(function(o){ return campoCard(o, true); }).join('') + '</div>' +
                 '</div>'
               : '') +
               (visitasList.length > 0 ?
                 '<div>' +
-                  '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Visitas (' + visitasList.length + ')</p>' +
+                  '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;font-family:'Sora',sans-serif;margin-bottom:8px">Visitas (' + visitasList.length + ')</p>' +
                   '<div class="space-y-2">' + visitasList.map(function(o){ return campoCard(o, false); }).join('') + '</div>' +
                 '</div>'
               : '') +
               '<div>' +
-                '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Por realizar (' + pendientes.length + ')</p>' +
+                '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;font-family:'Sora',sans-serif;margin-bottom:8px">Por realizar (' + pendientes.length + ')</p>' +
                 (pendientes.length > 0
                   ? '<div class="space-y-2">' + pendientes.map(function(o){ return campoCard(o, false); }).join('') + '</div>'
                   : '<div class="text-center py-4 bg-white rounded-xl border border-gray-200"><p class="text-sm font-semibold text-green-700">¡Todo realizado! 🎉</p></div>') +
               '</div>' +
               (bloqueadsList.length > 0 ?
                 '<div>' +
-                  '<p style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">🔒 Bloqueadas (' + bloqueadsList.length + ')</p>' +
+                  '<p style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;font-family:'Sora',sans-serif;margin-bottom:8px">🔒 Bloqueadas (' + bloqueadsList.length + ')</p>' +
                   '<div class="space-y-2">' + bloqueadsList.map(function(o){ return campoCard(o, false); }).join('') + '</div>' +
                 '</div>'
               : '') +
@@ -366,19 +366,19 @@ async function showListado(db, session, isCampo, destino) {
           '</div>' +
           '<div class="grid grid-cols-4 gap-2">' +
             '<div class="bg-white rounded-xl border ' + (sinActualizar.length>0?'border-yellow-300':'border-gray-200') + ' p-2.5 text-center">' +
-              '<p class="text-lg font-black" style="color:' + (sinActualizar.length>0?'#B45309':'#166534') + '">' + sinActualizar.length + '</p>' +
+              '<p class="text-lg font-black" style="font-family:'Sora',sans-serif" style="color:' + (sinActualizar.length>0?'#B45309':'#166534') + '">' + sinActualizar.length + '</p>' +
               '<p class="text-xs text-gray-400 leading-tight">Sin act.</p>' +
             '</div>' +
             '<div class="bg-white rounded-xl border border-gray-200 p-2.5 text-center">' +
-              '<p class="text-lg font-black" style="color:#166534">' + realizadasHoy.length + '</p>' +
+              '<p class="text-lg font-black" style="font-family:'Sora',sans-serif" style="color:#166534">' + realizadasHoy.length + '</p>' +
               '<p class="text-xs text-gray-400 leading-tight">Hoy</p>' +
             '</div>' +
             '<div class="bg-white rounded-xl border border-gray-200 p-2.5 text-center">' +
-              '<p class="text-lg font-black" style="color:#0F766E">' + pendientes.length + '</p>' +
+              '<p class="text-lg font-black" style="font-family:'Sora',sans-serif" style="color:#0F766E">' + pendientes.length + '</p>' +
               '<p class="text-xs text-gray-400 leading-tight">Pendientes</p>' +
             '</div>' +
             '<div class="bg-white rounded-xl border border-gray-200 p-2.5 text-center">' +
-              '<p class="text-lg font-black" style="color:#374151">' + visitasList.length + '</p>' +
+              '<p class="text-lg font-black" style="font-family:'Sora',sans-serif" style="color:#374151">' + visitasList.length + '</p>' +
               '<p class="text-xs text-gray-400 leading-tight">Visitas</p>' +
             '</div>' +
           '</div>' +
@@ -632,7 +632,7 @@ async function showSeguimiento(db, session) {
         // Counts
         '<div class="grid grid-cols-3 gap-2 text-center">' +
           '<div style="background:#F0FDFA;border-radius:8px;padding:6px">' +
-            '<p class="text-lg font-black" style="color:#0F766E">' + s.hechasHoy + '</p>' +
+            '<p class="text-lg font-black" style="font-family:'Sora',sans-serif" style="color:#0F766E">' + s.hechasHoy + '</p>' +
             '<p class="text-xs text-gray-400">Realizadas hoy</p>' +
           '</div>' +
           '<div style="background:#f9f9f9;border-radius:8px;padding:6px">' +
@@ -640,7 +640,7 @@ async function showSeguimiento(db, session) {
             '<p class="text-xs text-gray-400">Visitas hoy</p>' +
           '</div>' +
           '<div style="background:' + (s.pendConfirm.length ? '#FEF3C7' : '#F0FDFA') + ';border-radius:8px;padding:6px">' +
-            '<p class="text-lg font-black" style="color:' + (s.pendConfirm.length ? '#B45309' : '#166534') + '">' + s.pendConfirm.length + '</p>' +
+            '<p class="text-lg font-black" style="font-family:'Sora',sans-serif" style="color:' + (s.pendConfirm.length ? '#B45309' : '#166534') + '">' + s.pendConfirm.length + '</p>' +
             '<p class="text-xs text-gray-400">Por confirmar</p>' +
           '</div>' +
         '</div>' +
@@ -677,7 +677,7 @@ async function showSeguimiento(db, session) {
           return '<div class="bg-white rounded-xl border border-gray-200 p-4">' +
             '<div class="flex items-center justify-between mb-2">' +
               '<p class="font-bold text-gray-900">Progreso global hoy</p>' +
-              '<p class="text-sm font-black" style="color:#0F766E">' + totalHoy + ' / ' + metaTotal + '</p>' +
+              '<p class="text-sm font-black" style="font-family:'Sora',sans-serif" style="color:#0F766E">' + totalHoy + ' / ' + metaTotal + '</p>' +
             '</div>' +
             '<div style="height:10px;background:#f3f4f6;border-radius:5px;overflow:hidden">' +
               '<div style="height:100%;width:' + pct + '%;background:#0F766E;border-radius:5px;transition:width .3s"></div>' +
@@ -728,13 +728,13 @@ async function showSeguimiento(db, session) {
         })() +
 
         // Por pareja
-        '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em">Por pareja</p>' +
+        '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;font-family:'Sora',sans-serif">Por pareja</p>' +
         '<div class="space-y-3">' + PAREJAS.map(parejaCard).join('') + '</div>' +
         // Pendientes de confirmar
         (todasPendConfirm.length > 0 ?
           '<div>' +
             '<div class="flex items-center justify-between mb-2">' +
-              '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em">Pendientes de confirmación (' + todasPendConfirm.length + ')</p>' +
+              '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;font-family:'Sora',sans-serif">Pendientes de confirmación (' + todasPendConfirm.length + ')</p>' +
               '<button id="btn-reload-seg" style="padding:5px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:12px;color:#374151;background:white;cursor:pointer">↻</button>' +
             '</div>' +
             '<div class="space-y-2">' + todasPendConfirm.map(confirmCard).join('') + '</div>' +
@@ -1216,7 +1216,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
       '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:14px">' +
         '<div style="flex:1;min-width:0">' +
           '<p style="font-size:10px;color:#9ca3af;font-family:monospace;margin-bottom:3px">' + safeStr(o.wo) + '</p>' +
-          (!bloqueada || isAdminUser ? '<p style="font-size:17px;font-weight:800;color:#111827;line-height:1.2">' + safeStr(o.cliente) + '</p>' : '<p style="font-size:13px;color:#9ca3af">Información no disponible</p>') +
+          (!bloqueada || isAdminUser ? '<p style="font-size:17px;font-weight:800;color:#111827;line-height:1.2;font-family:'Sora',sans-serif">' + safeStr(o.cliente) + '</p>' : '<p style="font-size:13px;color:#9ca3af">Información no disponible</p>') +
         '</div>' +
         '<span style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;background:' + statusColor + '18;color:' + statusColor + ';white-space:nowrap;flex-shrink:0">' + statusLabel + '</span>' +
       '</div>' +
@@ -2198,14 +2198,14 @@ async function showDia(db, session) {
         // Sin actualizar section
         (sinActualizar.length > 0 ?
           '<div>' +
-            '<p style="font-size:11px;font-weight:700;color:#B45309;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">⚠ Sin actualizar en Delsur (' + sinActualizar.length + ')</p>' +
+            '<p style="font-size:11px;font-weight:700;color:#B45309;text-transform:uppercase;letter-spacing:.05em;font-family:'Sora',sans-serif;margin-bottom:8px">⚠ Sin actualizar en Delsur (' + sinActualizar.length + ')</p>' +
             '<div class="space-y-2">' + sinActualizar.map(diaCard).join('') + '</div>' +
           '</div>'
         : '<div class="text-center py-3 rounded-xl" style="background:#F0FDF4"><p class="text-sm font-semibold" style="color:#166534">✓ Todas actualizadas en Delsur</p></div>') +
         // Actualizadas section
         (actualizadas.length > 0 ?
           '<div>' +
-            '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Confirmadas (' + actualizadas.length + ')</p>' +
+            '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;font-family:'Sora',sans-serif;margin-bottom:8px">Confirmadas (' + actualizadas.length + ')</p>' +
             '<div class="space-y-2">' + actualizadas.map(diaCard).join('') + '</div>' +
           '</div>'
         : '') +
@@ -2402,14 +2402,14 @@ async function showPanel(db, session) {
         '<div class="space-y-4">' +
           // Parejas
           '<div>' +
-            '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Por pareja</p>' +
+            '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;font-family:'Sora',sans-serif;margin-bottom:8px">Por pareja</p>' +
             '<div class="space-y-2">' + PAREJAS.map(parejaCard).join('') + '</div>' +
           '</div>' +
 
           // Sin actualizar
           (todosSinAct.length>0 ?
             '<div>' +
-              '<p style="font-size:11px;font-weight:700;color:#B45309;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">⚠ Sin actualizar en Delsur (' + todosSinAct.length + ')</p>' +
+              '<p style="font-size:11px;font-weight:700;color:#B45309;text-transform:uppercase;letter-spacing:.05em;font-family:'Sora',sans-serif;margin-bottom:8px">⚠ Sin actualizar en Delsur (' + todosSinAct.length + ')</p>' +
               '<div class="space-y-2">' +
                 todosSinAct.sort(function(a,b){
                   const ca = a.pareja||''; const cb = b.pareja||'';
@@ -2434,7 +2434,7 @@ async function showPanel(db, session) {
             const generadas = ordenes.filter(function(o) { return o.generadaEnCampo && o.estadoCampo !== 'aprobada'; });
             if (!generadas.length) return '';
             return '<div>' +
-              '<p style="font-size:11px;font-weight:700;color:#1B4F8A;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">⚡ Generadas en campo (' + generadas.length + ')</p>' +
+              '<p style="font-size:11px;font-weight:700;color:#60a5fa;text-transform:uppercase;letter-spacing:.05em;font-family:'Sora',sans-serif;margin-bottom:8px">⚡ Generadas en campo (' + generadas.length + ')</p>' +
               '<div class="space-y-2">' +
                 generadas.map(function(o) {
                   const color = o.pareja ? (PAREJA_COLORS[o.pareja]||'#6B7280') : '#6B7280';
@@ -2456,7 +2456,7 @@ async function showPanel(db, session) {
           // Realizadas por fecha
           '<div>' +
             '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
-              '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em">Realizadas · ' + fechaLabels[fechaSelIdx] + ' (' + realizadasFecha.length + ')</p>' +
+              '<p style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;font-family:'Sora',sans-serif">Realizadas · ' + fechaLabels[fechaSelIdx] + ' (' + realizadasFecha.length + ')</p>' +
               '<button id="btn-reload-panel" style="padding:4px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:12px;color:#374151;background:white;cursor:pointer">↻</button>' +
             '</div>' +
             // Date selector
