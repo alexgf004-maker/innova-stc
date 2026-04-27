@@ -37,7 +37,7 @@ function initHomeSimple(session) {
   const isCampo = session.role === 'campo';
   const area    = session.asignacionActual?.area || (session.usuarioOperativoAsignado ? 'OTC' : null);
   const destino = session.asignacionActual?.destino || session.usuarioOperativoAsignado || null;
-  const color   = area === 'CAMBIOS' ? '#0F766E' : '#1B4F8A';
+  const color   = '#0f1f3d';
 
   el.innerHTML =
     '<div class="space-y-4">' +
