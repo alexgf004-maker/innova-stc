@@ -24,7 +24,7 @@ function cachedGet(key, ttlMs, fetcher) {
 }
 function invalidateCache() { Object.keys(_cambiosCache).forEach(function(k) { delete _cambiosCache[k]; }); }
 const PAREJA_COLORS = {
-  'Pareja 1': 'linear-gradient(135deg,#0f1f3d,#1a3a6b)',
+  'Pareja 1': '#1B4F8A',
   'Pareja 2': '#EA580C',
   'Pareja 3': '#7C3AED',
   'Pareja 4': '#DB2777',
@@ -1353,7 +1353,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
   function exitAssignMode() {
     assignMode = false; clearSel();
     const p = document.getElementById('assign-panel'); if (p) p.style.display = 'none';
-    const btn = document.getElementById('btn-assign-mode'); if (btn) { btn.style.background='white'; btn.style.color='linear-gradient(135deg,#0f1f3d,#1a3a6b)'; btn.textContent='🗂 Asignar'; }
+    const btn = document.getElementById('btn-assign-mode'); if (btn) { btn.style.background='white'; btn.style.color='#0f1f3d'; btn.textContent='🗂 Asignar'; }
     markers.forEach(function(m) { m.setIcon(makeIcon(m._color, false, false, m._type)); });
   }
 
