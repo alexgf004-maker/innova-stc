@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>INNOVA STC — Acceso</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/base.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.25rem;
+      position: relative;
+      overflow: hidden;
+      background: #1B4F8A;
+    }
+
+    /* Gradiente de fondo sutil */
+    .bg-layer {
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse at 20% 20%, rgba(255,255,255,0.07) 0%, transparent 55%),
+        radial-gradient(ellipse at 80% 80%, rgba(0,0,0,0.18) 0%, transparent 55%),
+        linear-gradient(145deg, #1E5CA0 0%, #1B4F8A 45%, #143D6E 100%);
+      pointer-events: none;
+    }
+
+    /* Patrón de puntos muy sutil */
+    .bg-dots {
+      position: fixed;
+      inset: 0;
+      background-image: radial-gradient(rgba(255,255,255,0.06) 1px, transparent 1px);
+      background-size: 28px 28px;
+      pointer-events: none;
+    }
+
+    .card-wrap {
+      width: 100%;
+      max-width: 360px;
+      position: relative;
+      z-index: 10;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow:
+        0 24px 60px rgba(0,0,0,0.25),
+        0 4px 16px rgba(0,0,0,0.12),
+        0 0 0 1px rgba(255,255,255,0.15);
+    }
+
+    /* Header azul del card */
+    .card-header {
+      background: linear-gradient(135deg, #1B4F8A 0%, #1A5299 100%);
+      padding: 2rem 2rem 1.75rem;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card-header::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    }
+
+    .logo-wrap {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 58px; height: 58px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.18);
+      margin-bottom: 1rem;
+    }
+
+    .card-title {
+      color: #fff;
+      font-size: 1.15rem;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+    }
+    .card-sub {
+      color: rgba(255,255,255,0.55);
+      font-size: 0.72rem;
+      margin-top: 0.3rem;
+      letter-spacing: 0.01em;
+    }
+
+    /* Body */
+    .card-body { padding: 1.875rem 2rem 2rem; }
+
+    .step-title {
+      color: #1a202c;
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-bottom: 0.2rem;
+    }
+    .step-sub {
+      color: #718096;
+      font-size: 0.78rem;
+      margin-bottom: 1.5rem;
+    }
+
+    label {
+      display: block;
+      color: #4A5568;
+      font-size: 0.72rem;
+      font-weight: 600;
+      margin-bottom: 0.45rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    input[type="text"],
+    input[type="password"] {
+      width: 100%;
+      background: #F7FAFC;
+      border: 1.5px solid #E2E8F0;
+      border-radius: 10px;
+      padding: 0.75rem 1rem;
+      color: #1a202c;
+      font-size: 0.875rem;
+      font-family: 'Inter', sans-serif;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+    }
+    input::placeholder { color: #A0AEC0; }
+    input:focus {
+      border-color: #1B4F8A;
+      background: #fff;
+      box-shadow: 0 0 0 3px rgba(27,79,138,0.1);
+    }
+
+    #input-pin {
+      text-align: center;
+      font-size: 1.875rem;
+      letter-spacing: 0.45em;
+      font-family: 'IBM Plex Mono', monospace;
+      padding: 0.875rem 1rem;
+    }
+
+    .btn-primary {
+      width: 100%;
+      background: #1B4F8A;
+      color: #fff;
+      font-weight: 600;
+      font-size: 0.875rem;
+      border: none;
+      border-radius: 10px;
+      padding: 0.875rem;
+      cursor: pointer;
+      margin-top: 1.125rem;
+      letter-spacing: 0.02em;
+      transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+      box-shadow: 0 2px 8px rgba(27,79,138,0.35);
+    }
+    .btn-primary:hover {
+      background: #1a5299;
+      box-shadow: 0 4px 14px rgba(27,79,138,0.4);
+    }
+    .btn-primary:active { transform: scale(0.98); }
+    .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .error-box {
+      background: #FFF5F5;
+      border: 1px solid #FED7D7;
+      border-radius: 8px;
+      padding: 0.65rem 0.875rem;
+      color: #C53030;
+      font-size: 0.78rem;
+      margin-top: 0.75rem;
+    }
+
+    .back-btn {
+      background: none;
+      border: none;
+      color: #A0AEC0;
+      cursor: pointer;
+      padding: 0.2rem 0;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.75rem;
+      font-family: 'Inter', sans-serif;
+      margin-bottom: 1.25rem;
+      transition: color 0.15s;
+    }
+    .back-btn:hover { color: #4A5568; }
+
+    .spinner {
+      width: 22px; height: 22px;
+      border: 2.5px solid #E2E8F0;
+      border-top-color: #1B4F8A;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 0 auto;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .footer-text {
+      text-align: center;
+      color: rgba(255,255,255,0.2);
+      font-size: 0.68rem;
+      margin-top: 1.5rem;
+      letter-spacing: 0.08em;
+    }
+
+    .space-y > * + * { margin-top: 0.875rem; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <div class="bg-layer"></div>
+  <div class="bg-dots"></div>
+
+  <div class="card-wrap">
+    <div class="card">
+
+      <div class="card-header">
+        <div class="logo-wrap">
+          <svg width="26" height="26" viewBox="0 0 32 32" fill="none">
+            <path d="M4 8h6v16H4zM13 8h6l6 16h-6zM19 8h6" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="card-title">INNOVA STC</div>
+        <div class="card-sub">Servicios Técnicos y Comerciales</div>
+      </div>
+
+      <div class="card-body">
+
+        <!-- Paso 1 -->
+        <div id="step-username">
+          <p class="step-title">Iniciar sesión</p>
+          <p class="step-sub">Ingresa tu nombre de usuario</p>
+          <div class="space-y">
+            <div>
+              <label>Usuario</label>
+              <input id="input-username" type="text" autocomplete="username"
+                autocapitalize="none" spellcheck="false" placeholder="ej. juan.perez"/>
+            </div>
+            <div id="error-username" class="error-box hidden"></div>
+            <button id="btn-username" class="btn-primary">Continuar →</button>
+          </div>
+        </div>
+
+        <!-- Paso 2 -->
+        <div id="step-pin" class="hidden">
+          <button id="btn-back" class="back-btn">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+            Volver
+          </button>
+          <p class="step-title">Ingresa tu PIN</p>
+          <p class="step-sub" id="pin-username-label"></p>
+          <div class="space-y">
+            <div>
+              <label>PIN</label>
+              <input id="input-pin" type="password" inputmode="numeric" maxlength="8" placeholder="••••"/>
+            </div>
+            <div id="error-pin" class="error-box hidden"></div>
+            <button id="btn-pin" class="btn-primary">Entrar</button>
+          </div>
+        </div>
+
+        <!-- Loading -->
+        <div id="step-loading" class="hidden" style="text-align:center;padding:2rem 0;">
+          <div class="spinner"></div>
+          <p style="color:#A0AEC0;font-size:0.78rem;margin-top:0.875rem;">Verificando...</p>
+        </div>
+
+      </div>
+    </div>
+    <p class="footer-text">INNOVA STC &nbsp;·&nbsp; Uso interno</p>
+  </div>
+
+  <!-- Firebase CDN -->
+  <script type="module">
+    import { initializeApp }               from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+    import { getAuth, signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+    import { getFirestore, collection, query, where, getDocs, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+    import { FIREBASE_CONFIG, SEED } from './js/firebase-config.js';
+    import { hashPin, derivePassword } from './js/crypto.js';
+
+    const app  = initializeApp(FIREBASE_CONFIG);
+    const auth = getAuth(app);
+    const db   = getFirestore(app);
+
+    let currentUser = null;
+
+    const stepUsername  = document.getElementById('step-username');
+    const stepPin       = document.getElementById('step-pin');
+    const stepLoading   = document.getElementById('step-loading');
+    const inputUsername = document.getElementById('input-username');
+    const inputPin      = document.getElementById('input-pin');
+    const btnUsername   = document.getElementById('btn-username');
+    const btnPin        = document.getElementById('btn-pin');
+    const btnBack       = document.getElementById('btn-back');
+    const errorUsername = document.getElementById('error-username');
+    const errorPin      = document.getElementById('error-pin');
+    const pinLabel      = document.getElementById('pin-username-label');
+
+    function showStep(step) {
+      [stepUsername, stepPin, stepLoading].forEach(s => s.classList.add('hidden'));
+      step.classList.remove('hidden');
+    }
+    function showError(el, msg) { el.textContent = msg; el.classList.remove('hidden'); }
+    function hideError(el) { el.classList.add('hidden'); }
+
+    async function handleUsername() {
+      const username = inputUsername.value.trim().toLowerCase();
+      if (!username) return;
+      hideError(errorUsername);
+      btnUsername.disabled = true;
+      showStep(stepLoading);
+      try {
+        const q    = query(collection(db, 'users'), where('username', '==', username));
+        const snap = await getDocs(q);
+        if (snap.empty) { showStep(stepUsername); showError(errorUsername, 'Usuario no encontrado.'); btnUsername.disabled = false; return; }
+        const data = snap.docs[0].data();
+        if (!data.active) { showStep(stepUsername); showError(errorUsername, 'Usuario inactivo. Contacta al administrador.'); btnUsername.disabled = false; return; }
+        currentUser = { uid: data.uid, internalEmail: data.internalEmail, username: data.username };
+        pinLabel.textContent = '@' + username;
+        showStep(stepPin);
+        inputPin.focus();
+      } catch (err) {
+        showStep(stepUsername);
+        showError(errorUsername, 'Error al conectar. Intenta de nuevo.');
+        btnUsername.disabled = false;
+        console.error(err);
+      }
+    }
+
+    async function handlePin() {
+      const pinInput = inputPin.value.replace(/\D/g, '');
+      if (pinInput.length < 4) return;
+      hideError(errorPin);
+      btnPin.disabled = true;
+      showStep(stepLoading);
+      try {
+        const internalPass = await derivePassword(currentUser.uid, SEED);
+        await signInWithEmailAndPassword(auth, currentUser.internalEmail, internalPass);
+        const snap = await getDoc(doc(db, 'users', currentUser.uid));
+        if (!snap.exists()) throw new Error('Perfil no encontrado.');
+        const profile = snap.data();
+        if (!profile.active) { await signOut(auth); showStep(stepPin); showError(errorPin, 'Usuario inactivo.'); btnPin.disabled = false; return; }
+        const computed = await hashPin(profile.pinSalt, pinInput);
+        if (computed !== profile.pinHash) {
+          await signOut(auth);
+          inputPin.value = '';
+          showStep(stepPin);
+          showError(errorPin, 'PIN incorrecto.');
+          btnPin.disabled = false;
+          return;
+        }
+        localStorage.setItem('innova_session', JSON.stringify({
+          uid:                      profile.uid,
+          username:                 profile.username,
+          displayName:              profile.displayName,
+          role:                     profile.role,
+          // Nueva arquitectura
+          asignacionActual:         profile.asignacionActual || null,
+          // Compatibilidad temporal
+          usuarioOperativoAsignado: profile.usuarioOperativoAsignado || null,
+          pinVerified:              true,
+        }));
+        window.location.href = 'index.html';
+      } catch (err) {
+        await signOut(auth).catch(() => {});
+        inputPin.value = '';
+        showStep(stepPin);
+        showError(errorPin, 'Error de autenticación. Intenta de nuevo.');
+        btnPin.disabled = false;
+        console.error(err);
+      }
+    }
+
+    btnUsername.addEventListener('click', handleUsername);
+    inputUsername.addEventListener('keydown', e => { if (e.key === 'Enter') handleUsername(); });
+    btnPin.addEventListener('click', handlePin);
+    inputPin.addEventListener('keydown', e => { if (e.key === 'Enter') handlePin(); });
+    inputPin.addEventListener('input', e => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 8); });
+    btnBack.addEventListener('click', () => {
+      currentUser = null;
+      inputPin.value = '';
+      hideError(errorPin);
+      showStep(stepUsername);
+      btnUsername.disabled = false;
+      inputUsername.focus();
+    });
+
+    const existing = localStorage.getItem('innova_session');
+    if (existing) window.location.href = 'index.html';
+    inputUsername.focus();
+  </script>
+
+</body>
+</html>
