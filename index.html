@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
   <meta name="apple-mobile-web-app-title" content="INNOVA"/>
   <meta name="mobile-web-app-capable" content="yes"/>
-  <meta name="theme-color" content="#1B4F8A"/>
+  <meta name="theme-color" content="#0f1f3d"/>
   <link rel="manifest" href="manifest.json"/>
   <link rel="apple-touch-icon" href="icons/icon-192.png"/>
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png"/>
@@ -26,8 +26,8 @@
       theme: {
         extend: {
           colors: {
-            primary: '#1B4F8A',
-            accent:  '#2196F3',
+            primary: '#0f1f3d',
+            accent:  '#2563eb',
             success: '#2E7D32',
             danger:  '#C62828',
             surface: '#F5F7FA',
@@ -46,7 +46,7 @@
   <div id="app-shell" class="flex h-screen overflow-hidden opacity-0 transition-opacity duration-300">
 
     <!-- ── SIDEBAR (desktop) ── -->
-    <aside id="sidebar" class="hidden md:flex flex-col w-60 bg-primary text-white shrink-0 overflow-y-auto">
+    <aside id="sidebar" class="hidden md:flex flex-col w-60 text-white shrink-0 overflow-y-auto" style="background:#0f1f3d;border-right:1px solid rgba(255,255,255,.08)">
 
       <!-- Logo -->
       <div class="px-5 py-5 border-b border-white/10">
@@ -88,7 +88,7 @@
       <!-- Topbar -->
       <header id="topbar" class="h-14 flex items-center px-4 shrink-0 z-10 gap-3" style="background:#0f1f3d;border-bottom:1px solid rgba(255,255,255,.08)">
         <div class="flex items-center gap-2 flex-1">
-          <div class="w-7 h-7 rounded flex items-center justify-center md:hidden" style="background-color:#1B4F8A">
+          <div class="w-7 h-7 rounded flex items-center justify-center md:hidden" style="background:#0f1f3d">
             <svg width="14" height="14" viewBox="0 0 32 32" fill="none">
               <path d="M4 8h6v16H4zM13 8h6l6 16h-6z" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
@@ -104,7 +104,7 @@
           <div class="relative">
             <button id="topbar-avatar"
               class="w-9 h-9 rounded-full text-white text-xs font-bold flex items-center justify-center shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
-              style="background-color:#1B4F8A;">
+              style="background:linear-gradient(135deg,#1a3a6b,#2563eb);">
             </button>
             <div id="avatar-menu" class="hidden absolute right-0 top-10 bg-white border border-gray-200 rounded-xl shadow-lg py-1 z-50 w-44">
               <div id="avatar-menu-name" class="px-4 py-2 text-xs text-gray-400 border-b border-gray-100 truncate"></div>
