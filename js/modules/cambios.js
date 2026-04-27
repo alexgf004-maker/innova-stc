@@ -24,7 +24,7 @@ function cachedGet(key, ttlMs, fetcher) {
 }
 function invalidateCache() { Object.keys(_cambiosCache).forEach(function(k) { delete _cambiosCache[k]; }); }
 const PAREJA_COLORS = {
-  'Pareja 1': '#1B4F8A',
+  'Pareja 1': 'linear-gradient(135deg,#0f1f3d,#1a3a6b)',
   'Pareja 2': '#EA580C',
   'Pareja 3': '#7C3AED',
   'Pareja 4': '#DB2777',
@@ -131,7 +131,7 @@ function renderShell(container, session, db, isCampo, destino) {
       '<div class="flex items-center justify-between">' +
         '<div>' +
           '<h1 class="text-xl font-semibold text-gray-900">Cambio de Medidores</h1>' +
-          (isCampo ? '<p class="text-xs text-gray-400 mt-0.5" style="color:#0F766E;font-weight:600">' + (destino || '') + '</p>' : '<p class="text-xs text-gray-400 mt-0.5">Gestión de órdenes</p>') +
+          (isCampo ? '<p class="text-xs text-gray-400 mt-0.5" style="color:#1a3a6b;font-weight:600">' + (destino || '') + '</p>' : '<p class="text-xs text-gray-400 mt-0.5">Gestión de órdenes</p>') +
         '</div>' +
         (isAdmin ?
           '<div class="flex gap-2">' +
@@ -140,7 +140,7 @@ function renderShell(container, session, db, isCampo, destino) {
           '</div>'
         : '') +
         (isCampo ?
-          '<button id="btn-nueva-orden" class="text-xs font-semibold px-3 py-2 rounded-lg text-white" style="background:#0F766E">+ Orden generada</button>'
+          '<button id="btn-nueva-orden" class="text-xs font-semibold px-3 py-2 rounded-lg text-white" style="background:linear-gradient(135deg,#0f1f3d,#1a3a6b)">+ Orden generada</button>'
         : '') +
       '</div>' +
       // Tabs
@@ -476,7 +476,7 @@ async function showListado(db, session, isCampo, destino) {
           // Filtro estado
           '<div class="flex gap-1.5 overflow-x-auto pb-1 hide-scrollbar">' +
             [['todas','Todas'],['disponibles','Disponibles'],['realizadas','Realizadas'],['visitas','Visitas'],['bloqueadas','Bloqueadas'],['sin_asignar','Sin asignar']].map(function(f) {
-              return '<button class="fest-btn text-xs font-semibold px-3 py-1.5 rounded-full border whitespace-nowrap flex-shrink-0 ' + (f[0] === 'todas' ? 'border-transparent text-white' : 'border-gray-200 text-gray-600') + '" style="' + (f[0] === 'todas' ? 'background:#1B4F8A' : '') + '" data-fest="' + f[0] + '">' + f[1] + '</button>';
+              return '<button class="fest-btn text-xs font-semibold px-3 py-1.5 rounded-full border whitespace-nowrap flex-shrink-0 ' + (f[0] === 'todas' ? 'border-transparent text-white' : 'border-gray-200 text-gray-600') + '" style="' + (f[0] === 'todas' ? 'background:linear-gradient(135deg,#0f1f3d,#1a3a6b)' : '') + '" data-fest="' + f[0] + '">' + f[1] + '</button>';
             }).join('') +
           '</div>' +
           // Filtro pareja
@@ -510,7 +510,7 @@ async function showListado(db, session, isCampo, destino) {
         btn.addEventListener('click', function() {
           filtroEstado = btn.dataset.fest;
           content.querySelectorAll('.fest-btn').forEach(function(b) {
-            b.style.background = b.dataset.fest === filtroEstado ? '#1B4F8A' : '';
+            b.style.background = b.dataset.fest === filtroEstado ? 'linear-gradient(135deg,#0f1f3d,#1a3a6b)' : '';
             b.style.borderColor = b.dataset.fest === filtroEstado ? 'transparent' : '#e5e7eb';
             b.style.color = b.dataset.fest === filtroEstado ? 'white' : '#4b5563';
           });
@@ -782,7 +782,7 @@ function showConfirmarOrdenAdmin(db, session, orden, calendarioMap) {
     '</div>' +
     '<div class="px-5 py-4 border-t border-gray-100 flex gap-2 shrink-0">' +
       '<button id="coa-rechazar" class="flex-1 py-3 rounded-xl font-bold border-2 border-gray-300 text-gray-700 text-sm">✗ Rechazar</button>' +
-      '<button id="coa-confirmar" class="flex-1 py-3 rounded-xl font-bold text-white text-sm" style="background:#166534">✓ Confirmar</button>' +
+      '<button id="coa-confirmar" class="flex-1 py-3 rounded-xl font-bold text-white text-sm" style="background:linear-gradient(135deg,#0f1f3d,#1a3a6b)">✓ Confirmar</button>' +
     '</div>'
   );
 
@@ -844,7 +844,7 @@ function showCargarOrdenes(db) {
         '<svg class="w-10 h-10 mx-auto text-gray-300 mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>' +
         '<p class="text-sm text-gray-500 mb-3">Selecciona un archivo Excel (.xlsx)</p>' +
         '<input id="co-file" type="file" accept=".xlsx,.xls" class="hidden"/>' +
-        '<label for="co-file" class="inline-block px-4 py-2 rounded-lg text-sm font-medium text-white cursor-pointer" style="background:#1B4F8A">Seleccionar archivo</label>' +
+        '<label for="co-file" class="inline-block px-4 py-2 rounded-lg text-sm font-medium text-white cursor-pointer" style="background:linear-gradient(135deg,#0f1f3d,#1a3a6b)">Seleccionar archivo</label>' +
       '</div>' +
       '<div id="co-preview" class="hidden">' +
         '<p id="co-preview-text" class="text-sm text-gray-600 text-center"></p>' +
@@ -853,7 +853,7 @@ function showCargarOrdenes(db) {
     '</div>' +
     '<div class="px-5 py-4 border-t border-gray-100 flex gap-2 shrink-0">' +
       '<button id="co-cancel" class="flex-1 border border-gray-200 text-gray-600 rounded-xl py-2.5 text-sm font-medium">Cancelar</button>' +
-      '<button id="co-submit" class="flex-1 text-white rounded-xl py-2.5 text-sm font-semibold disabled:opacity-40" style="background:#1B4F8A" disabled>Importar</button>' +
+      '<button id="co-submit" class="flex-1 text-white rounded-xl py-2.5 text-sm font-semibold disabled:opacity-40" style="background:linear-gradient(135deg,#0f1f3d,#1a3a6b)" disabled>Importar</button>' +
     '</div>'
   );
 
@@ -954,7 +954,7 @@ function showCargarCalendario(db) {
         '<svg class="w-10 h-10 mx-auto text-gray-300 mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>' +
         '<p class="text-sm text-gray-500 mb-3">Selecciona el archivo Excel</p>' +
         '<input id="cal-file" type="file" accept=".xlsx,.xls" class="hidden"/>' +
-        '<label for="cal-file" class="inline-block px-4 py-2 rounded-lg text-sm font-medium text-white cursor-pointer" style="background:#0F766E">Seleccionar archivo</label>' +
+        '<label for="cal-file" class="inline-block px-4 py-2 rounded-lg text-sm font-medium text-white cursor-pointer" style="background:linear-gradient(135deg,#0f1f3d,#1a3a6b)">Seleccionar archivo</label>' +
       '</div>' +
       '<div id="cal-preview" class="hidden">' +
         '<p id="cal-preview-text" class="text-sm text-gray-600 text-center"></p>' +
@@ -963,7 +963,7 @@ function showCargarCalendario(db) {
     '</div>' +
     '<div class="px-5 py-4 border-t border-gray-100 flex gap-2 shrink-0">' +
       '<button id="cal-cancel" class="flex-1 border border-gray-200 text-gray-600 rounded-xl py-2.5 text-sm font-medium">Cancelar</button>' +
-      '<button id="cal-submit" class="flex-1 text-white rounded-xl py-2.5 text-sm font-semibold disabled:opacity-40" style="background:#0F766E" disabled>Guardar calendario</button>' +
+      '<button id="cal-submit" class="flex-1 text-white rounded-xl py-2.5 text-sm font-semibold disabled:opacity-40" style="background:linear-gradient(135deg,#0f1f3d,#1a3a6b)" disabled>Guardar calendario</button>' +
     '</div>'
   );
 
@@ -1323,7 +1323,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
   function enterAssignMode() {
     assignMode = true; closeSheet();
     const p = document.getElementById('assign-panel'); if (p) p.style.display = 'flex';
-    const btn = document.getElementById('btn-assign-mode'); if (btn) { btn.style.background='#1B4F8A'; btn.style.color='white'; btn.textContent='✕ Salir'; }
+    const btn = document.getElementById('btn-assign-mode'); if (btn) { btn.style.background='linear-gradient(135deg,#0f1f3d,#1a3a6b)'; btn.style.color='white'; btn.textContent='✕ Salir'; }
     markers.forEach(function(m) { m.setIcon(makeIcon(m._color, m._sel, true, m._type)); });
 
     if (!drawnItems) { drawnItems = new L.FeatureGroup().addTo(map); }
@@ -1353,7 +1353,7 @@ function initMapaCambios(ordenes, calendarioMap, session, isCampo, db) {
   function exitAssignMode() {
     assignMode = false; clearSel();
     const p = document.getElementById('assign-panel'); if (p) p.style.display = 'none';
-    const btn = document.getElementById('btn-assign-mode'); if (btn) { btn.style.background='white'; btn.style.color='#1B4F8A'; btn.textContent='🗂 Asignar'; }
+    const btn = document.getElementById('btn-assign-mode'); if (btn) { btn.style.background='white'; btn.style.color='linear-gradient(135deg,#0f1f3d,#1a3a6b)'; btn.textContent='🗂 Asignar'; }
     markers.forEach(function(m) { m.setIcon(makeIcon(m._color, false, false, m._type)); });
   }
 
@@ -1445,7 +1445,7 @@ function showDetalleOrden(db, session, orden, isCampo, calendarioMap) {
       '<a href="' + mapsUrl + '" target="_blank" class="flex items-center justify-center gap-2 w-full border border-gray-300 text-gray-700 font-medium rounded-xl py-2.5 text-sm"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>Cómo llegar</a>' +
       (!bloqueada && !hecha && isCampo ? '<div class="flex gap-2"><button id="btn-visita" class="flex-1 border-2 border-gray-300 text-gray-700 font-semibold rounded-xl py-2.5 text-sm">Visita</button><button id="btn-hecha" class="flex-1 text-white font-semibold rounded-xl py-2.5 text-sm" style="background:#0F766E">✓ Realizada</button></div>' : '') +
       (isAdmin && !isCampo ? '<button id="btn-asignar-1" class="w-full border border-gray-300 text-gray-600 font-medium rounded-xl py-2.5 text-sm">Asignar pareja</button>' : '') +
-      (isAdmin && !isCampo && orden.estadoCampo === 'hecha' ? '<button id="btn-aprobar" class="w-full text-white font-semibold rounded-xl py-2.5 text-sm" style="background:#166534">✓ Confirmar realizada</button>' : '') +
+      (isAdmin && !isCampo && orden.estadoCampo === 'hecha' ? '<button id="btn-aprobar" class="w-full text-white font-semibold rounded-xl py-2.5 text-sm" style="background:linear-gradient(135deg,#0f1f3d,#1a3a6b)">✓ Confirmar realizada</button>' : '') +
     '</div>'
   );
 
@@ -2463,7 +2463,7 @@ async function showPanel(db, session) {
             '<div style="display:flex;gap:6px;margin-bottom:10px">' +
               fechaLabels.map(function(label, idx) {
                 const active = idx === fechaSelIdx;
-                return '<button class="fecha-btn text-xs font-semibold px-3 py-1.5 rounded-full border ' + (active?'border-transparent text-white':'border-gray-200 text-gray-600') + '" style="' + (active?'background:#1B4F8A':'') + '" data-idx="' + idx + '">' + label + '</button>';
+                return '<button class="fecha-btn text-xs font-semibold px-3 py-1.5 rounded-full border ' + (active?'border-transparent text-white':'border-gray-200 text-gray-600') + '" style="' + (active?'background:linear-gradient(135deg,#0f1f3d,#1a3a6b)':'') + '" data-idx="' + idx + '">' + label + '</button>';
               }).join('') +
             '</div>' +
             (realizadasFecha.length>0 ?
@@ -2562,7 +2562,7 @@ function showNuevaOrdenCampo(db, session, destino) {
     '</div>' +
     '<div class="px-5 py-4 border-t border-gray-100 flex gap-2 shrink-0">' +
       '<button id="nog-cancel" class="flex-1 border border-gray-200 text-gray-600 rounded-xl py-2.5 text-sm font-medium">Cancelar</button>' +
-      '<button id="nog-save" class="flex-1 text-white rounded-xl py-2.5 text-sm font-semibold" style="background:#0F766E">Guardar orden</button>' +
+      '<button id="nog-save" class="flex-1 text-white rounded-xl py-2.5 text-sm font-semibold" style="background:linear-gradient(135deg,#0f1f3d,#1a3a6b)">Guardar orden</button>' +
     '</div>'
   );
 
